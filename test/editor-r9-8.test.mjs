@@ -141,8 +141,8 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, { n: 2 });
     await page.evaluate(`window.BeesonEditor.exec('slide.hide')`);
     await press(page, 'Mod+Enter');
-    await page.waitFor(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Present the saved file')`);
-    const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent === 'Present the saved file').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await page.waitFor(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Discard changes')`);
+    const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent === 'Discard changes').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, at);
     await page.waitFor(showReady, 20000);
     assert.equal(await page.evaluate('window.__shows.length'), 0, 'Present opens the show in a new tab');
@@ -150,7 +150,9 @@ for (const platform of PLATFORMS) {
     assert.equal(await showHeading(page), 'Show your steps one at a time');
     await press(page, 'Escape');
     await page.waitFor(stageGone);
-    assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), true);
+    // Discard changes put the slides back as saved, with the slide shown again
+    assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal .slides [data-visibility="hidden"]')`), null);
     assert.deepEqual(errors(page), []);
   });
 }

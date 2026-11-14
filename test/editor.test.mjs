@@ -1007,7 +1007,7 @@ test('with nothing selected, Esc and B do not open the overview or black out the
   assert.deepEqual(page.errors, []);
 });
 
-test('an undo back to the saved text leaves the deck clean, and Present with unsaved changes asks first', async (t) => {
+test('an undo back to the saved text leaves the deck clean, and Present with unsaved changes asks first, where Discard changes puts the slides back as saved', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
@@ -1037,17 +1037,20 @@ test('an undo back to the saved text leaves the deck clean, and Present with uns
   await present();
   await sleep(100);
   const card = await page.evaluate(`(() => { const c = document.querySelector('.beeson-edit-dialog.ask'); return { hidden: c.hidden, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement.textContent }; })()`);
-  assert.deepEqual(card, { hidden: false, buttons: ['Save and present', 'Present the saved file', 'Cancel'], focused: 'Cancel' });
+  assert.deepEqual(card, { hidden: false, buttons: ['Save and present', 'Discard changes', 'Cancel'], focused: 'Cancel' });
   await choose('Cancel');
   await sleep(100);
   assert.equal(await page.evaluate(shown), false);
   await present();
   await sleep(100);
-  await choose('Present the saved file');
+  // Discard changes puts the slides back as saved before the show
+  await choose('Discard changes');
   await until(page, shown);
   s = await status();
-  assert.deepEqual({ dirty: s.dirty, written: await page.evaluate('window.written') }, { dirty: true, written: null });
+  assert.deepEqual({ dirty: s.dirty, written: await page.evaluate('window.written') }, { dirty: false, written: null });
   await endShow();
+  assert.equal(await page.evaluate(`[...document.querySelectorAll('.reveal h2')].filter((h) => h.textContent === ${JSON.stringify(h2)}).length`), 1);
+  await type(' edited');
   await present();
   await sleep(100);
   await choose('Save and present');
