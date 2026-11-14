@@ -15,7 +15,7 @@ Minus all the bloat.
 
 The slides (and editor) consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser. They are themed to the [Beeson Group](https://beeson.princeton.edu/)'s colors. 
 
-PRE-RELEASE: The template is currently still in beta. View the most up to date version of the template at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/)
+PRE-RELEASE: The template is currently still in beta. View the most up to date version of the template at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/).
 
 ## Using this template
 
@@ -41,32 +41,32 @@ Move the mouse near the bottom edge of the window to magnify the progress line i
 
 You can go back to editor mode any time by pressing `e` while in presentation mode.
 
-## Contributing to the template
+## Contributing
 
-This section is for you if you want to change the template itself (the theme, the editor, or the exports to PDF and PowerPoint), rather than write a talk with it. The steps below set it up on your machine.
+If you want to help us with improving this tool, here is how you can get set up:
 
-1. Install [git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/) version 22 or later (which comes with npm), and [Google Chrome](https://www.google.com/chrome/) (which the tests, the checks, and the exports drive in the background).
+1. Install [git](https://git-scm.com/downloads), [Node.js](https://nodejs.org/) version 22 or later (which comes with npm), and [Google Chrome](https://www.google.com/chrome/) (used by tests and exports).
 2. Clone the repository, and move into it.
    ```sh
-   git clone https://github.com/beeson-group/slides.git
+   gh repo clone beeson-group/slides
    cd slides
    ```
-3. Install the dependencies, copy the libraries that a deck loads into `theme/vendor/`, and build the theme and the editor. The built `theme/beeson.js` and `theme/editor.js` are committed (so that a talk works without any of these tools), hence you run `npm run build` again after every change in `src/`, and commit both files together with your change.
+3. Install dependencies. You should run the last command (`npm run build`) again after every change in `src/`.
    ```sh
    npm ci && npm run vendor && npm run build
    ```
-4. Check the types, and run the test files of what you changed (the second command below runs the tests of the editor's keyboard shortcuts, as an example). The whole suite takes over an hour on one machine, so GitHub runs it for you on every pull request.
+4. Typecheck and the test suite.
    ```sh
    npm run typecheck
    node --test test/editor-keys.test.mjs
    ```
-5. Take a screenshot of every slide of the demo deck in both modes (into `check/`), and export it to `slides.pdf`, then look at both to see what your change did.
+5. Take screenshots of every slides (which you or your agents can check from the `check/` folder), export to PDF.
    ```sh
    npm run check
    npm run pdf
    ```
 
-Before you open a pull request, please read our group's [contributing guide](https://github.com/beeson-group/.github/blob/main/CONTRIBUTING.md), where I explain what I expect of one.
+Before you open a pull request, please read our group's [contributing guide](https://github.com/beeson-group/.github/blob/main/CONTRIBUTING.md).
 
 ## License
 
