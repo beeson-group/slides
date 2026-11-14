@@ -66,7 +66,7 @@ If you want to help us with improving this tool, here is how you can get set up:
    npm run pdf
    ```
 
-Before you open a pull request, please read our group's [contributing guide](https://github.com/beeson-group/.github/blob/main/CONTRIBUTING.md).
+Before you open a pull request, please also read our group's [contributing guide](https://github.com/beeson-group/.github/blob/main/CONTRIBUTING.md).
 
 ## License
 
