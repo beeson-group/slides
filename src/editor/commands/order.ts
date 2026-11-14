@@ -12,7 +12,7 @@ import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf,
 import { LINE, MOVABLE, OUTSIDE, objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 import { stateOf } from '../tags.ts';
 import { groupOf, groupUsed, groupValue, groupsOf, scopeOf, setScope, within } from '../model/groups.ts';
-import { glueOf } from '../model/glue.ts';
+import { attachedTo } from '../model/attach.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -280,8 +280,8 @@ function solve(facts: Fact[], path: Path, options: Choice[][]): { cost: number; 
 }
 
 // whether a child of el with a z-index under 0 is drawn over the ground of el, i.e. whether el
-// makes a stacking context, as a slide does. elsewhere, e.g. in the panel of a split slide or the
-// block of a title slide, the child is drawn under its parent, hidden from a click
+// makes a stacking context, as a slide does. elsewhere, e.g. in the text column of a split slide or the
+// title text of a title slide, the child is drawn under its parent, hidden from a click
 function stacks(el: Element): boolean {
   const s = getComputedStyle(el);
   return (s.position !== 'static' && s.zIndex !== 'auto') || s.transform !== 'none' || s.translate !== 'none' || s.rotate !== 'none' || s.scale !== 'none' || Number(s.opacity) < 1 || s.isolation === 'isolate' || s.filter !== 'none';
@@ -503,20 +503,20 @@ function freshDataIds(app: App, copies: Element[]): void {
 }
 
 // the layout of a figure slide has one plate, and another slide has none, hence a copy of a plate
-// is a plate only as the first plate of a figure slide. elsewhere it is made a zone, the box of
+// is a plate only as the first plate of a figure slide. elsewhere it is made a figure box, the box of
 // the theme for a figure beside other content, since a second plate is laid out under the slide
-function plateToZone(app: App, copies: Element[]): void {
+function plateToFigureBox(app: App, copies: Element[]): void {
   for (const el of copies) {
     const slide = el.closest('section');
     if (!el.matches('.plate') || !slide || (slide.matches('.figure') && slide.querySelector(':scope > .plate') === el)) continue;
-    app.doc.setTag(el, { classes: { plate: false, zone: true } }, 'layout');
+    app.doc.setTag(el, { classes: { plate: false, 'figure-box': true } }, 'layout');
   }
 }
 
 // the copies of a paste, a Duplicate, or a drag with the copy modifier, fitted to their slide
 export function settleCopies(app: App, copies: Element[]): void {
   freshDataIds(app, copies);
-  plateToZone(app, copies);
+  plateToFigureBox(app, copies);
 }
 
 // two elements or more that are not one group already
@@ -591,13 +591,13 @@ function regroup(app: App): void {
   app.selection.set('elements', u.els);
 }
 
-// the elements of a lock or an unlock. a caret or a range in the text of a locked block unlocks
-// the block, since a click into the text of a locked block puts the caret there
+// the elements of a lock or an unlock. a caret or a range in the text of a locked text element
+// unlocks it, since a click into the text of a locked text element puts the caret there
 function lockTargets(app: App, on: boolean): Element[] {
   const els = objectEls(app);
   if (on || app.selection.kind !== 'text') return els;
-  const blocks = app.selection.items.map((el) => el.closest('[data-locked]')).filter((el): el is Element => !!el);
-  return [...new Set([...els, ...blocks])];
+  const locked = app.selection.items.map((el) => el.closest('[data-locked]')).filter((el): el is Element => !!el);
+  return [...new Set([...els, ...locked])];
 }
 
 function setLock(app: App, on: boolean): void {
@@ -608,9 +608,9 @@ function setLock(app: App, on: boolean): void {
 
 export { angleOf };
 
-// whether every one of els is a line with a glued end, which is not turned until each end is
+// whether every one of els is a line with an attached end, which is not turned until each end is
 // detached, as a connection line of Keynote
-export const gluedLines = (els: Element[]): boolean => els.length > 0 && els.every((el) => el.matches(LINE) && (glueOf(el, 'from').length > 0 || glueOf(el, 'to').length > 0));
+export const attachedLines = (els: Element[]): boolean => els.length > 0 && els.every((el) => el.matches(LINE) && (attachedTo(el, 'from').length > 0 || attachedTo(el, 'to').length > 0));
 
 // the angle of a whole group, i.e. of its first member in the order of the page, or null when els
 // are not one whole group that can be turned
@@ -770,7 +770,7 @@ export function commands(app: App): Command[] {
       // a whole group is turned about the center of its frame until its first member is at deg
       id: 'arrange.setRotation',
       label: 'Rotate',
-      enabled: (app) => selectedEls(app).some(turnable) && !gluedLines(selectedEls(app)),
+      enabled: (app) => selectedEls(app).some(turnable) && !attachedLines(selectedEls(app)),
       run: (app, arg) => {
         const a = (arg ?? {}) as { deg?: number; els?: Element[] };
         if (typeof a.deg !== 'number' || !Number.isFinite(a.deg)) return;
@@ -818,7 +818,7 @@ export function commands(app: App): Command[] {
       menu: { bar: 'Arrange', group: 'reset', order: 12 },
       enabled: (app) => {
         const els = selectedEls(app);
-        if (gluedLines(els)) return false;
+        if (attachedLines(els)) return false;
         const group = groupAngle(app, els);
         return group !== null ? group !== 0 : els.some((el) => turnable(el) && angleOf(el) !== 0);
       },
@@ -828,7 +828,7 @@ export function commands(app: App): Command[] {
   return list;
 }
 
-// the commands that change the elements of the selection or the text of a block of it, which a
+// the commands that change the elements of the selection or the text of a text element of it, which a
 // lock turns off, as Keynote does until a locked object is unlocked. Copy, Duplicate, and the
 // commands that select or show the selection are kept, and so are Lock and Unlock
 const CHANGES = new RegExp([
@@ -864,7 +864,7 @@ export function install(app: App): void {
   // Delete skips a locked element, hence it is turned off only when every selected element is locked
   app.commands.veto((a, c) => c.id === 'element.delete' && !inField(a, c.id) && a.selection.kind !== 'text' && a.selection.elements().length > 0 && a.selection.elements().every((el) => !!el.closest('[data-locked]')));
   // typing, a drop, and the keys that delete or break a line do not go through a command, hence
-  // they are cancelled before the browser changes the text of a locked block
+  // they are cancelled before the browser changes the text of a locked text element
   document.addEventListener('beforeinput', (ev) => {
     if (ev.target instanceof Element && ev.target.closest('.reveal .slides [data-locked]')) ev.preventDefault();
   }, true);

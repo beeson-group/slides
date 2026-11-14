@@ -8,8 +8,8 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 
-const DECK = 'index.html';
-// the slides of index.html with a list beside a backdrop, and with a figure in a zone
+const DECK = 'test-deck.html';
+// the slides of index.html with a list beside a backdrop, and with a figure in a figure box
 const STEPS = 2;
 const FIGURES = 4;
 const LAYOUTS = 'test/pages/editor-layouts.html';
@@ -67,7 +67,7 @@ async function choose(page, paths) {
 
 for (const platform of PLATFORMS) {
   // juror item 6b and D27. the empty caption of the Caption switch is drawn where the theme puts
-  // the caption of a zone, 16 px under the picture, with its prompt and the caret in it, and it is
+  // the caption of a figure box, 16 px under the picture, with its prompt and the caret in it, and it is
   // not reported as a text past the slide
   test(`the empty caption of the Caption switch is drawn under the picture with its prompt and the caret (${platform})`, async (t) => {
     const page = await load(t, platform, STEPS);

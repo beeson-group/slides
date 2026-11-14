@@ -1,8 +1,8 @@
-// the scenes selected with the data-scene attribute of a `.backdrop`, computed on first use and
+// the built-in backdrops selected with the data-backdrop attribute of a `.backdrop`, computed on first use and
 // cached
 
-import { MU, closed, droFamily, lagrange, lyapunovFamily, open, propagate, ramp, spaced, step } from './orbits.ts';
-import type { Member, Strand, Tone } from './orbits.ts';
+import { MU, closed, lagrange, lyapunovFamily, open, propagate, step } from './orbits.ts';
+import type { Member, Trajectory, Tone } from './orbits.ts';
 
 // the integration step, nondimensional
 const H = 0.004;
@@ -12,11 +12,11 @@ const H = 0.004;
 const stopped = (u: Float64Array): boolean =>
   Math.hypot(u[0] + MU, u[1]) < 0.0166 || Math.hypot(u[0] - 1 + MU, u[1]) < 0.0045 || Math.hypot(u[0] - 0.8, u[1]) > 2.4;
 
-const toned = (s: Strand, tone: Tone): Strand => ({ ...s, tone });
+const toned = (s: Trajectory, tone: Tone): Trajectory => ({ ...s, tone });
 
 // the same flight mirrored in the x axis with time reversed, which is the symmetry of the CR3BP
 // that turns an unstable manifold into a stable one
-function mirrored(s: Strand): Strand {
+function mirrored(s: Trajectory): Trajectory {
   const n = s.times.length, pts = new Float64Array(2 * n), times = new Float32Array(n);
   const end = s.times[n - 1];
   for (let i = 0; i < n; i++) {
@@ -43,12 +43,12 @@ function kicked(s0: Float64Array, sign: number): Float64Array {
 }
 
 // the stable and unstable manifold tubes of the Lyapunov orbit of amplitude A at Ln, from flights of
-// span periods out of the given number of phases. the orbit itself is the first strand
-function tubes(n: 1 | 2, A: number, phases: number, span: number): Strand[] {
+// span periods out of the given number of phases. the orbit itself is the first trajectory
+function tubes(n: 1 | 2, A: number, phases: number, span: number): Trajectory[] {
   const orbit = lyapunovFamily(n, [A], H)[0];
   if (!orbit) return [];
   const first = closed(orbit), states = sampled(orbit, first.T);
-  const out: Strand[] = [toned(first, 'text')];
+  const out: Trajectory[] = [toned(first, 'text')];
   for (let k = 0; k < phases; k++) {
     const i = Math.floor((k / phases) * states.length);
     for (const sign of [1, -1]) {
@@ -90,10 +90,10 @@ function unstable(orbit: Member, T: number): { states: Float64Array[]; dirs: Flo
 
 // the tube of the L1 Lyapunov orbit of amplitude A toward the Earth, as a dense ribbon: one flight
 // from each of the given number of phases, ended at a crossing of the x axis, with its stable mirror
-function ribbon(A: number, phases: number, crossings: number, alpha: number, kick = 1e-5): Strand[] {
+function ribbon(A: number, phases: number, crossings: number, alpha: number, kick = 1e-5): Trajectory[] {
   const orbit = lyapunovFamily(1, [A], H)[0];
   if (!orbit) return [];
-  const first = closed(orbit), { states, dirs } = unstable(orbit, first.T), out: Strand[] = [];
+  const first = closed(orbit), { states, dirs } = unstable(orbit, first.T), out: Trajectory[] = [];
   const xL = lagrange(1);
   // the branch toward the Earth is chosen from a trial flight
   let sign = 1;
@@ -121,22 +121,21 @@ function ribbon(A: number, phases: number, crossings: number, alpha: number, kic
   return [toned(first, 'text'), ...out];
 }
 
-const SCENES = {
-  nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
+const BUILT_IN = {
   tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
   wideRibbon: () => ribbon(0.016, 120, 3, 0.12),
-} satisfies Record<string, () => Strand[]>;
+} satisfies Record<string, () => Trajectory[]>;
 
-export type SceneName = keyof typeof SCENES;
-export const SCENE_NAMES = Object.keys(SCENES) as SceneName[];
+export type BuiltInName = keyof typeof BUILT_IN;
+export const BUILT_IN_NAMES = Object.keys(BUILT_IN) as BuiltInName[];
 
-const cache = new Map<string, Strand[]>();
+const cache = new Map<string, Trajectory[]>();
 
-// the strands of the scene name, or an empty list for an unknown name
-export function scene(name: string): Strand[] {
+// the trajectories of the built-in backdrop name, or an empty list for an unknown name
+export function builtIn(name: string): Trajectory[] {
   let out = cache.get(name);
   if (!out) {
-    out = name in SCENES ? SCENES[name as SceneName]() : [];
+    out = name in BUILT_IN ? BUILT_IN[name as BuiltInName]() : [];
     cache.set(name, out);
   }
   return out;

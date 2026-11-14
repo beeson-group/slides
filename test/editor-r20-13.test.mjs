@@ -1,5 +1,5 @@
 // regression tests of R20.13 on both platforms, the open items O7, O5, and O9 and the new defects
-// N1 and N2 of the review of round 7: Slide Layout from Figure to Content with a paper image, the
+// N1 and N2 of the review of round 7: Slide Layout from Figure to Content with a white figure, the
 // Format pane closed by hand in a narrow window, and the toolbar and the status bar in a window
 // 560 px wide
 
@@ -12,12 +12,12 @@ import { click, press } from './helpers/editor.mjs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the slide of index.html with the figures
 const FIGURES = 4;
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
-const PAPER = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('A figure slide with a paper image'));
+const WHITE_FIGURE = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('A figure slide with a paper image'));
 
 let browser;
 let server;
@@ -92,8 +92,8 @@ const apart = (a, b) => a.right <= b.left + 1 || b.right <= a.left + 1 || a.bott
 for (const platform of PLATFORMS) {
   // O7: the drawn image and the caption of the figure slide stay inside the slide as Content
   test(`Slide Layout from Figure to Content keeps the paper image and its caption inside the slide (${platform})`, async (t) => {
-    const page = await load(t, platform, LAYOUTS, PAPER);
-    await page.evaluate(`document.querySelector('img.paper').decode().then(() => true)`);
+    const page = await load(t, platform, LAYOUTS, WHITE_FIGURE);
+    await page.evaluate(`document.querySelector('img.white-figure').decode().then(() => true)`);
     await exec(page, 'slide.layout.content');
     await wait(page, 400);
     const b = await boxes(page);
@@ -108,7 +108,7 @@ for (const platform of PLATFORMS) {
     await redo(page);
     assert.equal(await render(page), text);
     assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(text)})`)).problems, []);
-    await page.evaluate(`Reveal.slide(${PAPER})`);
+    await page.evaluate(`Reveal.slide(${WHITE_FIGURE})`);
     await wait(page, 300);
     assert.ok(inside((await boxes(page)).drawn), 'the drawn image runs past the slide after a reopen');
     assert.deepEqual(errors(page), []);

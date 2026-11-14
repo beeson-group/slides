@@ -15,7 +15,7 @@ const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
 // the deck, the index of the slide, and the heights typed, as differences from the Height at the start
 const FIGURES = [
-  ['the figure of slide 5 of index.html', 'index.html', 4, [-175, -143, -139, -131, -129, -123, -119, -60, 76]],
+  ['the figure of slide 5 of index.html', 'test-deck.html', 4, [-175, -143, -139, -131, -129, -123, -119, -60, 76]],
   ['a figure with a caption and a written width', 'test/pages/editor-r36-2.html', 0, [-200, -160, -123, -119, -80, -40, 40]],
 ];
 

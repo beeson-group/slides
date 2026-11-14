@@ -1,5 +1,5 @@
 // package R6.7 on both platforms, driven with trusted input: a width written by a resize grip is
-// the width drawn, for a picture, a video, a QR code, and a text block, also past the box of a zone
+// the width drawn, for a picture, a video, a QR code, and a text block, also past the box of a figure box
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -73,8 +73,8 @@ const widths = (page, selector) => page.evaluate(`(() => {
 
 // each element, how it is selected, the grip that is dragged, and how far to the right in slide px
 const CASES = [
-  { name: 'an image of a zone', slide: MATH, selector: '.reveal section.present .zone > img', clicks: 1, grip: 'se', dx: 400 },
-  { name: 'a video of a zone', slide: SPLIT, selector: '.reveal section.present .zone > video', clicks: 2, grip: 'se', dx: 400 },
+  { name: 'an image of a zone', slide: MATH, selector: '.reveal section.present .figure-box > img', clicks: 1, grip: 'se', dx: 400 },
+  { name: 'a video of a zone', slide: SPLIT, selector: '.reveal section.present .figure-box > video', clicks: 2, grip: 'se', dx: 400 },
   { name: 'a QR code', slide: 0, selector: '.reveal section.present .qr', clicks: 1, grip: 'se', dx: 300 },
   { name: 'a text block', slide: MATH, selector: '.reveal section.present p', text: 'The lead-in of a display', grip: 'e', dx: 500 },
   { name: 'the heading of a narrow slide', slide: NARROW, selector: '.reveal section.present h2', text: 'A narrow slide', grip: 'e', dx: 400 },
@@ -145,7 +145,7 @@ const NOTATION = {
 for (const platform of PLATFORMS) {
   test(`${platform}: a menu, a context menu, a tooltip, and the sheet write the keys of a command in one notation`, async () => {
     const page = await editor(platform, MATH);
-    await click(page, '.reveal section.present .zone > img');
+    await click(page, '.reveal section.present .figure-box > img');
     await frames(page);
     const menus = new Map();
     for (const bar of ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help']) {
@@ -170,7 +170,7 @@ for (const platform of PLATFORMS) {
     assert.equal(sheet['View > Next Slide'], want.nextSheet);
 
     // the context menu of the image and the tooltips of the toolbar
-    await click(page, '.reveal section.present .zone > img', { button: 'right' });
+    await click(page, '.reveal section.present .figure-box > img', { button: 'right' });
     await frames(page);
     const context = await shownItems(page);
     await press(page, 'Escape');
@@ -205,11 +205,11 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(mouse, MOUSE[platform]);
     assert.deepEqual(await page.evaluate('window.BeesonEditorShell.keyClashes()'), []);
 
-    // the modifier of Drag a Copy, held at the release of a drag of the image of the zone
+    // the modifier of Drag a Copy, held at the release of a drag of the image of the figure box
     const listed = mouse['Drag a Copy, Resize About the Center'];
     const copy = { '⌥-drag': 'Alt', 'Ctrl+drag': 'Ctrl' }[listed];
-    const img = '.reveal section.present .zone > img.for-dark';
-    const count = async () => (await render(page)).split('<figure class="zone').length - 1;
+    const img = '.reveal section.present .figure-box > img.for-dark';
+    const count = async () => (await render(page)).split('<figure class="figure-box').length - 1;
     const before = await count();
     await selectFigure(page, img);
     await drag(page, img, { dx: -200, dy: 40, modifiers: copy });

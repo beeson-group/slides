@@ -1,5 +1,5 @@
-// the status bar: the previous and next slide with the number of the current one, the layer
-// switch, the buttons Navigator, Steps, and Notes, the zoom (−, a slider, +, the percentage as a
+// the status bar: the previous and next slide with the number of the current one, the switch
+// of the steps shown, the buttons Navigator, Steps, and Notes, the zoom (−, a slider, +, the percentage as a
 // menu, and Fit), and the switch ◐ of the mode of the slide
 
 import type { App } from '../app.ts';
@@ -17,9 +17,9 @@ const CSS = `
 .beeson-edit-bottom button:focus-visible, .beeson-edit-bottom input:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -1px; }
 .beeson-edit-bottom .count { white-space: nowrap; min-width: 9ch; text-align: center; color: var(--ed-text); font-variant-numeric: tabular-nums; }
 .beeson-edit-bottom .rule { width: 1px; height: 14px; background: var(--ed-line); flex: none; }
-.beeson-edit-bottom .beeson-layers { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-.beeson-edit-bottom .beeson-layers[hidden] { display: none; }
-.beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
+.beeson-edit-bottom .beeson-shown-steps { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.beeson-edit-bottom .beeson-shown-steps[hidden] { display: none; }
+.beeson-edit-bottom .beeson-shown-steps > span { margin-right: 4px; }
 .beeson-edit-bottom .gap { flex: 1; }
 .beeson-edit-bottom .zoom { display: flex; align-items: center; gap: 2px; }
 .beeson-edit-bottom .zoom button { padding: 0 4px; }
@@ -49,8 +49,8 @@ const STEPS = 1000;
 const TICK = -LOG_MIN / (LOG_MAX - LOG_MIN);
 const SNAP = 4;
 
-// layers is the switch of layers.ts, placed after the slide number
-export function install(app: App, layers: HTMLElement): void {
+// shownSteps is the switch of shown-steps.ts, placed after the slide number
+export function install(app: App, shownSteps: HTMLElement): void {
   injectStyle('statusbar', CSS);
   const bottom = make('div', 'beeson-edit-bottom beeson-edit-region');
   const prevButton = button('‹', 'Previous slide', 'Previous slide');
@@ -89,7 +89,7 @@ export function install(app: App, layers: HTMLElement): void {
   modeButton.append(icon('contrast', 14));
 
   const rule = () => make('span', 'rule');
-  bottom.append(prevButton, countEl, nextButton, layers, make('span', 'gap'), app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
+  bottom.append(prevButton, countEl, nextButton, shownSteps, make('span', 'gap'), app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
   const fail = (e: unknown) => app.fail(e);
   wire(prevButton, () => app.commands.run('navigate.previous'), fail);
   wire(nextButton, () => app.commands.run('navigate.next'), fail);

@@ -11,7 +11,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, click, drag, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const FIG = '.reveal section.present .zone > img';
+const FIG = '.reveal section.present .figure-box > img';
 
 let browser;
 let server;
@@ -29,15 +29,15 @@ after(async () => {
 async function open(t, platform, width = 1600) {
   const page = await browser.newPage({ width, height: 1000 });
   t.after(() => page.close());
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   // the storage of an earlier test, e.g. the zoom of the notes, is cleared and the page loaded again
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const status = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
   assert.deepEqual(status.problems, []);
   return page;
@@ -51,7 +51,7 @@ const setZoom = async (page, z) => { await page.evaluate(`window.BeesonEditorShe
 const rectOf = (page, selector) => page.evaluate(`(() => { const r = [...document.querySelectorAll(${JSON.stringify(selector)})].map((e) => e.getBoundingClientRect()).find((r) => r.width && r.height); return r && r.toJSON(); })()`);
 
 async function figureSlide(page) {
-  await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.reveal .slides section .zone > img').closest('section')).h)`);
+  await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.reveal .slides section .figure-box > img').closest('section')).h)`);
   await frames(page);
 }
 
@@ -217,7 +217,7 @@ for (const platform of PLATFORMS) {
     await figureSlide(page);
     // what the file gets: the text rendered by the editor, cut to the lines that differ from the deck
     const lines = page.source.split('\n');
-    const zone = async () => (await page.evaluate('window.BeesonEditor.render()')).split('\n').filter((l, i) => l !== lines[i]).join('\n');
+    const figureBox = async () => (await page.evaluate('window.BeesonEditor.render()')).split('\n').filter((l, i) => l !== lines[i]).join('\n');
     const undo = async () => { await press(page, 'Mod+Z'); await frames(page); };
     // nothing is selected before the figure is selected for each drag, since a click on a selected
     // figure selects its image
@@ -242,7 +242,7 @@ for (const platform of PLATFORMS) {
       let s = await ready(z);
       await drag(page, FIG, { dx: 60 * s, dy: 40 * s, modifiers: free });
       await frames(page);
-      const moved = await zone();
+      const moved = await figureBox();
       await undo();
       await byteExact(page);
       // a move that leaves the center of the figure 3 slide px right of the center of the slide,
@@ -259,7 +259,7 @@ for (const platform of PLATFORMS) {
       s = (await stage(page)).scale;
       await drag(page, FIG, { dx: -(off - 3) * s, dy: 0 });
       await frames(page);
-      const snapped = await zone();
+      const snapped = await figureBox();
       const center = await page.evaluate(`(() => { const s = window.BeesonEditorShell.stage; const r = [...document.querySelectorAll(${JSON.stringify(FIG)})].map((e) => e.getBoundingClientRect()).find((r) => r.width); return s.toSlide({ x: r.left + r.width / 2, y: 0 }).x; })()`);
       assert.ok(Math.abs(center - 960) < 1, `at ${z}: the center of the figure is at ${center}, not snapped to 960`);
       await undo();
@@ -275,13 +275,13 @@ for (const platform of PLATFORMS) {
       const se = await grip();
       await drag(page, se, { dx: 80 * s, dy: 80 * s, modifiers: free });
       await frames(page);
-      const resized = await zone();
+      const resized = await figureBox();
       await undo();
       await byteExact(page);
       results[z] = { moved, snapped, resized };
     }
-    assert.match(results.null.moved, /<figure class="zone" style="translate: 60px 40px">/);
-    assert.match(results.null.snapped, /<figure class="zone" style="translate: -?\d+px( -?\d+px)?">/);
+    assert.match(results.null.moved, /<figure class="figure-box" style="translate: 60px 40px">/);
+    assert.match(results.null.snapped, /<figure class="figure-box" style="translate: -?\d+px( -?\d+px)?">/);
     assert.match(results.null.resized, /width: \d+px/);
     for (const z of [0.5, 1, 2]) assert.deepEqual(results[z], results.null, `at ${z} the file got ${JSON.stringify(results[z])}, at Fit ${JSON.stringify(results.null)}`);
     assert.deepEqual(page.errors, []);

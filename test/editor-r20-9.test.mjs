@@ -8,7 +8,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { center, click, press, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const PAGE = 'test/pages/editor-r20-9.html';
 const PLATFORMS = ['mac', 'other'];
 const SLIDE = '.reveal .slides > section.present';
@@ -92,7 +92,7 @@ for (const platform of PLATFORMS) {
 }
 
 const FIGURES = 4;
-const IMG = `${SLIDE} figure.zone img.for-dark`;
+const IMG = `${SLIDE} figure.figure-box img.for-dark`;
 const focused = (page) => page.evaluate(`(() => { const a = document.activeElement; return a ? a.localName + (a.id ? '#' + a.id : '') : null; })()`);
 const findItem = `(l) => [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.getClientRects().length && (i.querySelector('.label')?.firstChild?.textContent ?? '').startsWith(l))`;
 

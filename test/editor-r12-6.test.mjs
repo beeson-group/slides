@@ -38,13 +38,13 @@ let saves = 0;
 async function load(t, platform, n = 4) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   page.platform = platform;
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
@@ -112,7 +112,7 @@ const caretIn = (page) => page.evaluate(`(() => {
 // the part of the file from the h2 of slide 5 to its figure
 const listPart = (text) => {
   const at = text.indexOf('<h2>Figures are first');
-  return text.slice(at, text.indexOf('<figure class="zone">', at));
+  return text.slice(at, text.indexOf('<figure class="figure-box">', at));
 };
 
 // pressCommand sends a key with the editing command of the browser, which a key event of the

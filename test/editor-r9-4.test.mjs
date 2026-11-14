@@ -35,14 +35,14 @@ let saves = 0;
 async function load(t, platform, { n = 0, edit = true } = {}) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?${edit ? 'edit&' : ''}still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?${edit ? 'edit&' : ''}still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   if (edit) {
     await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-    page.source = readFileSync('index.html', 'utf8');
+    page.source = readFileSync('test-deck.html', 'utf8');
     const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
     assert.deepEqual(s.problems, []);
   }
@@ -110,7 +110,7 @@ for (const platform of PLATFORMS) {
     const cases = [
       ['the display', 3, '.reveal section.present div.math mjx-container', 'div.math'],
       ['an inline formula', 3, '.reveal section.present p mjx-container', 'p.fragment'],
-      ['the formula of a caption', 4, '.reveal section.present figcaption mjx-container', 'figure.zone'],
+      ['the formula of a caption', 4, '.reveal section.present figcaption mjx-container', 'figure.figure-box'],
     ];
     for (const [what, n, sel, owner] of cases) {
       await page.evaluate(`Reveal.slide(${n})`);

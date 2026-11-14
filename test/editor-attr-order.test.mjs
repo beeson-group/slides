@@ -219,9 +219,9 @@ test('a seeded run of tag edits on the demo deck gives the file byte for byte af
   const { readFileSync } = await import('node:fs');
   const browser = await launch();
   t.after(() => browser.close());
-  const text = readFileSync('index.html', 'utf8');
+  const text = readFileSync('test-deck.html', 'utf8');
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'edit&still'));
+  await page.goto(deckUrl('test-deck.html', 'edit&still'));
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`)).problems, []);

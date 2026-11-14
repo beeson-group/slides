@@ -49,10 +49,10 @@ const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
 // the editor on a deck served over HTTP, with the Format tab shown
-async function open(platform, { deck = 'index.html', size = { width: 1440, height: 900 } } = {}) {
+async function open(platform, { deck = 'test-deck.html', size = { width: 1440, height: 900 } } = {}) {
   const page = await browser.newPage(size);
   // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
-  // of the origin, and the card of this draft then covers the slide of the next page of the deck
+  // of the origin, and the dialog of this draft then covers the slide of the next page of the deck
   await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -292,7 +292,7 @@ async function slideTo(page, fraction) {
   const r = await boxOf(page, SLIDER);
   await click(page, { x: r.left + 8 + (r.right - r.left - 16) * fraction, y: (r.top + r.bottom) / 2 });
 }
-const ASK = 'dialog.beeson-edit-card.beeson-poster-ask[open]';
+const ASK = 'dialog.beeson-edit-dialog.beeson-poster-ask[open]';
 
 for (const platform of PLATFORMS) {
   test(`the poster frame slider captures the frame at its time as the poster (${platform})`, async (t) => {

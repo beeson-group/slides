@@ -1,6 +1,6 @@
 // tests of R7.2 on both platforms with trusted input: Edit > Paste and Match Style in the Edit menu
 // and in the menu of a text, File > Revert to Saved, File > Open Recent with the decks kept in
-// IndexedDB and on the card of a deck that cannot read itself, and File > Export To with PDF… and
+// IndexedDB and on the dialog of a deck that cannot read itself, and File > Export To with PDF… and
 // HTML…. after each edit the text is checked byte for byte, after an undo and a redo, and after a
 // save and an open. the system clipboard is shared with the other tests, hence readText is a stub
 
@@ -131,10 +131,10 @@ async function choose(page, bar, ...path) {
   await frames(page);
 }
 
-// a trusted click on the button labeled label of the open card with class name
+// a trusted click on the button labeled label of the open dialog with class name
 async function cardButton(page, name, label) {
   const at = await page.evaluate(`(() => {
-    const b = [...document.querySelectorAll('dialog.beeson-edit-card.${name}:not([hidden]) button')].find((b) => b.textContent === ${js(label)});
+    const b = [...document.querySelectorAll('dialog.beeson-edit-dialog.${name}:not([hidden]) button')].find((b) => b.textContent === ${js(label)});
     if (!b) return null;
     const r = b.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -145,7 +145,7 @@ async function cardButton(page, name, label) {
 }
 
 const card = (page, name) => page.evaluate(`(() => {
-  const c = document.querySelector('dialog.beeson-edit-card.${name}');
+  const c = document.querySelector('dialog.beeson-edit-dialog.${name}');
   return c && !c.hidden ? { title: c.querySelector('h3').textContent, text: c.querySelector('p')?.textContent ?? '', buttons: [...c.querySelectorAll('button')].map((b) => b.textContent) } : null;
 })()`);
 
@@ -293,10 +293,13 @@ for (const platform of PLATFORMS) {
     assert.ok((await paragraph(page)).endsWith(' typed'));
     assert.equal((await status(page)).dirty, true);
 
-    // Revert loads the page again from the file
+    // Revert loads the page again from the file. a read that Chrome has not answered when the new
+    // page is shown fails with this error, which is thus not a failure of the click on Revert
     await page.evaluate('window.__before = true');
     await choose(page, 'File', 'Revert to Saved');
-    await cardButton(page, 'revert', 'Revert');
+    await cardButton(page, 'revert', 'Revert').catch((error) => {
+      if (!/Inspected target navigated or closed/.test(error.message)) throw error;
+    });
     await page.waitFor(`!window.__before && document.readyState === 'complete'`);
     await page.waitFor(deckSettled);
     await page.waitFor(ready);
@@ -408,6 +411,42 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`Clear Menu at the start of the editor is kept when the read of Open Recent answers after it (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await exec(page, 'file.recent.clear');
+    const name = `recent-late-${platform}.html`;
+    await page.evaluate(`(async () => {
+      const root = await navigator.storage.getDirectory();
+      const w = await (await root.getFileHandle(${js(name)}, { create: true })).createWritable();
+      await w.write(${js(page.source)});
+      await w.close();
+      window.showOpenFilePicker = async () => [await root.getFileHandle(${js(name)})];
+    })()`);
+    await choose(page, 'File', 'Open…');
+    await written(page, [name]);
+    // the database answers 1 s late, as on a slow runner, hence the menu is cleared while the
+    // read of the start is in flight
+    const { identifier } = await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `{
+        const open = IDBFactory.prototype.open;
+        IDBFactory.prototype.open = function (...args) {
+          const ask = open.apply(this, args);
+          let fn = null;
+          Object.defineProperty(ask, 'onsuccess', { get: () => fn, set: (f) => { fn = f; } });
+          ask.addEventListener('success', (ev) => setTimeout(() => fn?.call(ask, ev), 1000));
+          return ask;
+        };
+      }`,
+    });
+    t.after(() => page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {}));
+    await page.goto(page.url);
+    await page.waitFor(ready);
+    await exec(page, 'file.recent.clear');
+    await wait(page, 3000);
+    assert.deepEqual((await menuLabels(page, 'File')).slice(0, 2), ['Open…', 'Open Recent']);
+    await written(page, []);
+  });
+
   test(`the card of a deck that cannot read itself offers the file of the deck kept for Open Recent (${platform})`, async (t) => {
     const page = await load(t, platform);
     await exec(page, 'file.recent.clear');
@@ -429,18 +468,18 @@ for (const platform of PLATFORMS) {
     await written(page, [name]);
     await page.goto(page.url);
     await page.waitFor(ready);
-    await page.waitFor(`(() => { const b = document.querySelector('dialog.beeson-edit-card:not([hidden]) button.primary'); return b?.textContent === ${js(`Open ${name}`)}; })()`);
-    const shown = await page.evaluate(`(() => { const c = [...document.querySelectorAll('dialog.beeson-edit-card')].find((c) => !c.hidden); return { title: c.querySelector('h3').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement.textContent, text: c.querySelector('p').textContent }; })()`);
+    await page.waitFor(`(() => { const b = document.querySelector('dialog.beeson-edit-dialog:not([hidden]) button.primary'); return b?.textContent === ${js(`Open ${name}`)}; })()`);
+    const shown = await page.evaluate(`(() => { const c = [...document.querySelectorAll('dialog.beeson-edit-dialog')].find((c) => !c.hidden); return { title: c.querySelector('h3').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement.textContent, text: c.querySelector('p').textContent }; })()`);
     assert.equal(shown.title, 'Choose the file of this deck');
     assert.deepEqual(shown.buttons, [`Open ${name}`, 'Choose editor-layouts.html…']);
     assert.equal(shown.focused, `Open ${name}`);
     assert.match(shown.text, new RegExp(`Open ${name.replace(/\./g, '\\.')}, the file of this deck that you chose on `));
-    const at = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-card:not([hidden]) button.primary').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const at = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-dialog:not([hidden]) button.primary').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, at);
     await page.waitFor(`window.BeesonEditor.status().state === 'loaded'`);
     assert.equal(await page.evaluate('window.__picked ?? false'), false);
     assert.deepEqual((await status(page)).problems, []);
-    assert.equal(await page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-card')].some((c) => !c.hidden)`), false);
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-dialog')].some((c) => !c.hidden)`), false);
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page).filter((e) => !e.includes('offline')), []);
   });

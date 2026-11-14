@@ -12,7 +12,7 @@ import { click, saveAndReopen } from './helpers/editor.mjs';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const DARK = '<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">';
-const IMG = 'section.present figure.zone img.for-dark';
+const IMG = 'section.present figure.figure-box img.for-dark';
 
 let browser;
 let server;
@@ -72,10 +72,10 @@ for (const platform of PLATFORMS) {
     await click(page, 'section.present p');
     await click(page, IMG);
     await click(page, IMG);
-    await page.evaluate(`window.BeesonEditor.exec('figure.paper')`);
+    await page.evaluate(`window.BeesonEditor.exec('figure.whiteFigure')`);
     await settle(page);
     const edited = await render(page);
-    assert.equal(edited, page.source.replace(DARK, () => DARK.replace('class="for-dark"', 'class="for-dark paper"')));
+    assert.equal(edited, page.source.replace(DARK, () => DARK.replace('class="for-dark"', 'class="for-dark white-figure"')));
     assert.deepEqual(await heads(page), TYPESET);
     await page.evaluate('window.BeesonEditor.undo()');
     await settle(page);

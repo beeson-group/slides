@@ -1,7 +1,7 @@
 // regression tests of R16.4 on both platforms with trusted input: the start of a list numbered by
 // hand kept after its first item is taken off, the caret after an undo and a redo of Backspace in
 // an empty paragraph after a list and of Return on an empty list item, and two lists left apart
-// when they are locked or when the element deleted between them is a figure of the zone. each edit
+// when they are locked or when the element deleted between them is a figure of the figure box. each edit
 // is undone to the file byte for byte
 
 import assert from 'node:assert/strict';
@@ -263,13 +263,13 @@ for (const platform of PLATFORMS) {
   // outside the flow of their column
   test(`Delete of a figure of the zone between two lists in the file leaves both lists as they are (${platform})`, async (t) => {
     const page = await load(t, platform, DECK, 3);
-    await click(page, await center(page, `${SLIDE} figure.zone img`));
+    await click(page, await center(page, `${SLIDE} figure.figure-box img`));
     await wait(page);
     assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((el) => el.localName)`), ['figure']);
     await press(page, 'Delete');
     await wait(page);
     const text = await render(page);
-    const figure = page.source.slice(page.source.indexOf('  <figure class="zone">'), page.source.indexOf('</figure>') + 10);
+    const figure = page.source.slice(page.source.indexOf('  <figure class="figure-box">'), page.source.indexOf('</figure>') + 10);
     const part = text.slice(text.indexOf('<h2>A figure'), text.indexOf('</section>', text.indexOf('<h2>A figure')));
     assert.equal(text, page.source.replace(figure, ''), `the lists are changed: ${js(part)}`);
     assert.equal(await page.evaluate(`document.querySelectorAll('${SLIDE} > ul').length`), 2);

@@ -36,22 +36,22 @@ function lines(rows: [number, string][], style: TextStyle, base: string): string
 // a section of the layout, without the white space before it. base is the indentation of the
 // slides of the file, empty in the demo deck
 export function layoutText(layout: NewLayout, style: TextStyle, base = ''): string {
-  const block: [number, string][] = [[1, '<div class="block">'], [2, '<h1></h1>'], [2, '<p class="sub"></p>'], [2, '<p class="who"></p>'], [1, '</div>']];
+  const titleText: [number, string][] = [[1, '<div class="title-text">'], [2, '<h1></h1>'], [2, '<p class="sub"></p>'], [2, '<p class="who"></p>'], [1, '</div>']];
   switch (layout) {
     case 'title':
-      return lines([[0, '<section class="title">'], [1, '<div class="backdrop" data-strands="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128"></div>'], ...block, [0, '</section>']], style, base);
+      return lines([[0, '<section class="title">'], [1, '<div class="backdrop" data-trajectories="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128"></div>'], ...titleText, [0, '</section>']], style, base);
     case 'closing':
-      return lines([[0, '<section class="closing">'], [1, '<div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>'], ...block, [0, '</section>']], style, base);
+      return lines([[0, '<section class="closing">'], [1, '<div class="backdrop" data-backdrop="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>'], ...titleText, [0, '</section>']], style, base);
     case 'section':
       return lines(
-        [[0, '<section class="section">'], [1, '<div class="sec">'], [2, '<h2></h2>'], [2, '<ul class="outline" data-auto></ul>'], [1, '</div>'], [1, '<div class="backdrop" data-scene="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3"></div>'], [0, '</section>']],
+        [[0, '<section class="section">'], [1, '<div class="sec">'], [2, '<h2></h2>'], [2, '<ul class="outline" data-auto></ul>'], [1, '</div>'], [1, '<div class="backdrop" data-backdrop="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3"></div>'], [0, '</section>']],
         style,
         base,
       );
     case 'figure':
       return lines([[0, '<section class="figure">'], [1, '<div class="plate"></div>'], [1, '<h2></h2>'], [1, '<p class="caption"></p>'], [0, '</section>']], style, base);
     case 'split':
-      return lines([[0, '<section class="split">'], [1, '<div class="panel">'], [2, '<h2></h2>'], [2, '<p></p>'], [1, '</div>'], [1, '<div class="zone"></div>'], [0, '</section>']], style, base);
+      return lines([[0, '<section class="split">'], [1, '<div class="text-column">'], [2, '<h2></h2>'], [2, '<p></p>'], [1, '</div>'], [1, '<div class="figure-box"></div>'], [0, '</section>']], style, base);
     case 'titleOnly':
       return lines([[0, '<section>'], [1, '<h2></h2>'], [0, '</section>']], style, base);
     // a content slide holds a dash list under its paragraph, as a slide of Title & Bullets in
@@ -73,7 +73,7 @@ export function layoutText(layout: NewLayout, style: TextStyle, base = ''): stri
   }
 }
 
-export type ElementOptions = { src?: string; alt?: string; poster?: string; tex?: string; language?: string; qr?: string; columns?: number; rows?: number; scene?: string };
+export type ElementOptions = { src?: string; alt?: string; poster?: string; tex?: string; language?: string; qr?: string; columns?: number; rows?: number; backdrop?: string };
 
 // the units of a new element of the kind, each without the white space before it, in the order in
 // which they are inserted. base is the indentation of the children of the container
@@ -83,11 +83,11 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
     case 'text':
       return ['<p></p>'];
     case 'image':
-      return [lines([[0, '<figure class="zone">'], [1, `<img src="${attr(o.src ?? 'media/image.png')}" alt="${attr(o.alt ?? '')}">`], [0, '</figure>']], style, base)];
+      return [lines([[0, '<figure class="figure-box">'], [1, `<img src="${attr(o.src ?? 'media/image.png')}" alt="${attr(o.alt ?? '')}">`], [0, '</figure>']], style, base)];
     case 'video': {
       const src = o.src ?? 'media/video.mp4';
       const poster = o.poster ?? src.replace(/\.[^./]*$/, '.png');
-      return [lines([[0, '<div class="zone">'], [1, `<video src="${attr(src)}" poster="${attr(poster)}" muted loop data-autoplay></video>`], [0, '</div>']], style, base)];
+      return [lines([[0, '<div class="figure-box">'], [1, `<video src="${attr(src)}" poster="${attr(poster)}" muted loop data-autoplay></video>`], [0, '</div>']], style, base)];
     }
     case 'table': {
       const columns = Math.max(1, o.columns ?? 2);
@@ -105,7 +105,7 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
     case 'shape':
       return ['<div class="shape rounded" style="width: 240px; height: 240px"></div>'];
     case 'backdrop':
-      return [`<div class="backdrop" data-scene="${attr(o.scene ?? 'nest')}" data-cx="0.97" data-cy="0" data-half="0.5"></div>`];
+      return [`<div class="backdrop" data-backdrop="${attr(o.backdrop ?? 'tubes')}" data-cx="0.42" data-cy="0" data-half="0.6"></div>`];
   }
 }
 
@@ -115,7 +115,7 @@ const SAMPLE_WORDS: Partial<Record<NewLayout, [string, string][]>> & { all: [str
   closing: [['<h1></h1>', 'Thank you'], ['<p class="sub"></p>', 'Questions'], ['<p class="who"></p>', '']],
   section: [['<h2></h2>', 'Title of the section']],
   figure: [['<h2></h2>', 'Title of the figure'], ['<p class="caption"></p>', 'Caption of the figure, at the lower left']],
-  split: [['<h2></h2>', 'Title'], ['<p></p>', 'A sentence on the black panel.']],
+  split: [['<h2></h2>', 'Title'], ['<p></p>', 'A sentence on the black text column.']],
   all: [['<h2></h2>', 'Title of the slide'], ['<p></p>', 'A paragraph of the text column, which is set in the width of the layout and runs over a few lines.']],
 };
 
@@ -125,7 +125,7 @@ const BOX = 'style="background: color-mix(in srgb, var(--muted) 34%, var(--bg));
 // the text of a sample slide of the layout for the tiles of the layout chooser: the skeleton of
 // layoutText with placeholder words, two items in its list, and a gray box in place of each figure
 // and backdrop. a content slide and a narrow slide are written without a figure, hence their
-// samples get a gray zone and a gray backdrop at the place of the layout, and a wide slide is
+// samples get a gray figure box and a gray backdrop at the place of the layout, and a wide slide is
 // without one, since its text column runs over this place. a sample does not depend on the deck,
 // and it is drawn but never written into a file
 export function sampleText(layout: NewLayout): string {
@@ -136,8 +136,8 @@ export function sampleText(layout: NewLayout): string {
   }
   text = text
     .replace('<ul class="outline" data-auto></ul>', '<ul class="outline"><li class="now">Chapter one</li><li>Chapter two</li></ul>')
-    .replace(/<div class="(backdrop|plate|zone)"[^>]*>/g, (_, cls: string) => `<div class="${cls}" ${BOX}>`);
+    .replace(/<div class="(backdrop|plate|figure-box)"[^>]*>/g, (_, cls: string) => `<div class="${cls}" ${BOX}>`);
   text = text.replace(/<ul>\s*<li><\/li>\s*<\/ul>/, '<ul><li>A first point</li><li>A second point</li></ul>');
-  const place = layout === 'content' ? 'zone' : layout === 'narrow' ? 'backdrop' : null;
+  const place = layout === 'content' ? 'figure-box' : layout === 'narrow' ? 'backdrop' : null;
   return place ? text.replace('</section>', `  <div class="${place}" ${BOX}></div>\n</section>`) : text;
 }

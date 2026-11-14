@@ -1,14 +1,14 @@
-// the pairing of the blocks of text in the file with their elements on the page, and the text of
-// the file with the edits of the page written into it. a block is an element whose content is
+// the pairing of the text elements in the file with their elements on the page, and the text of
+// the file with the edits of the page written into it. a text element is an element whose content is
 // edited in place, e.g. a heading, a paragraph, a list item, a cell, a caption, or the notes, and
 // the outermost such element is paired, since the elements inside it are written with it. every
-// byte outside an edited block is copied from the file
+// byte outside an edited text element is copied from the file
 
 import { RAW_TEXT, type Range } from './tokens.ts';
 import { VOID, contentRange, elementRange, isFragmentRoot, lastEnd, rawRange, type Piece, type Source, type SrcComment, type SrcEl, type SrcNode, type SrcText } from './source.ts';
 import type { MathInfo, MathLookup } from './math.ts';
 import { mergeEdit, renderTag, stateOf, type TagEdit } from './tags.ts';
-import { fragmentIndex } from './layers.ts';
+import { fragmentIndex } from './shown-steps.ts';
 import { indentAt, placeLead, spaceOf, unitsOf, type Child, type Unit } from './model/units.ts';
 import { textStyle } from './model/templates.ts';
 
@@ -51,13 +51,13 @@ export function virtualChildren(el: Element, math: MathLookup): Item[] {
   return items;
 }
 
-const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'td', 'th', 'dt', 'dd', 'figcaption', 'caption', 'blockquote', 'pre', 'aside', 'summary', 'label']);
+const TEXT_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'td', 'th', 'dt', 'dd', 'figcaption', 'caption', 'blockquote', 'pre', 'aside', 'summary', 'label']);
 const INLINE_TAGS = new Set(['a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'img', 'kbd', 'mark', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr']);
 
-// a div or a span is a block when its own text is not only white space and its children are
-// inline, e.g. div.foot, div.caption, div.math, and span.lab of the theme
-export function isBlock(s: SrcEl): boolean {
-  if (BLOCK_TAGS.has(s.tag)) return true;
+// a div or a span is a text element when its own text is not only white space and its children are
+// inline, e.g. div.foot, div.caption, div.math, and span.label of the theme
+export function isTextElement(s: SrcEl): boolean {
+  if (TEXT_TAGS.has(s.tag)) return true;
   if (s.tag !== 'div' && s.tag !== 'span') return false;
   const own = s.children.some((c) => c.kind === 'text' && /\S/.test(c.decoded));
   return own && s.children.every((c) => c.kind !== 'element' || INLINE_TAGS.has(c.tag));
@@ -69,13 +69,13 @@ const sameTag = (el: Element, s: SrcEl) => el.localName.toLowerCase() === s.tag.
 const shown = (live: string, src: string) => (src.includes('\u00a0') ? live : live.replace(/\u00a0/g, ' '));
 const short = (s: string) => (s.length > 40 ? `${s.slice(0, 40)}…` : s).replace(/\n/g, '\\n');
 
-export type Block = { src: SrcEl; live: Element; slide: Element | null };
+export type TextElement = { src: SrcEl; live: Element; slide: Element | null };
 export type Problem = { slide: Element | null; tag: string; reason: string };
-// elements maps every element of the page that was found in the file, block or not, to its bytes,
-// inner maps the elements inside the blocks, and root is the div.slides of the page
+// elements maps every element of the page that was found in the file, text element or not, to its bytes,
+// inner maps the elements inside the text elements, and root is the div.slides of the page
 export type Pairing = {
-  blocks: Block[];
-  byLive: Map<Element, Block>;
+  texts: TextElement[];
+  byLive: Map<Element, TextElement>;
   elements: Map<Element, SrcEl>;
   inner: Map<Element, SrcEl>;
   sections: { src: SrcEl; live: Element }[];
@@ -83,20 +83,20 @@ export type Pairing = {
   root: Element | null;
 };
 
-// pairs the blocks of the file with the page. outside a block, the elements of the file are found
+// pairs the text elements of the file with the page. outside a text element, the elements of the file are found
 // on the page in order, and an element added on the page, e.g. a canvas of a backdrop or an item of
-// the outline, is passed over. inside a block, the page must read as the file, else the block is a
+// the outline, is passed over. inside a text element, the page must read as the file, else the text element is a
 // problem and is not edited
 export function pair(source: Source, liveSlides: Element, math: MathLookup): Pairing {
-  const out: Pairing = { blocks: [], byLive: new Map(), elements: new Map(), inner: new Map(), sections: [], problems: [], root: liveSlides };
+  const out: Pairing = { texts: [], byLive: new Map(), elements: new Map(), inner: new Map(), sections: [], problems: [], root: liveSlides };
   out.elements.set(liveSlides, source.slides);
   pairChildren(source.slides, liveSlides, null, math, out);
   return out;
 }
 
-function blocksWithin(s: SrcEl): SrcEl[] {
-  if (isBlock(s)) return [s];
-  return s.children.flatMap((c) => (c.kind === 'element' ? blocksWithin(c) : []));
+function textElementsWithin(s: SrcEl): SrcEl[] {
+  if (isTextElement(s)) return [s];
+  return s.children.flatMap((c) => (c.kind === 'element' ? textElementsWithin(c) : []));
 }
 
 // an element made at run time, e.g. a running head of chrome.ts, which is never in the file
@@ -110,7 +110,7 @@ function pairChildren(src: SrcEl, live: Element, slide: Element | null, math: Ma
     let k = j;
     while (k < items.length && !(items[k].kind === 'element' && sameTag((items[k] as { el: Element }).el, s) && !generated((items[k] as { el: Element }).el))) k++;
     if (k === items.length) {
-      for (const b of blocksWithin(s)) out.problems.push({ slide, tag: b.tag, reason: 'it is not on the page' });
+      for (const b of textElementsWithin(s)) out.problems.push({ slide, tag: b.tag, reason: 'it is not on the page' });
       continue;
     }
     j = k + 1;
@@ -123,13 +123,13 @@ export function pairElement(s: SrcEl, el: Element, slide: Element | null, math: 
   out.elements.set(el, s);
   const here = s.tag === 'section' ? el : slide;
   if (s.tag === 'section') out.sections.push({ src: s, live: el });
-  if (isBlock(s)) {
+  if (isTextElement(s)) {
     const reason = verify(s, el, math, out.inner);
     if (reason) out.problems.push({ slide: here, tag: s.tag, reason });
     else {
-      const block = { src: s, live: el, slide: here };
-      out.blocks.push(block);
-      out.byLive.set(el, block);
+      const textEl = { src: s, live: el, slide: here };
+      out.texts.push(textEl);
+      out.byLive.set(el, textEl);
     }
   } else pairChildren(s, el, here, math, out);
 }
@@ -279,14 +279,14 @@ export const isRuntimeAttr = (el: Element, name: string): boolean => numbered(el
 export function stripRuntime(root: ParentNode): void {
   for (const el of root.querySelectorAll('cite, p.theorem')) for (const name of RUNTIME_ATTRS[el.localName]) el.removeAttribute(name);
 }
-// the declarations and the attributes of an element inside a block that are compared with the
+// the declarations and the attributes of an element inside a text element that are compared with the
 // file, i.e. those that the editor writes under the scope rule
 const LIVE_STYLE = ['translate', 'rotate', 'width', 'font-size', 'text-align'];
 const LIVE_ATTRS = ['alt', 'src', 'poster', 'href', 'muted', 'loop', 'colspan', 'rowspan'];
 
 let probe: HTMLElement | null = null;
 
-// the changes of an element inside a block on the page, against its start tag in the file. the
+// the changes of an element inside a text element on the page, against its start tag in the file. the
 // declarations of the file are read by the browser as those of the page are, so that a value is
 // compared in one spelling
 function liveEdit(s: SrcEl, el: Element): TagEdit {
@@ -317,8 +317,8 @@ function liveEdit(s: SrcEl, el: Element): TagEdit {
   return edit;
 }
 
-// an element inside a block, with its start tag written again when it was changed on the page or
-// by a tag edit, which is applied here since the block is one splice of the file
+// an element inside a text element, with its start tag written again when it was changed on the page or
+// by a tag edit, which is applied here since the text element is one splice of the file
 function serializeElement(source: Source, s: SrcEl, el: Element, math: MathLookup, tags: Map<Element, TagEdit>): string {
   const text = source.text;
   let open = s.open ? text.slice(s.open.start, s.open.end) : '';
@@ -334,7 +334,7 @@ function serializeElement(source: Source, s: SrcEl, el: Element, math: MathLooku
 
 // the content of an element. the line breaks that the browser leaves in an item or a paragraph
 // emptied in the editor, also a nested item, are not written, so that the theme draws it as empty,
-// e.g. an item without its mark. a block of only line breaks in the file, e.g. <p><br></p>, keeps
+// e.g. an item without its mark. a text element of only line breaks in the file, e.g. <p><br></p>, keeps
 // them. other tags keep them, since the theme gives the height of a line only to these two
 const EMPTIED = new Set(['li', 'p']);
 const BREAKS = /^(?:\s*<br\s*\/?>)+\s*$/i;
@@ -345,12 +345,12 @@ function contentOf(source: Source, s: SrcEl, el: Element, math: MathLookup, tags
   return r && BREAKS.test(s.source.text.slice(r.start, r.end)) ? out : '';
 }
 
-export function renderBlock(source: Source, block: Block, math: MathLookup, tags: Map<Element, TagEdit> = new Map()): string {
-  return contentOf(source, block.src, block.live, math, tags);
+export function renderTextElement(source: Source, textEl: TextElement, math: MathLookup, tags: Map<Element, TagEdit> = new Map()): string {
+  return contentOf(source, textEl.src, textEl.live, math, tags);
 }
 
 export type Edit = { start: number; end: number; text: string };
-export type Rendered = { text: string; edits: Edit[]; changed: Block[]; warnings: string[] };
+export type Rendered = { text: string; edits: Edit[]; changed: TextElement[]; warnings: string[] };
 
 // the elements taken off the page by the document model, see model/doc.ts, whose units are left out
 // of the file. an element taken off the page otherwise, e.g. by a script of the theme, is kept
@@ -399,11 +399,11 @@ export function childSpace(s: SrcEl, eol: string, step: string): string {
 // order of its children on the page: a unit of the file with its lead, a unit moved in from another
 // element or inserted on the page with the white space of this one, and a unit taken off the page
 // left out. an element of the file that is not on the page is kept where it was, an element made
-// at run time is passed over, and a block is written by serializeChildren. every other byte is
+// at run time is passed over, and a text element is written by serializeChildren. every other byte is
 // copied, hence the text of an unchanged page is the file byte for byte
 class Renderer {
   readonly edits: Edit[] = [];
-  readonly changed: Block[] = [];
+  readonly changed: TextElement[] = [];
   readonly warnings: string[] = [];
   private readonly liveOf = new Map<SrcEl, Element>();
   private readonly eol: string;
@@ -433,17 +433,17 @@ class Renderer {
     const verbatim = inner ? text.slice(inner.start, inner.end) : '';
     if (VOID.has(s.tag)) return open;
     if (RAW_TEXT.has(s.tag)) return open + verbatim + close;
-    const block = this.pairing.byLive.get(live);
-    if (block?.src === s) {
+    const textEl = this.pairing.byLive.get(live);
+    if (textEl?.src === s) {
       const content = contentOf(s.source, s, live, this.math, this.tags);
       if (content !== verbatim) {
         this.edits.push({ start: inner?.start ?? range.start, end: inner?.end ?? range.start, text: content });
-        this.changed.push(block);
+        this.changed.push(textEl);
       }
       return open + content + close;
     }
-    // a block that the page does not read as the file is copied
-    if (isBlock(s)) return open + verbatim + close;
+    // a text element that the page does not read as the file is copied
+    if (isTextElement(s)) return open + verbatim + close;
     return open + this.content(s, live) + close;
   }
 
@@ -458,7 +458,7 @@ class Renderer {
   }
 
   // a unit is left out when its element was taken off the page by the document model, moved into
-  // another element, also one taken off the page, or is a block deleted on the page
+  // another element, also one taken off the page, or is a text element deleted on the page
   private dropped(s: SrcEl, node: Element): boolean {
     if (detached.has(node) || node.parentNode) return true;
     return this.pairing.byLive.get(node)?.src === s;
@@ -547,7 +547,7 @@ class Renderer {
   }
 }
 
-// the text of the file with the edits of the page: the content of the blocks, the start tags in
+// the text of the file with the edits of the page: the content of the text elements, the start tags in
 // tags, the notes added to a slide, and the slides and elements inserted, removed, and moved
 export function renderDeck(source: Source, pairing: Pairing, math: MathLookup, tags: Map<Element, TagEdit> = new Map()): Rendered {
   const r = new Renderer(source, pairing, math, tags);

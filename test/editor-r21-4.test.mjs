@@ -129,10 +129,10 @@ const marks = async (page, n) => {
 
 // V15 and V21. each mark of a centered list is drawn beside the words of its item, at the distance
 // of an uncentered list, and the item with its mark is centered on the list. the four lists of
-// slide 1 of the fixture of R20.4 are a list of dashes, of dots, of arrows, and of numbers
-const KINDS = [['dashes', '<ul class="center">\n    <li>Alpha'], ['dots', '<ul class="dots center">'], ['arrows', '<ul class="arrows center">'], ['numbers', '<ol start="4" class="center">']];
+// slide 1 of the fixture of R20.4 are a list of chevrons, of dots, of dashes, and of numbers
+const KINDS = [['chevrons', '<ul class="center">\n    <li>Alpha'], ['dots', '<ul class="dots center">'], ['dashes', '<ul class="dashes center">'], ['numbers', '<ol start="4" class="center">']];
 for (const platform of PLATFORMS) {
-  test(`V15 ${platform}: Center draws the mark of each item of a list of dashes, dots, arrows, or numbers beside its centered words`, async (t) => {
+  test(`V15 ${platform}: Center draws the mark of each item of a list of chevrons, dots, dashes, or numbers beside its centered words`, async (t) => {
     const page = await load(t, platform, 'test/pages/editor-r20-4.html');
     for (const [n, [kind, written]] of KINDS.entries()) {
       const before = await marks(page, n);

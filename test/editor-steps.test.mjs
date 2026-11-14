@@ -11,7 +11,7 @@ import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { click, drag, press, previewFrames, recordPreview, saveAndReopen } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const REDO = { mac: 'Mod+Shift+Z', other: 'Mod+Y' };
@@ -34,10 +34,10 @@ after(async () => {
 // has a data-keep of a number
 const KEEP_BEFORE = '<div class="math fragment" data-fragment-index="1" data-keep>';
 const KEEP_AFTER = '<div class="math fragment" data-fragment-index="1" data-keep="3">';
-const demo = () => readFileSync('index.html', 'utf8').replace(KEEP_BEFORE, KEEP_AFTER);
+const demo = () => readFileSync('test-deck.html', 'utf8').replace(KEEP_BEFORE, KEEP_AFTER);
 
 // the editor on a deck served over HTTP, opened with text, with the Steps tab shown
-async function open(t, platform, { deck = 'index.html', text = readFileSync(deck, 'utf8'), width = 1920, height = 1080 } = {}) {
+async function open(t, platform, { deck = 'test-deck.html', text = readFileSync(deck, 'utf8'), width = 1920, height = 1080 } = {}) {
   const page = await browser.newPage({ width, height });
   t.after(() => page.close());
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
@@ -110,7 +110,7 @@ for (const platform of PLATFORMS) {
     await slideOf(page, 'div.math[data-keep]');
     assert.deepEqual((await rows(page)).map((r) => r.step), ['0', '1', '2', '3', '', '']);
     const grip = await rowPart(page, 'The Coriolis');
-    const top = await page.evaluate(`document.querySelector('.beeson-edit-side .rows .card.step').getBoundingClientRect().top`);
+    const top = await page.evaluate(`document.querySelector('.beeson-edit-side .rows .step:not(.plain)').getBoundingClientRect().top`);
 
     // a drag shows a line where the row goes and a ghost of the row, and Esc cancels it
     await drag(page, grip, { dy: top - 3 - grip.y, steps: 12, hold: true });
@@ -197,8 +197,8 @@ for (const platform of PLATFORMS) {
 
   test(`a row selects its element, a selected element marks its row, and Alt with an arrow moves a step on ${platform}`, async (t) => {
     const page = await open(t, platform);
-    await slideOf(page, '.reveal .slides section .zone > img');
-    await click(page, '.reveal section.present .zone > img');
+    await slideOf(page, '.reveal .slides section .figure-box > img');
+    await click(page, '.reveal section.present .figure-box > img');
     await page.evaluate('window.BeesonEditor.status()');
     let r = await rows(page);
     assert.deepEqual(r.filter((x) => x.selected).map((x) => x.meta.split(' · ')[0]), ['Figure']);
@@ -235,28 +235,30 @@ for (const platform of PLATFORMS) {
 
   test(`Preview plays the steps of the slide and ends on its last layer on ${platform}`, async (t) => {
     const page = await open(t, platform, { deck: 'test/pages/layers.html' });
-    const layers = () => page.evaluate(`[...document.querySelectorAll('.beeson-layers button')].map((b) => (b.getAttribute('aria-pressed') === 'true' ? '*' : '') + b.textContent)`);
+    const layers = () => page.evaluate(`[...document.querySelectorAll('.beeson-shown-steps button')].map((b) => (b.getAttribute('aria-pressed') === 'true' ? '*' : '') + b.textContent)`);
     assert.deepEqual(await layers(), ['*Up to step 2', 'From step 3']);
     // the span in the text of a paragraph is a step of its own, listed on a locked row
     assert.deepEqual((await rows(page)).filter((r) => r.step).map((r) => [r.step, r.text.slice(0, 12)]), [['0', 'The old step'], ['1', 'The old span'], ['2', 'The old lead'], ['2', 'The new lead'], ['3', 'The new step']]);
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row.locked .chip')].map((c) => c.disabled)`), [true]);
-    const shown = () => page.evaluate(`['old-lead', 'old-step', 'old-span', 'new-lead', 'new-step'].filter((id) => { const el = document.getElementById(id); return getComputedStyle(el).visibility === 'visible' && !el.closest('.beeson-pv-off'); })`);
+    // each frame of the preview is recorded in the page as it is drawn, since the wait for its step
+    // 2 timed out on a slow runner, where the preview was past this step at the first read
+    await recordPreview(page, `({
+      shown: ['old-lead', 'old-step', 'old-span', 'new-lead', 'new-step'].filter((id) => { const el = document.getElementById(id); return getComputedStyle(el).visibility === 'visible' && !el.closest('.beeson-pv-off'); }),
+      label: document.querySelector('.beeson-edit-side .head .play').textContent,
+    })`);
     await click(page, '.beeson-edit-side .head .play');
-    await page.waitFor(`document.documentElement.classList.contains('beeson-previewing')`);
-    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-side .head .play').textContent`), 'Stop');
+    const played = await previewFrames(page);
+    const at = (step) => played.find((f) => f.step === step);
     // before the first step, only the lead-in of the old derivation is shown
-    assert.deepEqual(await shown(), ['old-lead']);
-    await page.waitFor(`document.documentElement.dataset.previewStep === '2'`);
-    assert.deepEqual(await shown(), ['old-lead', 'old-step', 'old-span']);
-    await page.waitFor(`document.documentElement.dataset.previewStep === '4'`);
-    assert.deepEqual(await shown(), ['new-lead', 'new-step']);
-    await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 8000);
+    assert.deepEqual(played[0], { step: '0', playing: true, read: { shown: ['old-lead'], label: 'Stop' } });
+    assert.deepEqual(at('2')?.read.shown, ['old-lead', 'old-step', 'old-span']);
+    assert.deepEqual(at('4')?.read.shown, ['new-lead', 'new-step']);
     assert.deepEqual(await layers(), ['Up to step 2', '*From step 3']);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-pv-off, .beeson-pv-dim').length`), 0);
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-side .head .play').textContent`), 'Preview Steps');
 
     // Esc stops a preview, which also ends on the last layer
-    await page.evaluate(`[...document.querySelectorAll('.beeson-layers button')][0].click()`);
+    await page.evaluate(`[...document.querySelectorAll('.beeson-shown-steps button')][0].click()`);
     await click(page, '.beeson-edit-side .head .play');
     await page.waitFor(`document.documentElement.classList.contains('beeson-previewing')`);
     await press(page, 'Escape');
@@ -273,11 +275,10 @@ for (const platform of PLATFORMS) {
     await slideOf(page, 'div.math[data-keep]');
     await pick(page, 'where', 'With Previous');
     assert.deepEqual((await rows(page)).map((r) => r.step), ['0', '0', '1', '2', '', '']);
+    await recordPreview(page, `[...document.querySelectorAll('.reveal section.present .fragment')].filter((f) => f.classList.contains('beeson-pv-off')).map((f) => f.textContent.slice(0, 12))`);
     await click(page, '.beeson-edit-side .head .play');
-    await page.waitFor(`document.documentElement.dataset.previewStep === '2'`);
-    const off = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .fragment')].filter((f) => f.classList.contains('beeson-pv-off')).map((f) => f.textContent.slice(0, 12))`);
-    assert.deepEqual(off, ['The effectiv']);
-    await press(page, 'Escape');
+    const played = await previewFrames(page);
+    assert.deepEqual(played.find((f) => f.step === '2')?.read, ['The effectiv']);
     assert.deepEqual(errors(page), []);
   });
 

@@ -30,7 +30,7 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const exec = (page, id) => page.evaluate(`window.BeesonEditor.exec(${js(id)})`).then(() => frames(page));
 
 // the editor on slide n of a deck, served over HTTP
-async function load(t, platform, n = 0, deck = 'index.html') {
+async function load(t, platform, n = 0, deck = 'test-deck.html') {
   const text = readFileSync(deck, 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
@@ -105,7 +105,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, 10);
     await selectFigure(page, 'video.for-light');
     await exec(page, 'figure.caption');
-    assert.ok(await page.evaluate(`!!Reveal.getCurrentSlide().querySelector('.zone > .caption')`), 'Caption does not show a caption to type into');
+    assert.ok(await page.evaluate(`!!Reveal.getCurrentSlide().querySelector('.figure-box > .caption')`), 'Caption does not show a caption to type into');
     await byteExact(page);
     await sleep(100);
     await page.send('Input.insertText', { text: 'x' });
@@ -118,7 +118,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'figure.caption');
     await page.evaluate('document.activeElement.blur()');
     await sleep(100);
-    assert.ok(await page.evaluate(`!Reveal.getCurrentSlide().querySelector('.zone > .caption')`), 'an empty caption stays on the page');
+    assert.ok(await page.evaluate(`!Reveal.getCurrentSlide().querySelector('.figure-box > .caption')`), 'an empty caption stays on the page');
     await byteExact(page);
     await byteExact(page);
     await saveAndReopen(page);
@@ -198,7 +198,7 @@ for (const platform of PLATFORMS) {
 test('a deck opened by itself stays at its last slide at a key forward', async (t) => {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  await page.goto(`${server.origin}/index.html?still#/12`);
+  await page.goto(`${server.origin}/test-deck.html?still#/12`);
   await page.waitFor(deckSettled);
   for (const key of ['ArrowRight', 'Space', 'Enter']) await press(page, key);
   await sleep(300);

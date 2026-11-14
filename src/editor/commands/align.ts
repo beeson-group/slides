@@ -38,7 +38,7 @@ function simplest(lo: number, hi: number): number {
   return (lo + hi) / 2;
 }
 
-// the elements selected on the canvas, or the block of a text that has the caret. a backdrop is
+// the elements selected on the canvas, or the text element of a text that has the caret. a backdrop is
 // left out, since only its grips write its box
 export function selectedTargets(app: App): Element[] {
   if (app.selection.kind === 'text') {
@@ -81,7 +81,7 @@ export function groupFrameOf(app: App, els: Element[]): { box: Box; deg: number 
 
 // the members of a group scaled by kx and ky along the axes of its frame, turned by deg, about the
 // upper left corner of the frame, as a drag of its corner grip scales them. a picture is stretched
-// where kx and ky differ, and a text block keeps the place of its top under its wrapped text
+// where kx and ky differ, and a text element keeps the place of its top under its wrapped text
 function scaleGroup(app: App, els: Element[], frame: { box: Box; deg: number }, kx: number, ky: number): Change[] {
   const f = frameOf(app);
   const corner = turned(frame.box, frame.deg, frame.box.left, frame.box.top);
@@ -89,7 +89,7 @@ function scaleGroup(app: App, els: Element[], frame: { box: Box; deg: number }, 
   const changes: Change[] = [];
   for (const el of els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el)))) {
     const s = sizedTarget(el), pic = pictureOf(el), deg = angleOf(el);
-    // the center of the member, or the middle of the top of a text block, turned with it
+    // the center of the member, or the middle of the top of a text element, turned with it
     const point = () => {
       const b = toSlide(f, orientedBox(pic, f.scale, deg)), up = isTextSized(pic) ? b.height / 2 : 0, r = (deg * Math.PI) / 180;
       return { b, x: b.left + b.width / 2 + up * Math.sin(r), y: b.top + b.height / 2 - up * Math.cos(r) };
@@ -204,7 +204,7 @@ const canDistribute = (app: App) => {
 };
 
 // whether the width of every target is written by the editor, by the scope rule, and whether its
-// height is set by the field H, i.e. every target is a picture and none a text block
+// height is set by the field H, i.e. every target is a picture and none a text element
 export const resizable = (els: Element[]) => els.length > 0 && els.map(sizedTarget).every((el) => el.matches(RESIZABLE) || isTextSized(el));
 export const heightSet = (els: Element[]) => els.length > 0 && els.map(sizedTarget).every((el) => el.matches(RESIZABLE));
 
@@ -327,7 +327,7 @@ export function commands(): Command[] {
   });
   // arg is { w, h, els }. an image or a video with its switch Constrain Proportions on keeps the
   // aspect that it has, and with the switch off it is stretched, with its height written. for any
-  // other picture, a height is written as the width at its aspect, and a text block takes a width.
+  // other picture, a height is written as the width at its aspect, and a text element takes a width.
   // a whole group is scaled about the upper left corner of its frame, on both axes where every
   // picture of it keeps its aspect, else on the axis typed
   list.push({
@@ -396,11 +396,11 @@ export function commands(): Command[] {
       const changes = withCorners(app, els, () => els.map((el, i) => {
         const from = placeOf(el);
         const now = sizeOf(el);
-        // a picture that object-fit contain draws inside a larger box, e.g. the image of a zone
+        // a picture that object-fit contain draws inside a larger box, e.g. the image of a figure box
         // without a width, keeps its box with the ratio of the box, which a width alone would
         // shrink to the picture. the box is written with object-fit contain, since the theme
         // stretches a picture with a width and a height to its box. the box is the content box, and
-        // pad is the padding and border around it, e.g. the paper of a paper image
+        // pad is the padding and border around it, e.g. the frame of a white figure
         const cs = getComputedStyle(el);
         const edge = (side: string) => (parseFloat(cs.getPropertyValue(`padding-${side}`)) || 0) + (parseFloat(cs.getPropertyValue(`border-${side}-width`)) || 0);
         const pad = { w: edge('left') + edge('right'), h: edge('top') + edge('bottom') };

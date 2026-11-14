@@ -9,7 +9,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const PLATFORMS = ['mac', 'other'];
 
 let browser;
@@ -79,7 +79,7 @@ const hit = (page, selector) =>
   })()`);
 
 async function openTable(page) {
-  await choose(page, 'View', 'Chapters Table');
+  await choose(page, 'View', 'Slide Sorter');
   await sleep(200);
   assert.equal((await state(page, 'view.lightTable')).checked, true);
   assert.equal((await hit(page, '.beeson-edit-nav')).sorter, true);
@@ -105,7 +105,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await closed(page, 'Esc');
     await openTable(page);
-    await choose(page, 'View', 'Chapters Table');
+    await choose(page, 'View', 'Slide Sorter');
     await closed(page, 'menu');
     await openTable(page);
     await click(page, '.beeson-edit-sorter .tile:nth-of-type(3) .pic', { count: 2 });

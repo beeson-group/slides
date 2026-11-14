@@ -1,9 +1,9 @@
 // tests of R27.1 on both platforms, connection lines as the connectors of PowerPoint: an end of a
-// line drawn or dragged onto an element is glued to it, written as data-anchor on the element and
+// line drawn or dragged onto an element is attached to it, written as data-anchor on the element and
 // data-from or data-to on the svg, and it follows every change of the box of the element in the
 // same entry of the history. a move of the whole line, a delete of the element, and a copy
-// without the element take the glue off, and a copy with the element glues the copy to the copies.
-// the Line pane names each glued end. each edit is checked byte for byte after an undo and a redo
+// without the element take the attachment off, and a copy with the element attaches the copy to the copies.
+// the Line pane names each attached end. each edit is checked byte for byte after an undo and a redo
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -46,7 +46,7 @@ const call = (page, fn, ...args) => page.evaluate(`(${fn})(${args.map(js).join('
 
 // the page loaded before it in the file is closed first. Within 1 s of the last change of a page,
 // its unsaved edits are kept in the storage of the browser, and they would then be offered on a
-// card over the slide of the next page
+// dialog over the slide of the next page
 let last = null;
 async function load(t, platform, slide = EMPTY, text = SOURCE) {
   await last?.close().catch(() => {});
@@ -76,7 +76,7 @@ function screenOf(p) {
 const screen = (page, x, y) => call(page, screenOf, { x, y });
 const scale = (page) => page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); return s.getBoundingClientRect().width / s.offsetWidth; })()`);
 
-// the lines of the current slide: their glue and their two ends in slide px, rounded
+// the lines of the current slide: their attachment and their two ends in slide px, rounded
 function linesNow(slide) {
   return [...document.querySelector(slide).querySelectorAll('svg.line')].map((svg) => {
     const [tx, ty] = (svg.style.translate || '0px 0px').split(/\s+/).map((v) => parseFloat(v) || 0);
@@ -98,7 +98,7 @@ const lines = (page) => call(page, linesNow, SLIDE);
 // the names of data-anchor on the slide, in document order, with the kind of each element
 const anchors = (page) => page.evaluate(`[...document.querySelector(${js(SLIDE)}).querySelectorAll('[data-anchor]')].map((el) => el.getAttribute('data-anchor') + ' ' + el.localName)`);
 
-// for each glued end of the current slide, its distance in slide px from its place in the box of
+// for each attached end of the current slide, its distance in slide px from its place in the box of
 // its element, i.e. the box of the style of a shape turned by its rotate, or the box seen of any
 // other element
 function offsets(slide) {
@@ -140,7 +140,7 @@ function offsets(slide) {
   }
   return out;
 }
-const glued = async (page, count) => {
+const linesOf = async (page, count) => {
   const d = await call(page, offsets, SLIDE);
   assert.equal(d.length, count, `the slide does not have ${count} glued ends: ${js(d)}`);
   assert.ok(d.every((v) => v >= 0 && v <= 1), `a glued end is off its place in the box of its element: ${js(d)}`);
@@ -186,14 +186,14 @@ for (const platform of PLATFORMS) {
     const [moved] = await lines(page);
     assert.deepEqual(moved.ends.slice(0, 2), [640, 537], 'the tail of the arrow is left behind by the box');
     assert.deepEqual(moved.ends.slice(2), [1186, 537], 'the head of the arrow is moved');
-    await glued(page, 2);
+    await linesOf(page, 2);
     await undoRedo(page, before, await render(page));
     assert.deepEqual(errors(page), []);
   });
 }
 
-// rule 1. an end drawn onto an element is glued at the pointer, or at the middle of the nearest edge
-// within 16 slide px of it. a text in the flow, a line, and a drag with the free key do not glue, and
+// rule 1. an end drawn onto an element is attached at the pointer, or at the middle of the nearest edge
+// within 16 slide px of it. a text in the flow, a line, and a drag with the free key do not attach, and
 // a text moved as a box does. the element under a dragged end is outlined
 for (const platform of PLATFORMS) {
   test(`rule 1: the ends of a drawn line are glued at the pointer or at the middle of an edge (${platform})`, async (t) => {
@@ -205,7 +205,7 @@ for (const platform of PLATFORMS) {
     const a = await screen(page, 330, 520);
     await drag(page, a, { dx: (1306 - 330) * k, dy: (810 - 520) * k, steps: 12, hold: true });
     const outline = await call(page, (sel) => {
-      const o = document.querySelector('.beeson-glue-target');
+      const o = document.querySelector('.beeson-attach-target');
       const el = document.querySelector(sel);
       if (!o || o.hidden || !o.getClientRects().length) return null;
       const r = o.getBoundingClientRect(), e = el.getBoundingClientRect();
@@ -221,7 +221,7 @@ for (const platform of PLATFORMS) {
     assert.equal(outline.color, outline.accent, 'the outline is not in the accent color');
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: a.x + (1306 - 330) * k, y: a.y + (810 - 520) * k, button: 'left', clickCount: 1 });
     await sleep(100);
-    assert.equal(await page.evaluate('document.querySelectorAll(".beeson-glue-target:not([hidden])").length'), 0, 'the outline stays after the release');
+    assert.equal(await page.evaluate('document.querySelectorAll(".beeson-attach-target:not([hidden])").length'), 0, 'the outline stays after the release');
     const drawn = (await lines(page)).at(-1);
     assert.equal(drawn.to, 'a3 0.5 0', 'the head is not put at the middle of the top edge of the ellipse');
     assert.deepEqual(drawn.ends.slice(2), [1306, 800]);
@@ -230,20 +230,20 @@ for (const platform of PLATFORMS) {
     assert.ok(Math.abs(+fx * 241 + 279 - drawn.ends[0]) <= 1 && Math.abs(+fy * 148 + 463 - drawn.ends[1]) <= 1, `the tail is not glued at the pointer: ${drawn.from} ${drawn.ends}`);
     assert.ok(!['0.5', '0', '1'].includes(fx) || !['0.5', '0', '1'].includes(fy), 'the tail is put at an edge');
     assert.deepEqual(await anchors(page), ['a1 div', 'a2 div', 'a3 div']);
-    await glued(page, 4);
+    await linesOf(page, 4);
     const after = await render(page);
     await undo(page);
     assert.equal(await render(page), SOURCE, 'one undo does not take the line and its glue off');
     await redo(page);
     assert.equal(await render(page), after);
 
-    // with the free key, neither end is glued
+    // with the free key, neither end is attached
     await exec(page, 'insert.line');
     await drag(page, await screen(page, 400, 540), { dx: (1300 - 400) * k, dy: (880 - 540) * k, steps: 12, modifiers: free(platform) });
     await sleep(100);
     const loose = (await lines(page)).at(-1);
     assert.deepEqual([loose.from, loose.to], [null, null], 'an end drawn with the free key is glued');
-    // a text in the flow and another line do not take glue, and a text moved as a box does
+    // a text in the flow and another line do not take an attachment, and a text moved as a box does
     await exec(page, 'insert.line');
     await drag(page, await screen(page, 300, 270), { dx: (900 - 300) * k, dy: (950 - 270) * k, steps: 12 });
     await sleep(100);
@@ -264,8 +264,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 2. the glue is written into the tags only, as attributes of the editor: a deck without glue
-// and a deck with glue are written byte for byte by an open and a save, and the attributes are in
+// rule 2. the attachment is written into the tags only, as attributes of the editor: a deck without an attachment
+// and a deck with an attachment are written byte for byte by an open and a save, and the attributes are in
 // the scope rule
 for (const platform of PLATFORMS) {
   test(`rule 2: an open and a save keep a deck with and without glue byte for byte (${platform})`, async (t) => {
@@ -284,7 +284,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 3. whenever a glued element gets another box, its ends follow in the same entry of the history
+// rule 3. whenever an attached element gets another box, its ends follow in the same entry of the history
 const FOLLOW = [
   ['a drag', async (page) => {
     await drag(page, await screen(page, 399, 500), { dx: 90, dy: 60, steps: 10 });
@@ -314,7 +314,7 @@ const FOLLOW = [
     await click(page, await screen(page, 1306, 880), { modifiers: 'Shift' });
     await exec(page, 'arrange.align.bottom');
   }],
-  // a line glued to the text moved as a box, which Reset Slide puts back into the flow
+  // a line attached to the text moved as a box, which Reset Slide puts back into the flow
   ['Reset Slide', async (page) => {
     await exec(page, 'slide.reset');
   }, async (page) => {
@@ -331,13 +331,13 @@ for (const platform of PLATFORMS) {
     test(`rule 3: the glued ends follow ${name} of an element, undone with it in one step (${platform})`, async (t) => {
       const page = await load(t, platform, GLUED);
       const count = (await prepare?.(page)) ?? 2;
-      await glued(page, count);
+      await linesOf(page, count);
       const base = await render(page);
       const was = (await lines(page)).map((l) => l.ends);
       await run(page);
       await sleep(150);
       assert.notEqual(await render(page), base, `${name} does not change the deck`);
-      await glued(page, count);
+      await linesOf(page, count);
       assert.notDeepEqual((await lines(page)).map((l) => l.ends), was, 'the line does not follow');
       const after = await render(page);
       // each change of the box is one entry with the line in it
@@ -346,31 +346,31 @@ for (const platform of PLATFORMS) {
       assert.equal(await render(page), base, 'the undo does not put the box and the line back');
       for (let i = 0; i < steps; i++) await redo(page);
       assert.equal(await render(page), after, 'the redo does not move the box and the line again');
-      await glued(page, count);
+      await linesOf(page, count);
       assert.deepEqual(errors(page), []);
     });
   }
 
   test(`rule 3: a glued end follows a move of the group of its element (${platform})`, async (t) => {
     const page = await load(t, platform, GROUPED);
-    await glued(page, 2);
+    await linesOf(page, 2);
     await drag(page, await screen(page, 300, 660), { dx: 60, dy: 90, steps: 10 });
     await sleep(150);
     assert.notEqual(await page.evaluate(`document.querySelector(${js(`${SLIDE} > .shape`)}).style.translate`), '200px 400px', 'the group is not moved');
-    await glued(page, 2);
+    await linesOf(page, 2);
     await undoRedo(page, SOURCE, await render(page));
     // and a nudge of the box at the other end
     await click(page, await screen(page, 1300, 460));
     for (let i = 0; i < 3; i++) await press(page, 'ArrowDown');
     await sleep(100);
-    await glued(page, 2);
+    await linesOf(page, 2);
     assert.deepEqual(errors(page), []);
   });
 }
 
-// rule 4. a drag of a glued end off its element takes its glue off, a drop on another element
-// glues it there, a move of the whole line takes both off, a delete of the element leaves the line
-// without its glue, and a copy keeps the glue only with the elements
+// rule 4. a drag of an attached end off its element takes its attachment off, a drop on another element
+// attaches it there, a move of the whole line takes both off, a delete of the element leaves the line
+// without its attachment, and a copy keeps the attachment only with the elements
 const endGrip = (page, which) => page.evaluate(`(() => { const g = [...document.querySelectorAll('.beeson-line-end')].find((g) => !g.hidden && g.dataset.end === ${js(which)}); if (!g) return null; const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 for (const platform of PLATFORMS) {
   test(`rule 4: a dragged end is glued off and on, and a moved line is let go (${platform})`, async (t) => {
@@ -386,7 +386,7 @@ for (const platform of PLATFORMS) {
     let [l] = await lines(page);
     assert.equal(l.to, 'a3 0 0.5', 'the head is not glued to the ellipse');
     assert.deepEqual(await anchors(page), ['a1 div', 'a3 div'], 'the name of the box let go is kept, or the ellipse is not named');
-    await glued(page, 2);
+    await linesOf(page, 2);
     await undoRedo(page, SOURCE, await render(page));
     // the head dragged off to the empty slide
     grip = await endGrip(page, '2');
@@ -395,7 +395,7 @@ for (const platform of PLATFORMS) {
     [l] = await lines(page);
     assert.equal(l.to, null, 'the head dragged off the ellipse is still glued');
     assert.deepEqual(await anchors(page), ['a1 div']);
-    // with the free key a drop on a box does not glue
+    // with the free key a drop on a box does not attach
     grip = await endGrip(page, '2');
     const target = await screen(page, 1306, 537);
     await drag(page, grip, { dx: target.x - grip.x, dy: target.y - grip.y, steps: 10, modifiers: free(platform) });
@@ -442,7 +442,7 @@ for (const platform of PLATFORMS) {
     await undoRedo(page, SOURCE, await render(page));
     await undo(page);
 
-    // the line copied alone is pasted without glue
+    // the line copied alone is pasted without an attachment
     await click(page, await screen(page, 853, 454));
     await exec(page, 'edit.copy');
     await exec(page, 'edit.paste');
@@ -475,19 +475,19 @@ for (const platform of PLATFORMS) {
       const copy = all.find((x) => x.from && x.from !== 'a1 1 0.5');
       assert.ok(copy, `${route} does not glue the copied line to the copies: ${js(all)}`);
       assert.ok(copy.to && copy.to !== 'a2 0 0.5');
-      await glued(page, 4);
+      await linesOf(page, 4);
       await undo(page);
       assert.equal(await render(page), SOURCE, `one undo does not take the copies of ${route} off`);
     }
 
-    // Duplicate Slide and a paste of the slide keep the glue of the copy
+    // Duplicate Slide and a paste of the slide keep the attachment of the copy
     for (const route of ['slide.duplicate', 'slide.paste']) {
       if (route === 'slide.paste') await exec(page, 'slide.copy');
       await exec(page, route);
       await sleep(200);
       assert.equal(await page.evaluate('Reveal.getIndices().h'), 2);
       assert.deepEqual(await anchors(page), ['a1 div', 'a2 div']);
-      await glued(page, 2);
+      await linesOf(page, 2);
       await undo(page);
       await page.evaluate('Reveal.slide(1)');
       await sleep(100);
@@ -497,7 +497,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// item 5. the Line pane names each glued end, with a button that takes its glue off
+// item 5. the Line pane names each attached end, with a button that takes its attachment off
 for (const platform of PLATFORMS) {
   test(`item 5: the Line pane names the glued ends and takes the glue off (${platform})`, async (t) => {
     const page = await load(t, platform, GLUED);
@@ -507,8 +507,8 @@ for (const platform of PLATFORMS) {
     const text = await page.evaluate(`document.querySelector(${js(PANEL)}).innerText`);
     assert.match(text, /Start: Rounded Rectangle: Goal/, 'the start is not named in the Line pane');
     assert.match(text, /End: Rounded Rectangle/, 'the end is not named in the Line pane');
-    assert.equal((await state(page, 'line.unglue.end')).enabled, true);
-    const button = await page.evaluate(`(() => { const b = document.querySelector(${js(`${PANEL} [data-command="line.unglue.end"]`)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    assert.equal((await state(page, 'line.detach.end')).enabled, true);
+    const button = await page.evaluate(`(() => { const b = document.querySelector(${js(`${PANEL} [data-command="line.detach.end"]`)}); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     assert.ok(button, 'the end does not have a button that takes its glue off');
     await click(page, button);
     await sleep(100);
@@ -518,7 +518,7 @@ for (const platform of PLATFORMS) {
     assert.ok(lineTag(await render(page)).includes('data-from="a1 1 0.5"'));
     await undoRedo(page, SOURCE, await render(page));
     await undo(page);
-    await exec(page, 'line.unglue.end');
+    await exec(page, 'line.detach.end');
     await frames(page);
     const after = await page.evaluate(`document.querySelector(${js(PANEL)}).innerText`);
     assert.doesNotMatch(after, /End: Rounded Rectangle/, 'the pane names an end let go');
@@ -537,7 +537,7 @@ async function drawLine(page, a, b) {
   return (await lines(page)).at(-1);
 }
 
-// rule 1. an end is glued to the element under the pointer, even where the middle of an edge of an
+// rule 1. an end is attached to the element under the pointer, even where the middle of an edge of an
 // element above it is within reach. the lower box spans y 600 to 720 and is first in the file, and
 // the upper box spans y 472 to 592
 for (const platform of PLATFORMS) {
@@ -547,7 +547,7 @@ for (const platform of PLATFORMS) {
     assert.equal(low.to, 'a1 0.5 0', `the end inside the lower box is glued to another element: ${js(low)}`);
     assert.deepEqual(low.ends.slice(2), [450, 600]);
     assert.deepEqual(await anchors(page), ['a1 div']);
-    await glued(page, 1);
+    await linesOf(page, 1);
     // on a fresh slide, since an end snaps to the end of another line
     const fresh = await load(t, platform, STACK);
     const high = await drawLine(fresh, { x: 1200, y: 480 }, { x: 450, y: 590 });
@@ -555,14 +555,14 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(high.ends.slice(2), [450, 592]);
     assert.deepEqual(await anchors(fresh), ['a1 div']);
     assert.equal(await fresh.evaluate(`document.querySelector(${js(SLIDE)}).querySelector('[data-anchor]').style.translate`), '300px 472px');
-    await glued(fresh, 1);
+    await linesOf(fresh, 1);
     assert.deepEqual(errors(page), []);
     assert.deepEqual(errors(fresh), []);
   });
 }
 
-// rule 1. a group takes glue as one object: an end at the middle of the right edge of the box of the
-// group, between its two members, is glued to the group, whose members share the name, and it
+// rule 1. a group takes an attachment as one object: an end at the middle of the right edge of the box of the
+// group, between its two members, is attached to the group, whose members share the name, and it
 // follows a move of the group. the Line pane names the group
 for (const platform of PLATFORMS) {
   test(`rule 1: a group takes glue as one object at the middle of an edge of its box (${platform})`, async (t) => {
@@ -587,7 +587,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 2. a delete or a cut of a glued line takes the names off the elements that it was glued to
+// rule 2. a delete or a cut of an attached line takes the names off the elements that it was attached to
 for (const platform of PLATFORMS) {
   test(`rule 2: a delete or a cut of a glued line takes the names off its elements (${platform})`, async (t) => {
     const page = await load(t, platform, GLUED);
@@ -606,18 +606,18 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// item 5. the row of an end that is not glued is not shown, nor is the section without a glued end
-const shownButtons = (page) => page.evaluate(`[...document.querySelectorAll(${js(`${PANEL} [data-command^="line.unglue"]`)})].filter((b) => b.getClientRects().length).map((b) => b.dataset.command)`);
+// item 5. the row of an end that is not attached is not shown, nor is the section without an attached end
+const shownButtons = (page) => page.evaluate(`[...document.querySelectorAll(${js(`${PANEL} [data-command^="line.detach"]`)})].filter((b) => b.getClientRects().length).map((b) => b.dataset.command)`);
 for (const platform of PLATFORMS) {
   test(`item 5: the Line pane shows a row only for a glued end of one line (${platform})`, async (t) => {
     const page = await load(t, platform, GLUED);
     await click(page, await screen(page, 853, 454));
     await frames(page);
     await sleep(100);
-    assert.deepEqual(await shownButtons(page), ['line.unglue.start', 'line.unglue.end']);
-    await exec(page, 'line.unglue.end');
+    assert.deepEqual(await shownButtons(page), ['line.detach.start', 'line.detach.end']);
+    await exec(page, 'line.detach.end');
     await frames(page);
-    assert.deepEqual(await shownButtons(page), ['line.unglue.start'], 'a button is shown for the end let go');
+    assert.deepEqual(await shownButtons(page), ['line.detach.start'], 'a button is shown for the end let go');
     // the loose line alone, and the two lines
     await click(page, await screen(page, 900, 950));
     await frames(page);

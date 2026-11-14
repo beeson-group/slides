@@ -57,8 +57,11 @@ export async function removeProfile(profile) {
  * Starts Chrome and returns an object with newPage() and close(). With offline set, every host
  * name is mapped to a failed lookup, thus each network load of a deck is reported as an error.
  * Without it, only 127.0.0.1 is reached. A request that is not answered within timeout ms fails.
+ * With wholeFrames set, a frame is drawn only once every layer in it is rastered, which a screenshot
+ * after a scroll and heavy work in the page needs, see scripts/export-pptx.mjs, and text is drawn
+ * without subpixel antialiasing.
  */
-export async function launch({ offline = true, timeout = 120000 } = {}) {
+export async function launch({ offline = true, timeout = 120000, wholeFrames = false } = {}) {
   const chrome = findChrome();
   const profile = mkdtempSync(join(tmpdir(), 'beeson-chrome-'));
   const args = [
@@ -81,13 +84,27 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     // network, Chrome downloads components and models into the profile in the background, and on
     // Windows such a file is still locked when the profile is removed
     `--host-resolver-rules=MAP * ~NOTFOUND${offline ? '' : ', EXCLUDE 127.0.0.1'}`,
+    // without it, a frame is drawn while the tiles of a layer that the scroll has brought into view
+    // are rastered, and the layer is left out of the frame. a fragment is a layer of its own, with
+    // will-change: opacity in reveal.css
+    ...(wholeFrames ? ['--run-all-compositor-stages-before-draw'] : []),
+    // on Linux and Windows, text over an opaque ground is drawn with subpixel antialiasing, whose
+    // color fringes stay in a picture shown on another screen. the picture of the words of a step,
+    // taken over a transparent ground, has gray edges, hence it differs from the print view there
+    ...(wholeFrames ? ['--disable-lcd-text'] : []),
     'about:blank',
   ];
   const child = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
   let stderr = '';
   child.stderr.setEncoding('utf8');
+  // the crashes of the network service of Chrome, which Chrome reports on stderr and starts again
+  let networkCrashes = 0;
+  const onNetworkCrash = new Set();
   child.stderr.on('data', (chunk) => {
     stderr = `${stderr}${chunk}`.slice(-2000);
+    if (!chunk.includes('Network service crashed')) return;
+    networkCrashes++;
+    for (const listener of onNetworkCrash) listener();
   });
   const exited = new Promise((done) => child.once('exit', done));
   // rejected when Chrome exits, so that a request in flight is not left unsettled
@@ -131,14 +148,16 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
   function send(method, params = {}, sessionId) {
     const id = nextId++;
     child.stdio[3].write(`${JSON.stringify({ id, method, params, sessionId })}\0`);
-    return answered(new Promise((done, fail) => pending.set(id, { done, fail })), method);
+    // an expression that is not answered is named by its start, to tell which read of a test hung
+    const what = typeof params.expression === 'string' ? `${method} of ${params.expression.slice(0, 300)}` : method;
+    return answered(new Promise((done, fail) => pending.set(id, { done, fail })), what);
   }
 
   // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer, and scale
   // is the device pixel ratio. with motion set, the page is shown without reduced motion, which is
   // the setting of the macOS and Windows runners of GitHub, hence a backdrop is traced there too.
   // without drafts, the unsaved edits that the editor keeps in the storage of the browser 1 s after
-  // its last change are not written, since they were offered on a card to the next page of a test
+  // its last change are not written, since they were offered on a dialog to the next page of a test
   async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1, motion = false, drafts = false } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
@@ -190,9 +209,10 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
       send: call,
       // on a Windows runner of GitHub, about one page in a few thousand is refused one of its
       // files with net::ERR_NO_BUFFER_SPACE, while ports and memory are free. such a page is loaded
-      // again, twice at most, and the error of the load before is dropped
+      // again, twice at most, and the error of the load before is dropped. a load in flight when the
+      // network service of Chrome crashes is lost, and it is made again, twice at most
       async goto(url) {
-        const load = async (method, params) => {
+        const once = async (method, params) => {
           const loaded = new Promise((done) => {
             const onLoad = ({ method: event, sessionId: from }) => {
               if (from === sessionId && event === 'Page.loadEventFired') {
@@ -206,10 +226,33 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
           if (errorText) throw new Error(`${url}: ${errorText}`);
           await answered(loaded, `the load of ${url}`);
         };
+        const load = async (method, params) => {
+          for (let n = 0; ; n++) {
+            const seen = networkCrashes;
+            let crash;
+            const crashed = new Promise((done) => onNetworkCrash.add((crash = done)));
+            // a lost load may not be answered, hence it is left once the crash is reported
+            const attempt = once(method, params);
+            attempt.catch(() => {});
+            try {
+              if ((await Promise.race([attempt.then(() => 'loaded'), crashed])) === 'loaded') return;
+            } catch (error) {
+              // the load is reported as aborted before the crash is written to stderr
+              if (networkCrashes === seen && error.message.includes('net::ERR_ABORTED')) await Promise.race([crashed, sleep(2000)]);
+              if (networkCrashes === seen || n === 2) throw error;
+            } finally {
+              onNetworkCrash.delete(crash);
+            }
+            if (n === 2) throw new Error(`${url}: the network service of Chrome crashed three times`);
+          }
+        };
+        // the other errors of a refused load are dropped with it, since they follow from the file
+        // that is missing, e.g. MathJax without theme/mathjax-config.js asks its CDN for a font
+        const before = errors.length;
         const refused = () => {
-          const kept = errors.filter((error) => !error.includes('net::ERR_NO_BUFFER_SPACE'));
-          const found = kept.length < errors.length;
-          errors.splice(0, errors.length, ...kept);
+          const is = (error) => error.includes('net::ERR_NO_BUFFER_SPACE');
+          const found = errors.some(is);
+          if (found) errors.splice(0, errors.length, ...errors.slice(0, before).filter((error) => !is(error)));
           return found;
         };
         await load('Page.navigate', { url });
@@ -288,9 +331,10 @@ export const deckSettled = `(async () => {
 /** Opens a deck at url in the print view of reveal.js, with ?print-pdf in url, and waits until it can be printed. */
 export async function printView(page, url) {
   await page.goto(url);
-  // loading-scroll-mode is removed from the viewport after the pdf-ready event of reveal.js
+  // loading-scroll-mode is removed from the viewport after the pdf-ready event of reveal.js. on a
+  // slow runner, the pages of the demo deck at a pixel ratio of 2 are laid out in over 15 s
   await page.waitFor(`!!document.querySelector('.pdf-page')
-    && !document.querySelector('.reveal-viewport.loading-scroll-mode')`);
+    && !document.querySelector('.reveal-viewport.loading-scroll-mode')`, 120000);
   await page.waitFor(deckSettled);
   // reveal.js clones a slide for each of its steps after the load event, which does not wait for
   // the clones, and a video that has not loaded a frame is printed as a black panel. A clone with

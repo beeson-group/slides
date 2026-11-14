@@ -1,7 +1,7 @@
-/*! beeson.js 0.9.0-beta.1, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
+/*! beeson.js 0.9.0-beta.2, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
 "use strict";
 (() => {
-  // src/scenes.ts
+  // src/backdrops.ts
   var H = 4e-3;
   var stopped = (u) => Math.hypot(u[0] + MU, u[1]) < 0.0166 || Math.hypot(u[0] - 1 + MU, u[1]) < 45e-4 || Math.hypot(u[0] - 0.8, u[1]) > 2.4;
   var toned = (s, tone) => ({ ...s, tone });
@@ -102,23 +102,22 @@
     }
     return [toned(first, "text"), ...out];
   }
-  var SCENES = {
-    nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
+  var BUILT_IN = {
     tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
     wideRibbon: () => ribbon(0.016, 120, 3, 0.12)
   };
-  var SCENE_NAMES = Object.keys(SCENES);
+  var BUILT_IN_NAMES = Object.keys(BUILT_IN);
   var cache = /* @__PURE__ */ new Map();
-  function scene(name) {
+  function builtIn(name) {
     let out = cache.get(name);
     if (!out) {
-      out = name in SCENES ? SCENES[name]() : [];
+      out = name in BUILT_IN ? BUILT_IN[name]() : [];
       cache.set(name, out);
     }
     return out;
   }
 
-  // src/strands.ts
+  // src/trajectories.ts
   var FILL = 0.93;
   var MARGIN = 40;
   var INK_ALPHA = 0.6;
@@ -128,45 +127,45 @@
   var isColor = (v) => isColorString(v) || Array.isArray(v) && v.length === 2 && v.every(isColorString);
   var TONES = ["orange", "violet", "text"];
   function parse(data) {
-    const records = isObject(data) ? data.families : void 0;
-    if (!Array.isArray(records)) throw new Error('it does not have a list "families"');
-    records.forEach((r, i) => {
+    const fileTrajectories = isObject(data) ? data.families : void 0;
+    if (!Array.isArray(fileTrajectories)) throw new Error('it does not have a list "families"');
+    fileTrajectories.forEach((r, i) => {
       if (!isObject(r) || !Array.isArray(r.points) || r.points.length < 2 || !r.points.every(isPair)) {
-        throw new Error(`its record ${i} does not have a list "points" of at least two [x, y] pairs`);
+        throw new Error(`its trajectory ${i} does not have a list "points" of at least two [x, y] pairs`);
       }
       for (const key of ["t", "theta"]) {
         const clock = r[key];
         if (clock !== void 0 && (!Array.isArray(clock) || clock.length !== r.points.length || !clock.every(Number.isFinite))) {
-          throw new Error(`the list "${key}" of its record ${i} does not have one number per point`);
+          throw new Error(`the list "${key}" of its trajectory ${i} does not have one number per point`);
         }
       }
       if (r.tone !== void 0 && !TONES.includes(r.tone)) {
-        throw new Error(`the "tone" of its record ${i} is not orange, violet, or text`);
+        throw new Error(`the "tone" of its trajectory ${i} is not orange, violet, or text`);
       }
       if (r.color !== void 0 && !isColor(r.color)) {
-        throw new Error(`the "color" of its record ${i} is not a CSS color or a pair of them for the dark and the light mode`);
+        throw new Error(`the "color" of its trajectory ${i} is not a CSS color or a pair of them for the dark and the light mode`);
       }
       if (r.alpha !== void 0 && !(typeof r.alpha === "number" && r.alpha > 0 && r.alpha <= 1)) {
-        throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
+        throw new Error(`the "alpha" of its trajectory ${i} is not a number above 0 and up to 1`);
       }
       for (const key of ["weight", "head", "start", "fade"]) {
         const v = r[key];
         if (v !== void 0 && !(typeof v === "number" && Number.isFinite(v) && v >= 0)) {
-          throw new Error(`the "${key}" of its record ${i} is not a number of zero or more`);
+          throw new Error(`the "${key}" of its trajectory ${i} is not a number of zero or more`);
         }
       }
       if (r.glow !== void 0 && typeof r.glow !== "boolean") {
-        throw new Error(`the "glow" of its record ${i} is not true or false`);
+        throw new Error(`the "glow" of its trajectory ${i} is not true or false`);
       }
     });
     const bodies = isObject(data) && Array.isArray(data.bodies) ? data.bodies.filter(isObject) : [];
-    return { families: records, bodies };
+    return { families: fileTrajectories, bodies };
   }
   var TERM = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/;
-  function select(records, spec) {
-    if (!spec?.trim()) return records;
+  function select(fileTrajectories, spec) {
+    if (!spec?.trim()) return fileTrajectories;
     const groups = spec.split(";").map(group);
-    return records.filter((r) => groups.some((tests) => tests.every((test) => test(r))));
+    return fileTrajectories.filter((r) => groups.some((tests) => tests.every((test) => test(r))));
   }
   function group(spec) {
     return spec.split(",").map((term) => {
@@ -186,7 +185,7 @@
       };
     });
   }
-  function strandsOf(file, chosen, color, ramp2, shade, map) {
+  function trajectoriesOf(file, chosen, color, ramp2, shade, map) {
     if (map) shade = void 0;
     const along = shade ?? ramp2;
     const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
@@ -210,23 +209,23 @@
         if (i > 0 && !clock) length += Math.hypot(pts[2 * i] - pts[2 * i - 2], pts[2 * i + 1] - pts[2 * i - 1]);
         times[i] = (clock ? clock[i] - clock[0] : length) + (r.start ?? 0);
       }
-      const strand = { pts, times, T: times[n - 1] };
-      if (r.craft === true) strand.craft = true;
+      const trajectory = { pts, times, T: times[n - 1] };
+      if (r.craft === true) trajectory.craft = true;
       if (color || along || map) {
         const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = along ? r[along] : void 0;
-        strand.ink = { pair: pair2, at: typeof v === "number" && hi > lo ? (v - lo) / (hi - lo) : 0 };
-        if (shade) strand.ink.shade = true;
-        if (map) strand.ink.map = map;
-        strand.alpha = map ? MAP_ALPHA : INK_ALPHA;
+        trajectory.ink = { pair: pair2, at: typeof v === "number" && hi > lo ? (v - lo) / (hi - lo) : 0 };
+        if (shade) trajectory.ink.shade = true;
+        if (map) trajectory.ink.map = map;
+        trajectory.alpha = map ? MAP_ALPHA : INK_ALPHA;
       }
-      if (r.tone) strand.tone = r.tone;
-      if (r.color !== void 0) strand.color = r.color;
-      if (r.alpha !== void 0) strand.alpha = r.alpha;
-      if (r.weight !== void 0) strand.weight = r.weight;
-      if (r.head !== void 0) strand.head = r.head;
-      if (r.fade !== void 0) strand.fade = r.fade;
-      if (r.glow) strand.glow = true;
-      return strand;
+      if (r.tone) trajectory.tone = r.tone;
+      if (r.color !== void 0) trajectory.color = r.color;
+      if (r.alpha !== void 0) trajectory.alpha = r.alpha;
+      if (r.weight !== void 0) trajectory.weight = r.weight;
+      if (r.head !== void 0) trajectory.head = r.head;
+      if (r.fade !== void 0) trajectory.fade = r.fade;
+      if (r.glow) trajectory.glow = true;
+      return trajectory;
     });
   }
   var SAME = 1e-4;
@@ -255,10 +254,10 @@
     }
     return first ? [...first.values()] : [];
   }
-  function fitView(strands, box2, slide) {
+  function fitView(trajectories, box2, slide) {
     const xs = [], ys = [], ws = [];
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (const s of strands) {
+    for (const s of trajectories) {
       const p = s.pts, n = p.length / 2;
       let length = 0;
       for (let i = 1; i < n; i++) length += Math.hypot(p[2 * i] - p[2 * i - 2], p[2 * i + 1] - p[2 * i - 1]);
@@ -455,7 +454,7 @@
       if (location.protocol === "file:") {
         return Promise.reject(
           new Error(
-            `a JSON file cannot be read in a deck opened from the disk. Wrap it in Beeson.strands( and ); and name the .js file in data-strands`
+            `a JSON file cannot be read in a deck opened from the disk. Wrap it in Beeson.trajectories( and ); and name the .js file in data-trajectories`
           )
         );
       }
@@ -468,7 +467,7 @@
     return new Promise((done, fail2) => {
       const script2 = document.createElement("script");
       script2.src = url;
-      script2.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path2} does not call Beeson.strands`));
+      script2.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path2} does not call Beeson.trajectories`));
       script2.onerror = () => fail2(new Error("it was not found"));
       document.head.append(script2);
     });
@@ -486,41 +485,41 @@
     return out;
   }
   function colormapFor(el) {
-    const spec = el.dataset.strandsColormap;
+    const spec = el.dataset.trajectoriesColormap;
     if (!spec?.trim()) return void 0;
     let map;
     try {
       map = colormapOf(spec);
     } catch (error) {
-      console.warn(`beeson: data-strands-colormap="${spec}" is not used, since ${error.message}. The strands are colored from the palette`);
+      console.warn(`beeson: data-trajectories-colormap="${spec}" is not used, since ${error.message}. The trajectories are colored from the palette`);
       return void 0;
     }
-    if (el.dataset.strandsShade)
-      console.warn(`beeson: data-strands-shade="${el.dataset.strandsShade}" is ignored, since data-strands-colormap is given`);
+    if (el.dataset.trajectoriesShade)
+      console.warn(`beeson: data-trajectories-shade="${el.dataset.trajectoriesShade}" is ignored, since data-trajectories-colormap is given`);
     return map;
   }
-  async function strandsFor(el) {
-    const path2 = el.dataset.strands ?? "";
+  async function trajectoriesFor(el) {
+    const path2 = el.dataset.trajectories ?? "";
     const file = await load(path2);
-    if (!file) return { strands: [], dots: [] };
+    if (!file) return { trajectories: [], dots: [] };
     try {
-      const chosen = select(file.families, el.dataset.strandsSelect);
+      const chosen = select(file.families, el.dataset.trajectoriesSelect);
       if (!chosen.length)
-        console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path2}`);
+        console.warn(`beeson: data-trajectories-select="${el.dataset.trajectoriesSelect}" does not match a trajectory of ${path2}`);
       return {
-        strands: strandsOf(
+        trajectories: trajectoriesOf(
           file,
           chosen,
-          el.dataset.strandsColor || void 0,
-          el.dataset.strandsRamp || void 0,
-          el.dataset.strandsShade || void 0,
+          el.dataset.trajectoriesColor || void 0,
+          el.dataset.trajectoriesRamp || void 0,
+          el.dataset.trajectoriesShade || void 0,
           colormapFor(el)
         ),
         dots: bodiesOf(file, chosen)
       };
     } catch (error) {
       console.warn(`beeson: the backdrop of ${path2} is not drawn, since ${error.message}`);
-      return { strands: [], dots: [] };
+      return { trajectories: [], dots: [] };
     }
   }
 
@@ -677,11 +676,6 @@
     for (let x = a; x < b; x *= factor) out.push(x);
     return out;
   }
-  function spaced(a, b, count, p) {
-    const out = [];
-    for (let i = 0; i < count; i++) out.push(a + (b - a) * Math.pow(i / (count - 1), p));
-    return out;
-  }
   function lagrange(n, mu = MU) {
     let x = n === 1 ? 1 - mu - Math.cbrt(mu / 3) : n === 2 ? 1 - mu + Math.cbrt(mu / 3) : -1 - 5 * mu / 12;
     for (let i = 0; i < 30; i++) {
@@ -707,22 +701,6 @@
     const lead = ramp(start4, amplitudes[0], 1.2);
     const values = lead.concat(amplitudes).map((A) => xL + sign * A);
     return family(guess, 0, values, [4], [3], h, () => 0.3, () => 6, lead.length);
-  }
-  function droFamily(distances, h) {
-    const guess = (x0) => {
-      const d = 1 - MU - x0;
-      const s = new Float64Array(6);
-      s[0] = x0;
-      s[4] = Math.sqrt(MU / d) + d;
-      return s;
-    };
-    const tmin = (x0) => {
-      const d = 1 - MU - x0;
-      return 0.4 * Math.PI / (Math.sqrt(MU / (d * d * d)) + 1);
-    };
-    const lead = ramp(0.02, distances[0], 1.12);
-    const values = lead.concat(distances).map((d) => 1 - MU - d);
-    return family(guess, 0, values, [4], [3], h, tmin, (x0) => 10 * tmin(x0), lead.length);
   }
   function closed(m) {
     const n = m.times.length, T = m.t, N = 2 * n - 1;
@@ -876,28 +854,28 @@
       this.pointer = null;
       // the box and the slide for which the window was last fitted, in slide pixels
       this.fittedFor = "";
-      // true when start() was called before the strands of a file were loaded
+      // true when start() was called before the trajectories of a file were loaded
       this.pending = false;
-      // the colors of the strands with an ink, resolved in redraw() for the current mode
+      // the colors of the trajectories with an ink, resolved in redraw() for the current mode
       this.inks = [];
       // copies of the canvases and of the trail, traced in the colors of the old mode during a flip, or
       // null
       this.ghosted = null;
-      // during a trace, the strands before the index cached are drawn on the trail a piece per frame, and
+      // during a trace, the trajectories before the index cached are drawn on the trail a piece per frame, and
       // the others are stroked whole at every frame, see order()
       this.cached = 0;
-      // the point of each strand before cached up to which it is drawn on the trail, a point of its path
+      // the point of each trajectory before cached up to which it is drawn on the trail, a point of its path
       this.upTo = [];
-      // the first points of the bands of the fade of each strand, from bandsOf()
+      // the first points of the bands of the fade of each trajectory, from bandsOf()
       this.bands = [];
-      // a canvas outside the page with the bodies and the strands before cached up to upTo, copied onto
+      // a canvas outside the page with the bodies and the trajectories before cached up to upTo, copied onto
       // the base canvas at every frame of a trace, or null outside a trace
       this.trail = null;
-      // the records of the file once it is loaded, which the editor reads to tell two selections apart
-      this.records = null;
+      // the trajectories of the file once it is loaded, which the editor reads to tell two selections apart
+      this.fileTrajectories = null;
       this.el = el;
-      const file = el.dataset.strands !== void 0;
-      this.strands = file ? [] : scene(el.dataset.scene ?? "");
+      const file = el.dataset.trajectories !== void 0;
+      this.trajectories = file ? [] : builtIn(el.dataset.backdrop ?? "");
       this.dots = file ? [] : null;
       this.loaded = !file;
       this.fitted = file && el.dataset.half === void 0;
@@ -918,15 +896,15 @@
       for (const c of [this.base, this.head]) c.setAttribute("aria-hidden", "true");
       el.prepend(this.head);
       el.prepend(this.base);
-      this.labels = [...el.querySelectorAll(".lab")];
-      this.Tmax = Math.max(...this.strands.map((s) => s.T));
-      this.idx = this.strands.map(() => 0);
+      this.labels = [...el.querySelectorAll(".label")];
+      this.Tmax = Math.max(...this.trajectories.map((s) => s.T));
+      this.idx = this.trajectories.map(() => 0);
       this.order();
       CACHE.set(el, this);
       this.fit();
-      this.ready = file ? Promise.all([strandsFor(el), load(el.dataset.strands ?? "")]).then(([{ strands, dots }, f]) => {
-        this.records = f?.families ?? null;
-        this.install(strands, dots);
+      this.ready = file ? Promise.all([trajectoriesFor(el), load(el.dataset.trajectories ?? "")]).then(([{ trajectories, dots }, f]) => {
+        this.fileTrajectories = f?.families ?? null;
+        this.install(trajectories, dots);
       }) : Promise.resolve();
     }
     static of(el) {
@@ -937,11 +915,11 @@
       const q = location.search;
       return matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute("data-still") || /[?&]still\b/.test(q) || /print-pdf/.test(q);
     }
-    install(strands, dots) {
-      this.strands = strands;
+    install(trajectories, dots) {
+      this.trajectories = trajectories;
       this.dots = dots;
-      this.Tmax = Math.max(...strands.map((s) => s.T));
-      this.idx = strands.map(() => 0);
+      this.Tmax = Math.max(...trajectories.map((s) => s.T));
+      this.idx = trajectories.map(() => 0);
       this.order();
       this.loaded = true;
       this.fittedFor = "";
@@ -952,27 +930,27 @@
         this.start();
       }
     }
-    // sets cached, the number of strands at the start of the order of the strands that are drawn in
-    // pieces during a trace. a strand is drawn in pieces where the seams of the pieces are too faint to
+    // sets cached, the number of trajectories at the start of the order of the trajectories that are drawn in
+    // pieces during a trace. a trajectory is drawn in pieces where the seams of the pieces are too faint to
     // be seen, i.e. it is a hairline without a glow at an opacity of 0.5 or less, and where the pieces
-    // keep the order of the strands, i.e. every earlier strand of another color is traced before it
+    // keep the order of the trajectories, i.e. every earlier trajectory of another color is traced before it
     // begins. two strokes of one color give the same pixels in either order
     order() {
       const ends = /* @__PURE__ */ new Map();
       const seconds = (i, t) => t / this.Tmax * this.duration + i * this.stagger;
       let k = 0;
-      for (; k < this.strands.length; k++) {
-        const s = this.strands[k], color = colorOf(s), begin = seconds(k, s.times[0]);
+      for (; k < this.trajectories.length; k++) {
+        const s = this.trajectories[k], color = colorOf(s), begin = seconds(k, s.times[0]);
         if (s.glow || alphaOf(s) > 0.5 || widthOf(s) > 1) break;
         if ([...ends].some(([other, end]) => other !== color && end > begin)) break;
         ends.set(color, Math.max(ends.get(color) ?? -Infinity, seconds(k, s.times[s.times.length - 1])));
       }
       this.cached = k;
-      this.upTo = this.strands.map(() => 0);
-      this.bands = this.strands.map(bandsOf);
+      this.upTo = this.trajectories.map(() => 0);
+      this.bands = this.trajectories.map(bandsOf);
       this.trail = null;
     }
-    // the last point of the path of strand i at or before its point j
+    // the last point of the path of trajectory i at or before its point j
     lastKept(i, j) {
       const keep = this.paths[i].keep;
       let lo = 0, hi = keep.length - 1;
@@ -983,7 +961,7 @@
       }
       return keep[lo];
     }
-    // the window in the units of the strands: its center and its half height
+    // the window in the units of the trajectories: its center and its half height
     get view() {
       return { cx: this.cx, cy: this.cy, half: this.half };
     }
@@ -1032,11 +1010,11 @@
       const cs = getComputedStyle(this.el);
       return { stroke: cs.getPropertyValue("--stroke").trim(), body: cs.getPropertyValue("--body").trim(), accent: cs.getPropertyValue("--accent").trim(), violet: cs.getPropertyValue("--violet").trim(), text: cs.getPropertyValue("--text").trim(), light: this.el.ownerDocument.documentElement.dataset.theme === "light" };
     }
-    // the colors of the strands with an ink in the current mode. a color of the palette is serialized
-    // by the canvas as #rrggbb or rgba(), which mix() reads, and a strand is given the stroke color
+    // the colors of the trajectories with an ink in the current mode. a color of the palette is serialized
+    // by the canvas as #rrggbb or rgba(), which mix() reads, and a trajectory is given the stroke color
     // when its colors are missing or of another form
     paint(ctx, c) {
-      if (!this.strands.some((s) => s.ink)) {
+      if (!this.trajectories.some((s) => s.ink)) {
         this.inks = [];
         return;
       }
@@ -1048,9 +1026,9 @@
         ctx.fillStyle = value;
         return String(ctx.fillStyle);
       };
-      const palette = Array.from({ length: PALETTE }, (_, i) => color(`--strand-${i + 1}`));
+      const palette = Array.from({ length: PALETTE }, (_, i) => color(`--trajectory-${i + 1}`));
       const bg = color("--bg") || void 0;
-      this.inks = this.strands.map((s) => {
+      this.inks = this.trajectories.map((s) => {
         if (!s.ink) return "";
         if (s.ink.map) return colormapColor(s.ink.map, s.ink.at, bg);
         const k = 2 * s.ink.pair % PALETTE;
@@ -1068,13 +1046,13 @@
       const w = this.el.offsetWidth, h = this.el.offsetHeight;
       if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
       this.unghost();
-      if (this.fitted && this.strands.length) {
+      if (this.fitted && this.trajectories.length) {
         const section = this.el.closest("section");
         const box2 = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
         const slide = { width: section?.offsetWidth || w, height: section?.offsetHeight || h };
         const key2 = [box2.left, box2.top, w, h, slide.width, slide.height].join();
         if (key2 !== this.fittedFor) {
-          const view = fitView(this.strands, box2, slide);
+          const view = fitView(this.trajectories, box2, slide);
           if (view) ({ cx: this.cx, cy: this.cy, half: this.half } = view);
           this.fittedFor = key2;
         }
@@ -1089,7 +1067,7 @@
       this.lw = Math.max(1, 0.7 * dpr * (r.height / h));
       const key = [this.W, this.H, this.cx, this.cy, this.half].join();
       if (key !== this.pathsFor) {
-        this.paths = this.strands.map((s) => {
+        this.paths = this.trajectories.map((s) => {
           const n = s.times.length, out = new Float32Array(2 * n);
           for (let i = 0; i < n; i++) {
             out[2 * i] = this.X(s.pts[2 * i]);
@@ -1141,10 +1119,10 @@
         ctx.fill();
       }
     }
-    // the color, opacity, width, and glow of strand i: those of its tone, then its own ink, alpha,
+    // the color, opacity, width, and glow of trajectory i: those of its tone, then its own ink, alpha,
     // weight, and glow where it has them
     pen(ctx, c, i, inks = this.inks) {
-      const s = this.strands[i], tone = s.tone;
+      const s = this.trajectories[i], tone = s.tone;
       ctx.strokeStyle = s.color ? typeof s.color === "string" ? s.color : s.color[c.light ? 1 : 0] : s.ink ? inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
       ctx.globalAlpha = alphaOf(s);
       ctx.lineWidth = widthOf(s) * this.lw;
@@ -1152,9 +1130,9 @@
       ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
       if (s.glow) ctx.shadowColor = ctx.strokeStyle;
     }
-    // strokes strand i from its point from, its first by default, up to the fraction f of its segment
-    // from point j to j + 1. up to its fade, the strand is stroked in one path, since two strokes of one
-    // strand at an opacity below 1 overlap or leave a gap at their joint. beyond its fade, it is stroked
+    // strokes trajectory i from its point from, its first by default, up to the fraction f of its segment
+    // from point j to j + 1. up to its fade, the trajectory is stroked in one path, since two strokes of one
+    // trajectory at an opacity below 1 overlap or leave a gap at their joint. beyond its fade, it is stroked
     // in bands of equal time, which begin and end at its points, at an opacity that falls to zero at its
     // last point. a stroke from a later point draws the pixels of the same bands beyond this point
     stroke(ctx, i, j, f, from = 0) {
@@ -1179,20 +1157,20 @@
       }
       ctx.globalAlpha = base;
     }
-    // the last point drawn of strand i
+    // the last point drawn of trajectory i
     drawn(i) {
-      return this.done ? this.strands[i].times.length - 1 : this.idx[i];
+      return this.done ? this.trajectories[i].times.length - 1 : this.idx[i];
     }
     // true between the start and the end of a trace that is not a loop
     get midTrace() {
       return !this.loop && this.t0 !== null && !this.finished;
     }
-    // the fraction of the segment of strand i from point j to j + 1 reached at the flight time tau
+    // the fraction of the segment of trajectory i from point j to j + 1 reached at the flight time tau
     fraction(i, j, tau) {
-      const t = this.strands[i].times, dt = t[j + 1] - t[j];
+      const t = this.trajectories[i].times, dt = t[j + 1] - t[j];
       return dt > 0 ? Math.min(1, Math.max(0, (tau - t[j]) / dt)) : 1;
     }
-    // draws the bodies and the strands on the base canvas for the current mode
+    // draws the bodies and the trajectories on the base canvas for the current mode
     redraw() {
       if (!this.W) return;
       const ctx = this.base.getContext("2d");
@@ -1203,10 +1181,10 @@
       this.draw(ctx, c, now, this.inks, this.midTrace ? this.trailOf(c) : null);
       this.paintHead(now, c);
     }
-    // draws the bodies and every strand, a finished strand whole and a strand in its trace up to its
-    // head at the time now. the strands are stroked in the order of their file or scene at every
+    // draws the bodies and every trajectory, a finished trajectory whole and a trajectory in its trace up to its
+    // head at the time now. the trajectories are stroked in the order of their file or built-in backdrop at every
     // frame, the order of the still, hence the last frame of a trace is its still apart from the heads.
-    // with a trail, the trail is copied in place of the bodies, and each strand before cached is
+    // with a trail, the trail is copied in place of the bodies, and each trajectory before cached is
     // stroked from its point of upTo on
     draw(ctx, c, now, inks = this.inks, trail = null) {
       ctx.globalAlpha = 1;
@@ -1215,7 +1193,7 @@
       if (trail) ctx.drawImage(trail, 0, 0);
       else this.bodies(ctx, c);
       const tracing = this.midTrace;
-      this.strands.forEach((s, i) => {
+      this.trajectories.forEach((s, i) => {
         const n = s.times.length, j = this.drawn(i), from = trail && i < this.cached ? this.upTo[i] : 0;
         if (from > 0 && from >= n - 1) return;
         if (j < n - 1) {
@@ -1231,8 +1209,8 @@
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
     }
-    // the trail of the trace, laid with the bodies and the strands before cached up to upTo when it
-    // is missing, or null without a strand before cached
+    // the trail of the trace, laid with the bodies and the trajectories before cached up to upTo when it
+    // is missing, or null without a trajectory before cached
     trailOf(c) {
       if (!this.cached) return null;
       if (!this.trail) {
@@ -1251,7 +1229,7 @@
       }
       return this.trail;
     }
-    // draws on the trails the pieces of the strands before cached that their heads have passed since
+    // draws on the trails the pieces of the trajectories before cached that their heads have passed since
     // the last frame, i.e. from the point of upTo to the last point of the path passed, and moves upTo
     // there. a piece ends at a point of the path, since a stroke to a point left out of the path ends
     // at the point of the path before it
@@ -1280,12 +1258,14 @@
       this.pending = false;
       this.t0 = null;
       this.finished = false;
-      this.idx = this.strands.map(() => 0);
-      this.upTo = this.strands.map(() => 0);
+      this.idx = this.trajectories.map(() => 0);
+      this.upTo = this.trajectories.map(() => 0);
       this.redraw();
     }
-    start() {
-      if (_Orbits.reduced()) {
+    // with force, the backdrop is traced in a still deck too, e.g. in the print view for a recording of
+    // scripts/record.mjs
+    start(force = false) {
+      if (!force && _Orbits.reduced()) {
         this.complete();
         return;
       }
@@ -1319,7 +1299,7 @@
       this.head.remove();
       CACHE.delete(this.el);
     }
-    // tints the drawn strands within r slide pixels of the client point in the accent color, or
+    // tints the drawn trajectories within r slide pixels of the client point in the accent color, or
     // clears the tint when clientX is null
     glow(clientX, clientY = 0, r = 20) {
       if (clientX === null || !this.W) this.pointer = null;
@@ -1347,12 +1327,12 @@
       else if (this.raf && this.t0 !== null && !this.finished) this.heads(ctx, c, now);
       if (this.pointer) this.glowing(ctx, c);
     }
-    // the head of the first strand of a scene, or of each strand of a file, which has no strands and no
+    // the head of the first trajectory of a built-in backdrop, or of each trajectory of a file, which has no trajectories and no
     // paths before it is loaded
     loopHead(ctx, c, now) {
-      const count = this.dots === null ? Math.min(1, this.strands.length) : this.strands.length;
+      const count = this.dots === null ? Math.min(1, this.trajectories.length) : this.trajectories.length;
       for (let i = 0; i < count && this.paths[i]; i++) {
-        const s = this.strands[i], p = this.paths[i].px, n = s.times.length;
+        const s = this.trajectories[i], p = this.paths[i].px, n = s.times.length;
         const tau = this.raf && this.t0 !== null ? (now - this.t0) / 1e3 % LOOP / LOOP * s.T : this.finished ? 0.37 * s.T : 0;
         let j = 0;
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
@@ -1377,36 +1357,41 @@
         ctx.fill();
       }
     }
-    // the flight time reached by strand i at the time now, which is negative before its start
+    // the flight time reached by trajectory i at the time now, which is negative before its start
     clock(i, now) {
       return ((now - (this.t0 ?? now)) / 1e3 - i * this.stagger) / this.duration * this.Tmax;
     }
-    // the radius of the head of strand i in line widths: the one of its record, or the one of the
-    // backdrop on the path of a spacecraft, or on every strand with data-heads set
+    // the radius of the head of trajectory i in line widths: the one given in its file, or the one of the
+    // backdrop on the path of a spacecraft, or on every trajectory with data-heads set
     headOf(i) {
-      const s = this.strands[i];
+      const s = this.trajectories[i];
       return s.head ?? (this.everyHead || s.craft ? this.headSize : 0);
     }
-    // true when a head is drawn on at least one strand during a trace
+    // true when a head is drawn on at least one trajectory during a trace
     get headed() {
-      return this.strands.some((_, i) => this.headOf(i) > 0);
+      return this.trajectories.some((_, i) => this.headOf(i) > 0);
     }
-    // the seconds into the trace at which its last strand is traced to its end, with strand i started
+    // the seconds into the trace at which its last trajectory is traced to its end, with trajectory i started
     // i times the stagger late
     get span() {
       if (!(this.Tmax > 0)) return this.duration;
-      return Math.max(...this.strands.map((s, i) => s.times[s.times.length - 1] / this.Tmax * this.duration + i * this.stagger));
+      return Math.max(...this.trajectories.map((s, i) => s.times[s.times.length - 1] / this.Tmax * this.duration + i * this.stagger));
     }
-    // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file
+    // the seconds after which the frames of a loop repeat, i.e. one revolution of its heads, or 0 for a
+    // backdrop that is not a loop
+    get period() {
+      return this.loop ? LOOP : 0;
+    }
+    // the seconds into the trace at which its first head is drawn, e.g. at the start of a trajectory of a file
     get headAfter() {
       if (!(this.Tmax > 0)) return 0;
-      const first = Math.min(...this.strands.map((s, i) => this.headOf(i) > 0 ? s.times[0] / this.Tmax * this.duration + i * this.stagger : Infinity));
+      const first = Math.min(...this.trajectories.map((s, i) => this.headOf(i) > 0 ? s.times[0] / this.Tmax * this.duration + i * this.stagger : Infinity));
       return Number.isFinite(first) ? first : 0;
     }
     heads(ctx, c, now) {
       if (!this.headed) return;
       ctx.fillStyle = c.accent;
-      this.strands.forEach((s, i) => {
+      this.trajectories.forEach((s, i) => {
         const j = this.idx[i], tau = this.clock(i, now), size = this.headOf(i);
         if (!size || j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
@@ -1415,9 +1400,9 @@
         ctx.fill();
       });
     }
-    // tints the drawn strands within the radius of the pointer. a segment of a strand is stroked when its
+    // tints the drawn trajectories within the radius of the pointer. a segment of a trajectory is stroked when its
     // box, with its control points where it is curved, meets the box of the disc, and the stroke is
-    // clipped to the disc, since the points of a strand may lie far apart on either side of it
+    // clipped to the disc, since the points of a trajectory may lie far apart on either side of it
     glowing(ctx, c) {
       const g = this.pointer;
       if (!g) return;
@@ -1432,7 +1417,7 @@
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
       ctx.beginPath();
-      this.strands.forEach((_, i) => {
+      this.trajectories.forEach((_, i) => {
         const { px: p, ctl } = this.paths[i], last = this.drawn(i);
         let pen = false;
         for (let j = 1; j <= last; j++) {
@@ -1458,9 +1443,9 @@
       ctx.stroke();
       ctx.restore();
     }
-    // the point of strand i at the flight time tau, on its segment from point j to j + 1
+    // the point of trajectory i at the flight time tau, on its segment from point j to j + 1
     at(i, j, tau) {
-      return pointOn(this.paths[i], j, j < this.strands[i].times.length - 1 ? this.fraction(i, j, tau) : 0);
+      return pointOn(this.paths[i], j, j < this.trajectories[i].times.length - 1 ? this.fraction(i, j, tau) : 0);
     }
     frame(now) {
       if (this.loop || !this.W) {
@@ -1470,7 +1455,7 @@
       const ctx = this.base.getContext("2d");
       if (!ctx) return;
       let flying = 0;
-      this.strands.forEach((s, i) => {
+      this.trajectories.forEach((s, i) => {
         const n = s.times.length, tau = this.clock(i, now);
         let j = this.idx[i];
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
@@ -2360,7 +2345,7 @@
       try {
         const id = el.dataset.plot ?? "";
         const block = id ? document.getElementById(id) : null;
-        if (text === null && !block) throw new Error(`the JSON block with the id "${id}" is not found`);
+        if (text === null && !block) throw new Error(`the JSON script with the id "${id}" is not found`);
         this.spec = parsePlot(text ?? block?.textContent ?? "");
       } catch (error) {
         const message = `plot ${el.dataset.plot ?? ""}: ${error.message}`;
@@ -2902,6 +2887,7 @@
     still3.className = viewer.className;
     still3.classList.add("viewer-still");
     still3.style.cssText = viewer.style.cssText;
+    if (viewer.dataset.still !== void 0) still3.dataset.still = viewer.dataset.still;
     still3.style.position = getComputedStyle(viewer).position;
     viewer.replaceWith(still3);
     return still3;
@@ -3492,9 +3478,9 @@
     track.className = "scrub-track";
     const fill2 = document.createElement("span");
     track.append(fill2);
-    const card = document.createElement("div");
-    card.className = "scrub-card";
-    band.append(track, card);
+    const headingBox = document.createElement("div");
+    headingBox.className = "scrub-heading";
+    band.append(track, headingBox);
     reveal.append(band);
     let ticks = [];
     let hovered = null;
@@ -3542,14 +3528,14 @@
       hovered?.el.classList.remove("hover");
       hovered = t;
       if (!t) {
-        card.textContent = "";
+        headingBox.textContent = "";
         return;
       }
       t.el.classList.add("hover");
-      card.textContent = heading(t.slide);
-      const half = card.offsetWidth / 2;
+      headingBox.textContent = heading(t.slide);
+      const half = headingBox.offsetWidth / 2;
       const x = Math.min(Math.max(t.at * zone.width, half), zone.width - half);
-      card.style.left = `${x}px`;
+      headingBox.style.left = `${x}px`;
     };
     const show2 = (on) => {
       if (on === open2) return;
@@ -3685,32 +3671,30 @@
   var FUNCTIONS = {
     // the effective potential of the CR3BP at data-mu, assembled from its wells and its bowl, with the
     // libration points marked and a cut at the height -C/2 of the Jacobi constant C of data-C. the
-    // bowl is shown above the wells, and the two are merged into their sum at the next stage. the
+    // bowl is shown above the wells, and the two are merged into their sum at the next state. the
     // intersection of the plane with the surface is the zero-velocity curve, and Hill's region is
     // where the surface is under the plane. C is the value at L1 when data-C is not given
     "effective-potential": (attributes) => {
       const mu = num3(attributes.mu, 0.05);
       const { wells, bowl, sum } = effectivePotential(mu);
-      const marks = librationPoints(mu);
-      const C1 = -2 * sum(marks[0].x, 0);
-      const one = (layer) => [{ layer, lift: 0 }];
-      const plain = (layer) => () => ({ sheets: one(layer), marks: false, level: null });
+      const points = librationPoints(mu);
+      const C1 = -2 * sum(points[0].x, 0);
+      const zero = () => 0;
+      const one = (height, tone) => [{ height, tone, lift: 0 }];
       return {
         x: [-1.5, 1.5],
         y: [-1.5, 1.5],
         floor: -3.2,
         zscale: 1,
-        layers: { flat: () => 0, wells, bowl, sum },
-        tones: { flat: GRAVITATIONAL, wells: GRAVITATIONAL, bowl: CENTRIFUGAL, sum: EFFECTIVE },
-        marks,
-        initial: "flat",
-        stages: {
-          flat: plain("flat"),
-          wells: plain("wells"),
-          bowl: () => ({ sheets: [{ layer: "wells", lift: 0 }, { layer: "bowl", lift: BOWL_LIFT }], marks: false, level: null }),
-          sum: plain("sum"),
-          extrema: () => ({ sheets: one("sum"), marks: true, level: null }),
-          cut: (a) => ({ sheets: one("sum"), marks: true, level: -num3(a.c, C1) / 2 })
+        points,
+        initial: "zero",
+        states: {
+          zero: () => ({ sheets: one(zero, GRAVITATIONAL), points: false, level: null }),
+          gravitational: () => ({ sheets: one(wells, GRAVITATIONAL), points: false, level: null }),
+          centrifugal: () => ({ sheets: [...one(wells, GRAVITATIONAL), { height: bowl, tone: CENTRIFUGAL, lift: BOWL_LIFT }], points: false, level: null }),
+          effective: () => ({ sheets: one(sum, EFFECTIVE), points: false, level: null }),
+          extrema: () => ({ sheets: one(sum, EFFECTIVE), points: true, level: null }),
+          cut: (a) => ({ sheets: one(sum, EFFECTIVE), points: true, level: -num3(a.c, C1) / 2 })
         }
       };
     }
@@ -3727,11 +3711,11 @@
   var TURN = 90;
   var CURVE_WIDTH = 3.5;
   var GLOW_WIDTH = 18;
-  var MARK_SIZE = 22;
+  var POINT_SIZE = 22;
   var BEHIND = 0.3;
   var DIMMING = 0.12;
   var UNLIT = 0.18;
-  var MARK_FADE = 0.15;
+  var POINT_FADE = 0.15;
   var RAMP_TEXELS = 256;
   var ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
   var lerp = (a, b, t) => a + (b - a) * t;
@@ -3869,7 +3853,7 @@ void main() {
   gl_FragColor = vec4(uColor, uAlpha * edge);
 }`
   );
-  var MARK_VERTEX = (
+  var POINT_VERTEX = (
     /* glsl */
     `
 attribute float kind;
@@ -3889,7 +3873,7 @@ void main() {
   vFill = fill;
 }`
   );
-  var MARK_FRAGMENT = (
+  var POINT_FRAGMENT = (
     /* glsl */
     `
 uniform vec3 uRing;
@@ -3940,12 +3924,12 @@ void main() {
       this.zmax = 0;
       this.sheets = [];
       this.palette = { text: [0.95, 0.95, 0.94], accent: [0.94, 0.5, 0.31], violet: [0.79, 0.31, 0.9] };
-      this.markKey = "";
+      this.pointKey = "";
       this.seenAt = 0;
       this.capacity = 0;
       this.drawn = "";
       this.mix = 1;
-      this.stageName = "";
+      this.stateName = "";
       this.t0 = 0;
       this.duration = MORPH;
       this.moving = false;
@@ -3966,7 +3950,7 @@ void main() {
           const k = Math.min(1, (now - this.t0) / this.duration), e = ease(k), a = this.from, b = this.to;
           const late = ease(clamp2((k - 0.35) / 0.65, 0, 1)), early = ease(clamp2(k / 0.65, 0, 1));
           this.mix = e;
-          this.shown = { marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : early), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e), low: lerp(a.low, b.low, e), high: lerp(a.high, b.high, e) };
+          this.shown = { points: lerp(a.points, b.points, b.points > a.points ? late : early), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e), low: lerp(a.low, b.low, e), high: lerp(a.high, b.high, e) };
           for (const s of this.sheets) {
             s.shown = { lift: lerp(s.from.lift, s.to.lift, e), alpha: lerp(s.from.alpha, s.to.alpha, s.to.alpha > s.from.alpha ? early : late) };
             s.tone = lerp(s.toneFrom, 1, e);
@@ -3975,7 +3959,7 @@ void main() {
         }
         if (this.rate && !this.drag && now > this.resume) this.azimuth += dt * this.rate;
         this.draw();
-        if (this.moving || this.rate || !this.marksSettled()) this.kick();
+        if (this.moving || this.rate || !this.pointsSettled()) this.kick();
       };
       this.el = el;
       this.fn = fn;
@@ -3993,25 +3977,25 @@ void main() {
       this.canvas.setAttribute("aria-hidden", "true");
       el.prepend(this.canvas);
       el.setAttribute("data-prevent-swipe", "");
-      this.labels = [...el.querySelectorAll(".lab")];
-      for (const [name, f] of Object.entries(fn.layers)) {
+      this.labels = [...el.querySelectorAll(".label")];
+      for (const f of new Set(Object.values(fn.states).flatMap((state) => state({ ...el.dataset }).sheets.map((sheet) => sheet.height)))) {
         const g = sample(f, fn.x, fn.y, CELLS, CELLS, fn.floor);
-        this.grids.set(name, g);
-        this.ranges.set(name, this.range(g));
+        this.grids.set(f, g);
+        this.ranges.set(f, this.range(g));
         for (const z of g) {
           if (z < this.zmin) this.zmin = z;
           if (z > this.zmax) this.zmax = z;
         }
       }
-      this.markA = new Float64Array(fn.marks.length);
-      this.markB = new Float64Array(fn.marks.length);
-      this.seen = new Float32Array(fn.marks.length).fill(1);
-      this.lit = new Float32Array(fn.marks.length).fill(1);
-      this.litTo = new Float32Array(fn.marks.length).fill(1);
-      this.fill = new Float32Array(3 * fn.marks.length);
-      this.fillTo = new Float32Array(3 * fn.marks.length);
-      this.markTones = fn.marks.map(() => "text");
-      const still3 = { marks: 0, cut: 0, level: fn.floor, low: this.zmin * this.zscale, high: this.zmax * this.zscale };
+      this.pointA = new Float64Array(fn.points.length);
+      this.pointB = new Float64Array(fn.points.length);
+      this.seen = new Float32Array(fn.points.length).fill(1);
+      this.lit = new Float32Array(fn.points.length).fill(1);
+      this.litTo = new Float32Array(fn.points.length).fill(1);
+      this.fill = new Float32Array(3 * fn.points.length);
+      this.fillTo = new Float32Array(3 * fn.points.length);
+      this.pointTones = fn.points.map(() => "text");
+      const still3 = { points: 0, cut: 0, level: fn.floor, low: this.zmin * this.zscale, high: this.zmax * this.zscale };
       this.shown = this.from = this.to = still3;
       this.scene = new THREE.Scene();
       this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
@@ -4021,7 +4005,7 @@ void main() {
       this.glow = this.makeCurve(GLOW_WIDTH, 1);
       this.glow.geometry = this.curve.geometry;
       this.glow.renderOrder = 1.5;
-      this.points = this.makeMarks();
+      this.points = this.makePoints();
       this.scene.add(this.plane, this.glow, this.curve, this.points);
       this.recolor();
       this.bindDrag();
@@ -4029,8 +4013,13 @@ void main() {
       this.sync(false);
       this.fit();
     }
-    // the color range of a layer: from its 5th percentile, so that the deep wells do not take the
-    // whole ramp, to its maximum, in world units. a flat layer is drawn in the middle of the ramp
+    // the first sheet of the initial state of the function
+    initialSheet() {
+      return this.fn.states[this.fn.initial]({ ...this.el.dataset }).sheets[0];
+    }
+    // the color range of the sampled heights g: from their 5th percentile, so that the deep wells do
+    // not take the whole ramp, to their maximum, in world units. a flat sheet is drawn in the middle
+    // of the ramp
     range(g) {
       const sorted = Float64Array.from(g).sort();
       const lo = sorted[Math.floor(0.05 * (sorted.length - 1))] * this.zscale, hi = sorted[sorted.length - 1] * this.zscale;
@@ -4052,15 +4041,15 @@ void main() {
       this.textures.set(name, t);
       return t;
     }
-    // the ramp of a layer and its range in world units. an unknown ramp is reported, and the ramp
+    // the ramp of sheet and its range in world units. an unknown ramp is reported, and the ramp
     // theme is drawn in its place
-    paintOf(layer) {
-      let { ramp: ramp2, range } = this.fn.tones[layer] ?? { ramp: "theme" };
+    paintOf(sheet) {
+      let { ramp: ramp2, range } = sheet.tone;
       if (ramp2 !== "theme" && !(ramp2 in RAMPS)) {
-        console.error(`beeson: unknown ramp "${ramp2}" of the layer ${layer} of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(", ")}`);
+        console.error(`beeson: unknown ramp "${ramp2}" of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(", ")}`);
         ramp2 = "theme";
       }
-      const world = range ? [range[0] * this.zscale, range[1] * this.zscale] : this.ranges.get(layer) ?? [-1, 1];
+      const world = range ? [range[0] * this.zscale, range[1] * this.zscale] : this.ranges.get(sheet.height) ?? [-1, 1];
       return { key: `${ramp2}|${world.join("|")}`, texture: this.texture(ramp2), range: world };
     }
     // a sheet, made hidden on first use. the sheets are drawn in their order, before the plane
@@ -4087,7 +4076,7 @@ void main() {
       }
       geometry.setIndex(new THREE.BufferAttribute(index, 1));
       const cell = Math.max(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]) / 24;
-      const paint = this.paintOf(fn.initial);
+      const paint = this.paintOf(this.initialSheet());
       const uniforms = {
         uMix: { value: 1 },
         uRampA: { value: paint.texture },
@@ -4118,7 +4107,7 @@ void main() {
       group2.visible = false;
       this.scene.add(group2);
       const hidden2 = { lift: 0, alpha: 0 };
-      const s = { group: group2, mesh, depth, layer: "", A: this.zeros, B: this.zeros, from: hidden2, to: hidden2, shown: hidden2, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
+      const s = { group: group2, mesh, depth, height: null, A: this.zeros, B: this.zeros, from: hidden2, to: hidden2, shown: hidden2, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
       this.sheets[i] = s;
       return s;
     }
@@ -4162,30 +4151,30 @@ void main() {
       mesh.renderOrder = 2;
       return mesh;
     }
-    makeMarks() {
-      const THREE = this.THREE, marks = this.fn.marks;
+    makePoints() {
+      const THREE = this.THREE, points = this.fn.points;
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3).setUsage(THREE.DynamicDrawUsage));
-      geometry.setAttribute("kind", new THREE.BufferAttribute(Float32Array.from(marks, (m) => m.kind === "saddle" ? 0 : 1), 1));
-      geometry.setAttribute("seen", new THREE.BufferAttribute(new Float32Array(marks.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
-      geometry.setAttribute("lit", new THREE.BufferAttribute(new Float32Array(marks.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
-      geometry.setAttribute("fill", new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3).setUsage(THREE.DynamicDrawUsage));
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * points.length), 3).setUsage(THREE.DynamicDrawUsage));
+      geometry.setAttribute("kind", new THREE.BufferAttribute(Float32Array.from(points, (m) => m.kind === "saddle" ? 0 : 1), 1));
+      geometry.setAttribute("seen", new THREE.BufferAttribute(new Float32Array(points.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
+      geometry.setAttribute("lit", new THREE.BufferAttribute(new Float32Array(points.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
+      geometry.setAttribute("fill", new THREE.BufferAttribute(new Float32Array(3 * points.length), 3).setUsage(THREE.DynamicDrawUsage));
       const material = new THREE.ShaderMaterial({
-        vertexShader: MARK_VERTEX,
-        fragmentShader: MARK_FRAGMENT,
+        vertexShader: POINT_VERTEX,
+        fragmentShader: POINT_FRAGMENT,
         transparent: true,
         depthTest: false,
         depthWrite: false,
         uniforms: {
           uRing: { value: new THREE.Vector3() },
           uRise: { value: 0 },
-          uSize: { value: MARK_SIZE }
+          uSize: { value: POINT_SIZE }
         }
       });
-      const points = new THREE.Points(geometry, material);
-      points.frustumCulled = false;
-      points.renderOrder = 3;
-      return points;
+      const drawn = new THREE.Points(geometry, material);
+      drawn.frustumCulled = false;
+      drawn.renderOrder = 3;
+      return drawn;
     }
     /** Reads the colors of the theme from the custom properties of the element, e.g. after a flip of the mode. */
     recolor() {
@@ -4203,26 +4192,26 @@ void main() {
       set2(this.glow.material.uniforms.uColor.value, accent);
       set2(this.points.material.uniforms.uRing.value, bg);
       this.palette = { text, accent, violet };
-      this.paintMarks();
+      this.paintPoints();
       this.fill.set(this.fillTo);
     }
-    // the stage set by the visible fragment of the slide with data-surface-stage and the highest
-    // fragment index, or the data-stage of the element, or the initial stage of the function
+    // the state set by the visible fragment of the slide with data-surface-state and the highest
+    // fragment index, or the data-surface-state of the element, or the initial state of the function
     target() {
       let best = null, index = -Infinity;
-      for (const f of this.el.closest("section")?.querySelectorAll(".fragment.visible[data-surface-stage]") ?? []) {
+      for (const f of this.el.closest("section")?.querySelectorAll(".fragment.visible[data-surface-state]") ?? []) {
         const i = num4(f.dataset.fragmentIndex, 0);
         if (i >= index) {
           best = f;
           index = i;
         }
       }
-      let name = best?.dataset.surfaceStage ?? this.el.dataset.stage ?? this.fn.initial;
-      if (!(name in this.fn.stages)) {
-        console.error(`beeson: unknown surface stage "${name}" of ${this.el.dataset.function}, known: ${Object.keys(this.fn.stages).join(", ")}`);
+      let name = best?.dataset.surfaceState ?? this.el.dataset.surfaceState ?? this.fn.initial;
+      if (!(name in this.fn.states)) {
+        console.error(`beeson: unknown surface state "${name}" of ${this.el.dataset.function}, known: ${Object.keys(this.fn.states).join(", ")}`);
         name = this.fn.initial;
       }
-      return { name, stage: this.fn.stages[name]({ ...this.el.dataset, ...best?.dataset }), step: best };
+      return { name, state: this.fn.states[name]({ ...this.el.dataset, ...best?.dataset }), step: best };
     }
     // the ramp p set as the end of a change of the sheet s. a ramp drawn at the start is kept, so
     // that the colors drawn now are not changed at once when a change is reversed or redirected
@@ -4243,39 +4232,39 @@ void main() {
       u.uRangeA.value.set(...s.paintA.range);
       u.uRangeB.value.set(...s.paintB.range);
     }
-    // the targets of the opacity and the color of the marks at the step: every mark is lit without
-    // data-surface-marks, and a mark is filled in the color of the text unless it is named by
+    // the targets of the opacity and the color of the points at the step: every point is lit without
+    // data-surface-points, and a point is filled in the color of the text unless it is named by
     // data-surface-accent or data-surface-violet
-    markTargets(step2) {
+    pointTargets(step2) {
       const names = (key) => (step2?.dataset[key] ?? "").split(/[\s,]+/).filter(Boolean);
-      const lit = names("surfaceMarks"), accent = names("surfaceAccent"), violet = names("surfaceViolet");
-      this.fn.marks.forEach((m, i) => {
+      const lit = names("surfacePoints"), accent = names("surfaceAccent"), violet = names("surfaceViolet");
+      this.fn.points.forEach((m, i) => {
         this.litTo[i] = !lit.length || lit.includes(m.name) ? 1 : UNLIT;
-        this.markTones[i] = violet.includes(m.name) ? "violet" : accent.includes(m.name) ? "accent" : "text";
+        this.pointTones[i] = violet.includes(m.name) ? "violet" : accent.includes(m.name) ? "accent" : "text";
       });
-      this.paintMarks();
+      this.paintPoints();
       return JSON.stringify([lit, accent, violet]);
     }
-    paintMarks() {
-      this.markTones.forEach((tone, i) => this.fillTo.set(this.palette[tone], 3 * i));
+    paintPoints() {
+      this.pointTones.forEach((tone, i) => this.fillTo.set(this.palette[tone], 3 * i));
     }
-    marksSettled() {
+    pointsSettled() {
       for (let i = 0; i < this.lit.length; i++) if (Math.abs(this.lit[i] - this.litTo[i]) > 1e-3) return false;
       for (let i = 0; i < this.fill.length; i++) if (Math.abs(this.fill[i] - this.fillTo[i]) > 1e-3) return false;
       return true;
     }
-    /** Sets the stage from the fragments of the slide, animated or at once. */
+    /** Sets the state from the fragments of the slide, animated or at once. */
     sync(animate) {
-      const { name, stage, step: step2 } = this.target();
-      const markKey = this.markTargets(step2);
-      const jump = !animate || !this.stageName;
+      const { name, state, step: step2 } = this.target();
+      const pointKey = this.pointTargets(step2);
+      const jump = !animate || !this.stateName;
       if (jump) {
         this.lit.set(this.litTo);
         this.fill.set(this.fillTo);
       }
-      if (name === this.stageName) {
-        if (markKey !== this.markKey) {
-          this.markKey = markKey;
+      if (name === this.stateName) {
+        if (pointKey !== this.pointKey) {
+          this.pointKey = pointKey;
           if (jump) this.draw();
           else {
             this.seenAt = performance.now();
@@ -4284,25 +4273,25 @@ void main() {
         }
         return;
       }
-      this.markKey = markKey;
-      this.stageName = name;
+      this.pointKey = pointKey;
+      this.stateName = name;
       this.el.dataset.shown = name;
-      const s = this.zscale, sheets = stage.sheets.length ? stage.sheets : [{ layer: this.fn.initial, lift: 0 }], main = sheets[0];
-      const grid = (layer) => this.grids.get(layer) ?? this.zeros;
+      const s = this.zscale, sheets = state.sheets.length ? state.sheets : [this.initialSheet()], main = sheets[0];
+      const grid = (height) => this.grids.get(height) ?? this.zeros;
       const first = this.sheets[0];
-      const merge = !first || first.layer !== main.layer;
+      const merge = !first || first.height !== main.height;
       const was = first ? { heights: this.current(first), lift: first.shown.lift, paint: first.tone < 0.5 ? first.paintA : first.paintB } : null;
       const lifts = [];
       for (let i = 0; i < Math.max(this.sheets.length, sheets.length); i++) {
         const sheet = this.sheet(i), next = sheets[i], seen = sheet.shown.alpha > 0;
         if (!next && !seen) {
-          sheet.layer = "";
+          sheet.height = null;
           sheet.from = sheet.to = sheet.shown;
           continue;
         }
         const heights = this.current(sheet);
         if (next) {
-          const paint = this.paintOf(next.layer);
+          const paint = this.paintOf(next);
           if (seen) {
             sheet.A = heights;
             sheet.from = sheet.shown;
@@ -4317,24 +4306,24 @@ void main() {
             sheet.paintA = sheet.paintB = paint;
             sheet.tone = 1;
           }
-          sheet.B = grid(next.layer);
+          sheet.B = grid(next.height);
           sheet.to = { lift: next.lift * s, alpha: 1 };
-          sheet.layer = next.layer;
+          sheet.height = next.height;
           this.repaint(sheet, paint);
           lifts.push(next.lift * s);
         } else {
           sheet.A = heights;
           sheet.from = sheet.shown;
-          sheet.layer = "";
-          sheet.B = merge ? grid(main.layer) : this.zeros;
+          sheet.height = null;
+          sheet.B = merge ? grid(main.height) : this.zeros;
           sheet.to = { lift: main.lift * s, alpha: 0 };
-          this.repaint(sheet, merge ? this.paintOf(main.layer) : sheet.paintB);
+          this.repaint(sheet, merge ? this.paintOf(main) : sheet.paintB);
         }
       }
       const to = {
-        marks: stage.marks ? 1 : 0,
-        cut: stage.level === null ? 0 : 1,
-        level: stage.level ?? this.fn.floor,
+        points: state.points ? 1 : 0,
+        cut: state.level === null ? 0 : 1,
+        level: state.level ?? this.fn.floor,
         low: this.zmin * s + Math.min(...lifts),
         high: this.zmax * s + Math.max(...lifts)
       };
@@ -4359,9 +4348,9 @@ void main() {
         this.moving = true;
       }
       const lead = this.sheet(0);
-      this.fn.marks.forEach((m, i) => {
-        this.markA[i] = heightAt(lead.A, this.fn, m.x, m.y);
-        this.markB[i] = heightAt(lead.B, this.fn, m.x, m.y);
+      this.fn.points.forEach((m, i) => {
+        this.pointA[i] = heightAt(lead.A, this.fn, m.x, m.y);
+        this.pointB[i] = heightAt(lead.B, this.fn, m.x, m.y);
       });
       for (const sheet of this.sheets) this.upload(sheet);
       if (this.moving) this.kick();
@@ -4405,33 +4394,33 @@ void main() {
       geometry.getAttribute("nB").set(this.normalsOf(sheet.B));
       for (const name of ["zA", "zB", "nA", "nB"]) geometry.getAttribute(name).needsUpdate = true;
     }
-    // the world position of the mark i, on the first sheet as drawn now
-    markAt(i, p) {
-      const m = this.fn.marks[i];
-      return p.set(m.x, m.y, lerp(this.markA[i], this.markB[i], this.mix) * this.zscale + this.sheet(0).shown.lift);
+    // the world position of the point i, on the first sheet as drawn now
+    pointAt(i, p) {
+      const m = this.fn.points[i];
+      return p.set(m.x, m.y, lerp(this.pointA[i], this.pointB[i], this.mix) * this.zscale + this.sheet(0).shown.lift);
     }
     /**
-     * The marks as drawn now, read by the tests: for each mark, the height at which it is drawn and
+     * The points as drawn now, read by the tests: for each point, the height at which it is drawn and
      * the height of the drawn surface under it, both in world units, and its fade, from 0 when it is
-     * hidden to 1, its opacity lit set by data-surface-marks, and its tone. With settled, the change
-     * of stage has ended.
+     * hidden to 1, its opacity lit set by data-surface-points, and its tone. With settled, the change
+     * of state has ended.
      */
     probe() {
       const position = this.points.geometry.getAttribute("position"), lead = this.sheet(0), g = this.current(lead);
-      const fade = this.points.visible ? this.shown.marks : 0;
+      const fade = this.points.visible ? this.shown.points : 0;
       const camera = this.camera.clone(), p = new this.THREE.Vector3();
       camera.updateMatrixWorld();
       const label = (i) => {
-        const lab = this.labels.find((l) => l.dataset.at === this.fn.marks[i].name);
+        const lab = this.labels.find((l) => l.dataset.at === this.fn.points[i].name);
         if (!lab) return null;
-        this.markAt(i, p).project(camera);
+        this.pointAt(i, p).project(camera);
         const x = (p.x + 1) / 2 * this.w + num4(lab.dataset.dx, 0), y = (1 - p.y) / 2 * this.h + num4(lab.dataset.dy, -34);
         return Math.hypot(parseFloat(lab.style.left) - x, parseFloat(lab.style.top) - y);
       };
       return {
-        stage: this.stageName,
+        state: this.stateName,
         settled: !this.moving,
-        marks: this.fn.marks.map((m, i) => ({ name: m.name, z: position.getZ(i), surface: heightAt(g, this.fn, m.x, m.y) * this.zscale + lead.shown.lift, fade, label: label(i), lit: this.lit[i], tone: this.markTones[i] }))
+        points: this.fn.points.map((m, i) => ({ name: m.name, z: position.getZ(i), surface: heightAt(g, this.fn, m.x, m.y) * this.zscale + lead.shown.lift, fade, label: label(i), lit: this.lit[i], tone: this.pointTones[i] }))
       };
     }
     /** Sizes the canvas from the box of the element on the screen, and draws. */
@@ -4450,7 +4439,7 @@ void main() {
       this.curve.material.uniforms.uWidth.value = CURVE_WIDTH * px;
       this.glow.material.uniforms.uViewport.value.set(this.W, this.H);
       this.glow.material.uniforms.uWidth.value = GLOW_WIDTH * px;
-      this.points.material.uniforms.uSize.value = MARK_SIZE * px;
+      this.points.material.uniforms.uSize.value = POINT_SIZE * px;
       this.camera.aspect = this.W / this.H;
       this.draw();
     }
@@ -4478,7 +4467,7 @@ void main() {
     // the level or the heights have changed
     trace() {
       const lead = this.sheet(0);
-      const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.layer}` : "";
+      const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.height ? [...this.grids.keys()].indexOf(lead.height) : -1}` : "";
       if (key === this.drawn) return;
       this.drawn = key;
       const curves2 = key ? levelCurves(this.current(lead), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
@@ -4516,7 +4505,7 @@ void main() {
       }
       geometry.setDrawRange(0, 6 * count);
     }
-    /** Draws the surface at the stage and the camera of now, and places the labels. */
+    /** Draws the surface at the state and the camera of now, and places the labels. */
     draw() {
       if (!this.W) return;
       const r = renderer();
@@ -4540,8 +4529,8 @@ void main() {
       this.curve.visible = shown.cut > 0;
       this.glow.material.uniforms.uAlpha.value = 0.45 * Math.min(1, 2 * shown.cut);
       this.glow.visible = shown.cut > 0;
-      this.points.material.uniforms.uRise.value = shown.marks;
-      this.points.visible = shown.marks > 0;
+      this.points.material.uniforms.uRise.value = shown.points;
+      this.points.visible = shown.points > 0;
       this.trace();
       this.aim();
       this.place();
@@ -4552,8 +4541,8 @@ void main() {
       ctx.clearRect(0, 0, this.W, this.H);
       ctx.drawImage(r.domElement, 0, 0);
     }
-    // the marks on the first sheet as drawn now, dimmed behind the surface, and the labels at their
-    // marks in the pixels of the slide, faded with the marks. the dimming follows the surface over
+    // the points on the first sheet as drawn now, dimmed behind the surface, and the labels at their
+    // points in the pixels of the slide, faded with the points. the dimming follows the surface over
     // DIMMING seconds, and at once after a pause between two frames
     place() {
       const THREE = this.THREE, p = new THREE.Vector3();
@@ -4564,9 +4553,9 @@ void main() {
       const lit = this.points.geometry.getAttribute("lit");
       const fill2 = this.points.geometry.getAttribute("fill");
       const k = dt > 0.25 ? 1 : 1 - Math.exp(-dt / DIMMING);
-      const f = !this.active || dt > 0.25 ? 1 : 1 - Math.exp(-dt / MARK_FADE);
-      this.fn.marks.forEach((m, i) => {
-        this.markAt(i, p);
+      const f = !this.active || dt > 0.25 ? 1 : 1 - Math.exp(-dt / POINT_FADE);
+      this.fn.points.forEach((m, i) => {
+        this.pointAt(i, p);
         position.setXYZ(i, p.x, p.y, p.z);
         this.seen[i] += ((this.behind(p) ? BEHIND : 1) - this.seen[i]) * k;
         seen.setX(i, this.seen[i]);
@@ -4577,12 +4566,12 @@ void main() {
       });
       position.needsUpdate = seen.needsUpdate = lit.needsUpdate = fill2.needsUpdate = true;
       for (const lab of this.labels) {
-        const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
+        const i = this.fn.points.findIndex((m) => m.name === lab.dataset.at);
         if (i < 0) continue;
-        this.markAt(i, p).project(this.camera);
+        this.pointAt(i, p).project(this.camera);
         lab.style.left = `${(p.x + 1) / 2 * this.w + num4(lab.dataset.dx, 0)}px`;
         lab.style.top = `${(1 - p.y) / 2 * this.h + num4(lab.dataset.dy, -34)}px`;
-        lab.style.opacity = String(this.shown.marks ** 2 * this.seen[i] * this.lit[i]);
+        lab.style.opacity = String(this.shown.points ** 2 * this.seen[i] * this.lit[i]);
       }
     }
     // whether the first sheet is between the world point p, a little above it, and the camera
@@ -4625,7 +4614,7 @@ void main() {
     kick() {
       if (this.active && !this.raf) this.raf = requestAnimationFrame(this.tick);
     }
-    // the end of a change of stage, at once
+    // the end of a change of state, at once
     settle() {
       if (!this.moving) return;
       this.moving = false;
@@ -4665,7 +4654,7 @@ void main() {
         for (const [name, g] of this.grids) this.ranges.set(name, this.range(g));
         this.normals = /* @__PURE__ */ new WeakMap();
         this.drawn = "";
-        this.stageName = "";
+        this.stateName = "";
         this.sync(false);
       }
       this.draw();
@@ -4676,14 +4665,14 @@ void main() {
       this.elevation = other.elevation;
       this.resume = other.resume;
     }
-    /** Starts the turning of the camera and the animation of a change of stage, while the slide is shown. */
+    /** Starts the turning of the camera and the animation of a change of state, while the slide is shown. */
     start() {
       this.active = true;
       this.last = 0;
       if (this.moving || this.rate) this.kick();
       else this.draw();
     }
-    /** Stops the animation, and ends a change of stage at once. */
+    /** Stops the animation, and ends a change of state at once. */
     stop() {
       this.active = false;
       cancelAnimationFrame(this.raf);
@@ -5076,7 +5065,7 @@ void main() {
   var mode = (v) => v.classList.contains("for-dark") ? "dark" : v.classList.contains("for-light") ? "light" : "";
   var coveredBy = (v, later) => !mode(later) || mode(later) === mode(v);
   function cover(slide) {
-    for (const place2 of slide.querySelectorAll(".zone, .plate")) {
+    for (const place2 of slide.querySelectorAll(".figure-box, .plate")) {
       const videos = [...place2.children].filter((c) => c instanceof HTMLVideoElement);
       const shown = videos.map((v) => stepShown(v, slide));
       videos.forEach((v, i) => {
@@ -5346,6 +5335,12 @@ void main() {
     if (own.length) applySteps(slide);
   }
   var waiting = (o) => o.el.classList.contains("fragment") && !o.el.classList.contains("visible");
+  function animated(o, slide = o.el.closest("section")) {
+    if (waiting(o)) return false;
+    const loop = o.el.hasAttribute("data-loop");
+    if (slide?.hasAttribute("data-auto-animate")) return loop;
+    return loop || o.el.hasAttribute("data-live") || TRACED.some((c) => slide?.classList.contains(c));
+  }
   function playBackdrop(o, slide) {
     o.fit();
     if (still2()) {
@@ -5365,7 +5360,7 @@ void main() {
         o.fit();
         if (loop) o.start();
       }, seconds * 1e3 + 50);
-    } else if (loop || o.el.hasAttribute("data-live") || TRACED.some((c) => slide.classList.contains(c))) {
+    } else if (animated(o, slide)) {
       o.reset();
       o.start();
     } else o.complete();
@@ -5421,9 +5416,9 @@ void main() {
     return o;
   }
   async function fitWindow(el, box2) {
-    const strands = el.dataset.strands !== void 0 ? (await strandsFor(el)).strands : scene(el.dataset.scene ?? "");
+    const trajectories = el.dataset.trajectories !== void 0 ? (await trajectoriesFor(el)).trajectories : builtIn(el.dataset.backdrop ?? "");
     const b = box2 ?? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
-    return b.width && b.height ? fitView(strands, b, { width: 1920, height: 1080 }) : null;
+    return b.width && b.height ? fitView(trajectories, b, { width: 1920, height: 1080 }) : null;
   }
   function completeAll() {
     remount();
@@ -5540,7 +5535,7 @@ void main() {
       }
       const before = surfacesOf(ev.previousSlide);
       for (const s of before) s.stop();
-      const key = (s) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== "stage" && k !== "shown").sort());
+      const key = (s) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== "surfaceState" && k !== "shown").sort());
       for (const s of surfacesOf(ev.currentSlide)) {
         const from = before.find((b) => key(b) === key(s));
         if (from) s.follow(from);
@@ -5603,10 +5598,11 @@ void main() {
     start: start3,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },
     backdrops,
+    animated,
     surfaces,
     plots,
-    // called in a script file of polylines named in data-strands, see src/strands.ts
-    strands: register,
+    // called in a script file of polylines named in data-trajectories, see src/trajectories.ts
+    trajectories: register,
     // called by the editor after a structural change of the slides
     mount: mountWithin,
     // called by the editor on a backdrop, see remountBackdrop, preview, and fitWindow
@@ -5620,7 +5616,7 @@ void main() {
       numberTheorems();
       mountCitations();
     },
-    version: "0.9.0-beta.1"
+    version: "0.9.0-beta.2"
   };
   window.Beeson = Beeson;
 })();

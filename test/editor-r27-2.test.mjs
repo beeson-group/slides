@@ -39,7 +39,7 @@ const redo = (page) => page.evaluate('Promise.resolve(window.BeesonEditor.redo()
 const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
 const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 
-async function load(t, platform, deck = 'index.html', slide = FIGURES) {
+async function load(t, platform, deck = 'test-deck.html', slide = FIGURES) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/theme/beeson.css`);

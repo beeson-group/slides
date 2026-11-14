@@ -85,7 +85,7 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const js = (v) => JSON.stringify(v);
 
-async function open(platform, deck = 'index.html') {
+async function open(platform, deck = 'test-deck.html') {
   const page = await browser.newPage();
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -370,7 +370,7 @@ for (const platform of ['mac', 'other']) {
     const table = layoutTable(LAYOUT_ROWS);
     const empty = '<tr><td></td><td></td></tr>';
     const marked = () => page.evaluate(`[...document.querySelectorAll('.beeson-table-bars .bar > .on')].map((d) => d.textContent)`);
-    const block = () => page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.block:not([hidden])')`);
+    const range = () => page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.range:not([hidden])')`);
     await show(page, '.reveal .slides table');
     await click(page, cellSelector(1, 0));
     // on a Mac the text of a cell takes the keys, which add nothing there. on Windows and Linux they
@@ -381,13 +381,13 @@ for (const platform of ['mac', 'other']) {
       await settle(page);
       assert.equal(await render(page), page.source);
     }
-    assert.equal(await block(), false);
+    assert.equal(await range(), false);
     await press(page, 'Escape');
     await settle(page);
     assert.equal(await page.evaluate(`window.BeesonEditor.state('table.rowBelow').enabled`), true);
     assert.equal(await focusCell(page), null);
     assert.deepEqual(await marked(), ['A', '2']);
-    assert.equal(await block(), true);
+    assert.equal(await range(), true);
     await press(page, 'Alt+ArrowDown');
     await settle(page);
     assert.deepEqual(await marked(), ['A', '3']);
@@ -396,7 +396,7 @@ for (const platform of ['mac', 'other']) {
     await byteExact(page, [[table, layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[1], empty, empty, LAYOUT_ROWS[2]])]]);
     assert.deepEqual(await marked(), ['A', '4']);
     assert.equal(await focusCell(page), null, 'the new cell is selected as a block, not its text');
-    assert.equal(await block(), true);
+    assert.equal(await range(), true);
     await press(page, 'Alt+ArrowUp');
     await settle(page);
     await byteExact(page, [[table, layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[1], empty, empty, empty, LAYOUT_ROWS[2]])]]);
@@ -622,7 +622,7 @@ for (const platform of ['mac', 'other']) {
 // the letters of the columns and the numbers of the rows marked in the bars, whether the outline is
 // drawn as cells selected as a block, and the cell of the caret
 const marked = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-table-bars .bar > .on')].map((d) => d.textContent)`);
-const asBlock = (page) => page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.block:not([hidden])')`);
+const asRange = (page) => page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.range:not([hidden])')`);
 
 const PLAIN_ROWS = [
   '<tr><th>Body</th><th>Mass ratio</th><th>System</th></tr>',
@@ -641,7 +641,7 @@ for (const platform of ['mac', 'other']) {
     await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
     await settle(page);
     assert.deepEqual(await marked(page), ['A', 'B', '2', '3']);
-    assert.ok(await asBlock(page));
+    assert.ok(await asRange(page));
     assert.equal(await focusCell(page), null);
     assert.equal(await selected(page), '');
     await click(page, cellSelector(3, 2), { modifiers: 'Shift' });
@@ -676,7 +676,7 @@ for (const platform of ['mac', 'other']) {
     await click(page, cellSelector(2, 0));
     await settle(page);
     assert.deepEqual(await focusCell(page), [2, 0]);
-    assert.ok(!(await asBlock(page)));
+    assert.ok(!(await asRange(page)));
     assert.deepEqual(errors(page), []);
   });
 
@@ -752,7 +752,7 @@ for (const platform of ['mac', 'other']) {
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Merge Cells');
     // the merged cell stays selected as a block, and is the range of Unmerge Cells
     assert.deepEqual(await marked(page), ['A', 'B', '2', '3']);
-    assert.ok(await asBlock(page));
+    assert.ok(await asRange(page));
     assert.equal(await page.evaluate(`document.querySelector('.reveal section.present td[rowspan] mjx-container') !== null`), true);
     await roundTrip(page);
   });
@@ -923,7 +923,7 @@ for (const platform of ['mac', 'other']) {
     near(after.outer[2], (before.outer[1] + before.outer[2]) / 2, 'the column C');
     near(after.outer[0], before.outer[0], 'the column A');
     assert.equal(writtenWidths(await render(page))[0], null);
-    assert.ok(await asBlock(page));
+    assert.ok(await asRange(page));
     await roundTrip(page);
   });
 }
@@ -959,7 +959,7 @@ for (const platform of ['mac', 'other']) {
       '<tr><td>Europa</td><td style="text-align: right">2.53e-5</td><td>Jupiter</td></tr>',
       '<tr><td>Titan</td><td style="text-align: right">2.37e-4</td><td>Saturn</td></tr>',
     ])]]);
-    assert.ok(await asBlock(page));
+    assert.ok(await asRange(page));
     await roundTrip(page);
   });
 

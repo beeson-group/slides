@@ -59,8 +59,8 @@ test('Edit Text is enabled on an element with a block and not on a figure withou
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
-  await showSlideWith(page, '.zone video');
-  await click(page, await centerOf(page, '.reveal section.present .zone video'), { button: 'right' });
+  await showSlideWith(page, '.figure-box video');
+  await click(page, await centerOf(page, '.reveal section.present .figure-box video'), { button: 'right' });
   // an item that a kind of element cannot run is left out of its menu
   assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is enabled on a figure of videos');
   await press(page, 'Escape');
@@ -73,8 +73,8 @@ test('Edit Text is enabled on an element with a block and not on a figure withou
   await press(page, 'Escape');
   // a figure with its caption holds a block, which Return edits, and so does a heading selected as
   // an element. the menu of the image of the figure does not offer Edit Text, as in Keynote
-  await showSlideWith(page, 'figure.zone');
-  await click(page, await centerOf(page, '.reveal section.present figure.zone img'), { button: 'right' });
+  await showSlideWith(page, 'figure.figure-box');
+  await click(page, await centerOf(page, '.reveal section.present figure.figure-box img'), { button: 'right' });
   assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is offered on the image of a figure');
   await press(page, 'Escape');
   assert.equal(await editText(page), true, 'Edit Text is disabled on a figure with a caption');
@@ -103,7 +103,7 @@ test('a modal dialog dims the window behind it in both modes', async (t) => {
     await frames(page);
     await new Promise((done) => setTimeout(done, 400));
     const after = decodePng(await page.screenshot());
-    const card = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-card[open]').getBoundingClientRect(); return { x: r.left + 12, y: r.top + 6 }; })()`);
+    const card = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-dialog[open]').getBoundingClientRect(); return { x: r.left + 12, y: r.top + 6 }; })()`);
     const was = gray(before, spot);
     const dimmed = gray(after, spot);
     assert.ok(dimmed <= 0.7 * was, `${mode}: the toolbar is ${dimmed.toFixed(0)} under the scrim and ${was.toFixed(0)} without it`);

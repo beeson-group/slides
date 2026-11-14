@@ -36,7 +36,7 @@ const exec = (page, id) => page.evaluate(`Promise.resolve(window.BeesonEditor.ex
 const rect = (page, expr) => page.evaluate(`(() => { const el = ${expr}; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 const count = (page, selector) => page.evaluate(`Reveal.getCurrentSlide().querySelectorAll(${js(selector)}).length`);
 
-async function load(t, platform, n, deck = 'index.html') {
+async function load(t, platform, n, deck = 'test-deck.html') {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${deck}?edit&still&theme=light&edit-platform=${platform}`;

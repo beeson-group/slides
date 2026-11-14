@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 const IMG = 'section.present figure img.for-light';
@@ -19,7 +19,7 @@ const STOCK = readFileSync(DECK, 'utf8');
 // the demo deck with the image of the light mode of the figure turned by 20 degrees, and the
 // image of the dark mode upright, as a deck edited by hand can have them
 const ONE = STOCK.replace('light version">', 'light version" style="rotate: 20deg">');
-const PREP = `document.querySelector('figure.zone > img.for-light').setAttribute('style', 'rotate: 20deg')`;
+const PREP = `document.querySelector('figure.figure-box > img.for-light').setAttribute('style', 'rotate: 20deg')`;
 
 let browser;
 let server;
@@ -90,7 +90,7 @@ async function undoes(page, before, what) {
 // the start tags of the figure and of its two images in the text, and the computed angles of the three
 async function figureState(page) {
   const text = await render(page);
-  const start = text.indexOf('<figure class="zone"');
+  const start = text.indexOf('<figure class="figure-box"');
   const tags = text.slice(start, text.indexOf('</figure>', start)).match(/<(figure|img)\b[^>]*>/g);
   const turned = await page.evaluate(`(() => { const f = document.querySelector('section.present figure'); return [f, ...f.querySelectorAll('img')].map((el) => getComputedStyle(el).rotate); })()`);
   return { tags, turned };

@@ -1,33 +1,33 @@
-// checks of the orbit engine and the scenes, run with `npm test` under type stripping
+// checks of the orbit engine and the built-in backdrops, run with `npm test` under type stripping
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lagrange, lyapunovFamily, pathOf, pointOn, spaced, toCrossing, trace } from '../src/orbits.ts';
-import { SCENE_NAMES, scene } from '../src/scenes.ts';
+import { lagrange, lyapunovFamily, pathOf, pointOn, toCrossing, trace } from '../src/orbits.ts';
+import { BUILT_IN_NAMES, builtIn } from '../src/backdrops.ts';
 
 const H = 0.004;
-// the smallest number of strands expected in each scene. the L2 family of nest is ended after 7 of
-// its 12 members
-const FEWEST = { nest: 24, tubes: 114, wideRibbon: 241 };
-// the scenes with strands that are not periodic orbits
-const FLIGHTS = ['tubes', 'wideRibbon'];
+// the smallest number of trajectories expected in each built-in backdrop
+const FEWEST = { tubes: 114, wideRibbon: 241 };
+// count values from a to b, crowded toward a with the exponent p
+const spaced = (a, b, count, p) => Array.from({ length: count }, (_, i) => a + (b - a) * Math.pow(i / (count - 1), p));
 
 test('the collinear points L1 and L2 are at the Earth–Moon values', () => {
   assert.ok(Math.abs(lagrange(1) - 0.8369) < 5e-4);
   assert.ok(Math.abs(lagrange(2) - 1.1557) < 5e-4);
 });
 
-test('every scene is computed with the expected number of strands', () => {
-  assert.deepEqual([...SCENE_NAMES].sort(), Object.keys(FEWEST).sort());
-  for (const name of SCENE_NAMES) assert.ok(scene(name).length >= FEWEST[name], `${name}: ${scene(name).length} strands`);
+test('every scene is computed with the expected number of trajectories', () => {
+  assert.deepEqual([...BUILT_IN_NAMES].sort(), Object.keys(FEWEST).sort());
+  for (const name of BUILT_IN_NAMES) assert.ok(builtIn(name).length >= FEWEST[name], `${name}: ${builtIn(name).length} trajectories`);
 });
 
-test('each periodic strand is closed on its first point', () => {
-  for (const name of SCENE_NAMES.filter((n) => !FLIGHTS.includes(n))) {
-    for (const s of scene(name)) {
-      const n = s.pts.length;
-      assert.ok(Math.hypot(s.pts[0] - s.pts[n - 2], s.pts[1] - s.pts[n - 1]) < 1e-5, name);
-    }
+test('each periodic trajectory is closed on its first point', () => {
+  // the Lyapunov orbits of L1 and L2 in tubes, drawn in the tone text
+  const orbits = builtIn('tubes').filter((s) => s.tone === 'text');
+  assert.equal(orbits.length, 2);
+  for (const s of orbits) {
+    const n = s.pts.length;
+    assert.ok(Math.hypot(s.pts[0] - s.pts[n - 2], s.pts[1] - s.pts[n - 1]) < 1e-5);
   }
 });
 
@@ -56,21 +56,21 @@ const distance = (s, x, y) => {
 };
 
 test('an unstable tube leaves its orbit, a stable tube arrives on it, and both run past the orbit', () => {
-  const strands = scene('tubes'), orbits = strands.filter((s) => s.tone === 'text');
+  const trajectories = builtIn('tubes'), orbits = trajectories.filter((s) => s.tone === 'text');
   assert.equal(orbits.length, 2);
   const near = (x, y) => Math.min(...orbits.map((o) => distance(o, x, y)));
-  for (const s of strands.filter((t) => t.tone === 'orange')) assert.ok(near(s.pts[0], s.pts[1]) < 0.01);
-  for (const s of strands.filter((t) => t.tone === 'violet')) assert.ok(near(s.pts.at(-2), s.pts.at(-1)) < 0.01);
-  const reach = strands.filter((s) => s.tone === 'orange').map((s) => s.pts[s.pts.length - 2]);
-  assert.ok(reach.some((x) => x < 0.5), 'a strand toward the Earth');
-  assert.ok(reach.some((x) => x > 1.3), 'a strand past L2');
+  for (const s of trajectories.filter((t) => t.tone === 'orange')) assert.ok(near(s.pts[0], s.pts[1]) < 0.01);
+  for (const s of trajectories.filter((t) => t.tone === 'violet')) assert.ok(near(s.pts.at(-2), s.pts.at(-1)) < 0.01);
+  const reach = trajectories.filter((s) => s.tone === 'orange').map((s) => s.pts[s.pts.length - 2]);
+  assert.ok(reach.some((x) => x < 0.5), 'a trajectory toward the Earth');
+  assert.ok(reach.some((x) => x > 1.3), 'a trajectory past L2');
 });
 
 test('a ribbon runs from its orbit around the Earth, with its stable tube the mirror image', () => {
-  const strands = scene('wideRibbon'), [orbit] = strands, orange = strands.filter((s) => s.tone === 'orange');
+  const trajectories = builtIn('wideRibbon'), [orbit] = trajectories, orange = trajectories.filter((s) => s.tone === 'orange');
   const left = (s) => { let x = Infinity; for (let i = 0; i < s.pts.length; i += 2) x = Math.min(x, s.pts[i]); return x; };
   assert.equal(orbit.tone, 'text');
-  assert.equal(strands.filter((s) => s.tone === 'violet').length, orange.length);
+  assert.equal(trajectories.filter((s) => s.tone === 'violet').length, orange.length);
   for (const s of orange) {
     assert.ok(Math.hypot(s.pts[0] - lagrange(1), s.pts[1]) < 0.1, 'starts near L1');
     assert.ok(left(s) < -0.3, 'passes the far side of the Earth');
@@ -79,10 +79,10 @@ test('a ribbon runs from its orbit around the Earth, with its stable tube the mi
 
 // the timing of a shared runner of GitHub does not stand for a laptop, as in test/perf.test.mjs
 test('a scene is computed in under 150 ms', { skip: process.env.CI ? 'the timing of a shared runner does not stand for a laptop' : false }, async () => {
-  // a fresh module instance, so that the cache of the scenes above is empty
-  const fresh = await import(`../src/scenes.ts?fresh=${Date.now()}`);
+  // a fresh module instance, so that the cache of the built-in backdrops above is empty
+  const fresh = await import(`../src/backdrops.ts?fresh=${Date.now()}`);
   const t = performance.now();
-  fresh.scene('nest');
+  fresh.builtIn('tubes');
   assert.ok(performance.now() - t < 150);
 });
 
@@ -93,7 +93,7 @@ const arc = (count, r, span) => Float32Array.from({ length: 2 * count }, (_, k) 
 });
 const offCircle = (r, [x, y]) => Math.abs(Math.hypot(x, y) - r);
 
-test('a strand of sparse points is drawn as a smooth curve through them, on the arc they sample', () => {
+test('a trajectory of sparse points is drawn as a smooth curve through them, on the arc they sample', () => {
   // 13 points 30 deg apart on a circle of 200 px, whose chords are 6.8 px inside the circle at their middles
   for (const span of [Math.PI, 2 * Math.PI]) {
     const path = pathOf(arc(13, 200, span));
@@ -105,11 +105,11 @@ test('a strand of sparse points is drawn as a smooth curve through them, on the 
       assert.ok(offCircle(200, pointOn(path, j, 0.5)) < (span < 6 && (j === 0 || j === 11) ? 2 : 0.6), `segment ${j}`);
     }
   }
-  // a closed strand turns smoothly at its first point, i.e. its first and last curves share the tangent there
+  // a closed trajectory turns smoothly at its first point, i.e. its first and last curves share the tangent there
   const { px, ctl } = pathOf(arc(13, 200, 2 * Math.PI));
   const out = [ctl[0] - px[0], ctl[1] - px[1]], into = [px[0] - ctl[46], px[1] - ctl[47]];
   assert.ok(Math.abs(out[0] * into[1] - out[1] * into[0]) / Math.hypot(...out) / Math.hypot(...into) < 1e-3);
-  // a strand whose last point misses its first by 0.2 px is closed as well, hence its first curve
+  // a trajectory whose last point misses its first by 0.2 px is closed as well, hence its first curve
   // leaves the first point along the same tangent
   const gap = arc(13, 200, 2 * Math.PI);
   gap[24] += 0.2;
@@ -117,7 +117,7 @@ test('a strand of sparse points is drawn as a smooth curve through them, on the 
   assert.ok(Math.hypot(near[0] - ctl[0], near[1] - ctl[1]) < 1e-3);
 });
 
-test('a strand of dense points is drawn straight, with the points within 0.1 px of a line left out', () => {
+test('a trajectory of dense points is drawn straight, with the points within 0.1 px of a line left out', () => {
   const px = arc(2001, 200, Math.PI), path = pathOf(px);
   assert.equal(path.ctl, null);
   assert.ok(path.keep.length < 200, `${path.keep.length} of 2001 points kept`);
@@ -142,7 +142,7 @@ function record(path, j, f) {
   return { calls, end: calls.at(-1).slice(-2) };
 }
 
-test('a traced strand ends at its head, on a curve and on a straight run with its points left out', () => {
+test('a traced trajectory ends at its head, on a curve and on a straight run with its points left out', () => {
   for (const path of [pathOf(arc(13, 200, Math.PI)), pathOf(arc(2001, 200, Math.PI))]) {
     const n = path.px.length / 2;
     for (const [j, f] of [[0, 0.3], [5, 0.5], [n - 2, 0.9], [Math.floor(n / 2) + 1, 0.25]]) {
@@ -150,7 +150,7 @@ test('a traced strand ends at its head, on a curve and on a straight run with it
       assert.ok(Math.hypot(end[0] - head[0], end[1] - head[1]) < 1e-3, `j = ${j}, f = ${f}`);
       assert.equal(calls.filter((c) => c[0] === 'M').length, 1, 'one path');
     }
-    // a whole strand ends at its last point
+    // a whole trajectory ends at its last point
     const { end } = record(path, n - 1, 0);
     assert.deepEqual(end, [path.px[2 * n - 2], path.px[2 * n - 1]]);
   }

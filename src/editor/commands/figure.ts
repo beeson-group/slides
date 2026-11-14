@@ -1,5 +1,5 @@
 // the commands of a figure, in Format > Image and in the Image, Video, and QR panes of the
-// inspector: the alt text of an image, the classes paper and invert, the mode in which an image or
+// inspector: the alt text of an image, the classes white-figure and invert, the mode in which an image or
 // a video is shown, the switches of a video, and the text of a QR code. each is a change of the
 // start tag through app.doc, as one entry of the history. the QR code is drawn again after every
 // change of its data-qr, also at an undo
@@ -17,7 +17,7 @@ export const QR_MAX = 2331;
 
 const shown = (el: Element) => el.getBoundingClientRect().width > 0;
 
-// the one element of tag that the selection is or holds in a figure, a zone, or a plate. of a pair
+// the one element of tag that the selection is or holds in a figure, a figure box, or a plate. of a pair
 // for the two modes, it is the one shown in the mode of the slide
 function mediaOf(app: App, tag: string): HTMLElement | null {
   const el = app.selection.only();
@@ -84,7 +84,7 @@ export function onCaptionBox(box: { begin(host: Element): void; drop(): void }):
   captionBox = box;
 }
 
-// the caption last taken off each figure or zone in the session, put back by Caption on
+// the caption last taken off each figure or figure box in the session, put back by Caption on
 const takenCaption = new WeakMap<Element, string>();
 
 function setTag(app: App, el: Element, edit: TagEdit, label: string): void {
@@ -167,12 +167,12 @@ async function setMode(app: App, el: Element, mode: Mode): Promise<void> {
   if (mode !== back.mode) setTag(app, node, { classes: modeClasses(otherMode(mode)) }, 'mode');
 }
 
-// the figure or the zone of the picture of the selection, or of the caption that the caret is in,
+// the figure or the figure box of the picture of the selection, or of the caption that the caret is in,
 // which takes a caption under the picture
 function captionHost(app: App): Element | null {
   const typed = app.selection.kind === 'text' ? app.selection.items[0]?.closest('figcaption, .caption') : null;
   const host = typed ? typed.parentElement : visual(app)?.parentElement;
-  return host?.matches('figure, .zone') && !host.matches('.plate, .plot') ? host : null;
+  return host?.matches('figure, .figure-box') && !host.matches('.plate, .plot') ? host : null;
 }
 const captionOf = (host: Element) => host.querySelector(':scope > figcaption, :scope > .caption');
 
@@ -180,7 +180,7 @@ export function commands(): Command[] {
   const list: Command[] = [
     {
       // a caption under the picture, as Caption in the Style tab of Keynote: a figcaption in a
-      // figure and a caption paragraph in a zone, with the caret in it. the caption taken off is
+      // figure and a caption paragraph in a figure box, with the caret in it. the caption taken off is
       // put back with its text, and a new one is written into the file at its first input
       id: 'figure.caption',
       label: 'Caption',
@@ -237,7 +237,7 @@ export function commands(): Command[] {
         for (const m of [el, twinOf(app, el)]) if (m) setTag(app, m, edit, 'decorative');
       },
     },
-    switchOf('figure.paper', 'Paper', imageOf, (el) => el.classList.contains('paper'), (on) => ({ classes: { paper: on } }), imageMenu(20)),
+    switchOf('figure.whiteFigure', 'White Figure', imageOf, (el) => el.classList.contains('white-figure'), (on) => ({ classes: { 'white-figure': on } }), imageMenu(20)),
     // an oval picture is clipped to its ellipse, and the inset of its crop is rounded with it, on both
     // images of a pair
     {

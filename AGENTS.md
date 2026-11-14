@@ -1,64 +1,96 @@
 # AGENTS.md
 
-This repository is either the slide template of the Beeson group, beeson-group/slides, or a talk made from it with the button "Use this template" of GitHub. The deck is `index.html`, i.e. the demo deck of the main layouts and elements in the template, and the talk in a talk. The reveal.js theme `beeson` is in `theme/`. The in-place editor of a deck, loaded with the URL parameter `edit`, is in `src/editor/` and compiled to `theme/editor.js`. The brand marks are in `brand/`, the matplotlib styles in `styles/`, and the maintainer tooling in `src/`, `scripts/`, and `.github/`. A talk made from the template is one `index.html` next to `theme/` and `brand/`.
+This repository is either slides, the template of the Beeson group for talks as HTML slides on reveal.js, or a talk that someone made from the template with the button "Use this template" of GitHub. The deck is `index.html`, i.e. the demo deck in the template and the talk in a talk. It is drawn by the theme in `theme/`, and it is edited in the browser with the editor, which is opened with the URL parameter `edit`.
 
-## Vocabulary
+## Hard invariants
 
-- A slide is a `section` element, and its layout is set with a class. With `title` or `closing`, the slide is a plate with the backdrop behind a block of words at the lower left. With `section`, the words are at the left and the outline of the talk is under them. Without a class, the slide is a content slide with a text column of 1000 px at the left margin and a `zone` or a full-height `backdrop` at the right. Set the width of the column with `narrow` or `wide`. With `figure`, the slide is a plate with a `backdrop` or a `plate` figure, the head at the top, and the `caption` at the lower left. With `split`, the black `panel` is at the left and a `zone` at the right.
-- A backdrop is the orbit drawing behind a slide, a `div.backdrop` with the attributes `data-scene`, `data-cx`, `data-cy`, and `data-half`, where `data-half` is the half height of the window in rotating-frame units. A drawing may run off the slide, but choose the window so that it is not cut at an edge of its box inside the slide. Optional `lab` spans are the labels of L1, L2, the Moon, and the Earth. On a content slide, the backdrop is drawn complete, and on a title, section, or closing slide, or with the attribute `data-live`, it is animated. A backdrop with `class="fragment"` is a step of its slide, blank until its step and traced from this step on. On a title slide, the backdrop is the low-thrust transfer of the group logo, drawn from `brand/transfer.js` with `data-strands` and `data-duration="20"`. In its trace, one head flies the transfer over the 20 s, and the tubes of the halo orbit are traced from the orbit outward from 0.8 s on. Their tips are thus at the end of the thrust at 5.8 s, together with the head. In the editor, a backdrop is selected with a click, and its drawing is panned with a drag, which writes `data-cx` and `data-cy`. Its box is resized with a grip, which writes `translate`, `width`, and `height` in px in its `style`. The word is not background, and not scene, which is a 3D view exported from tycho (the Typed Celestial HTML Observer).
-- A strand is one polyline record of a `data-strands` file, traced on its clock. A tube is a family of manifold arcs drawn as hairlines. The word is not fan, and not ribbon, which is in the name of the drawing `wideRibbon` of `data-scene`. A head is the dot at the tip of a strand while it is traced, with its radius set by `data-heads` or by the key `head` of its record. The word is not tracer, and not marker.
-- A surface is the graph z = f(x, y) of a function of `src/surfaces.ts` over a rectangle, a `div.surface` with `data-function` and the parameters of the function. It is drawn with three.js under a camera that turns slowly and is turned by a drag. Its stage, i.e. what is drawn at a step, is set with `data-surface-stage` on a fragment of its slide, and its marks are labeled with `lab` spans with `data-at`. On the same fragment, the marks named in `data-surface-marks` are shown and the others are dimmed with their labels, and the marks named in `data-surface-accent` or `data-surface-violet` are filled in orange or violet. A surface with the attributes of a surface on the slide before, apart from `data-stage`, is shown under its camera.
-- A QR code is a `div.qr` with its text in `data-qr`, drawn into an inline SVG at the start of the deck with the encoder of `src/qr.ts`, square at the CSS width of the div. Its modules are dark on a light tile in both modes, in `--qr-ink` and `--qr-tile`, with joined modules, rounded finder patterns, and eyes in `--qr-eye`, and the code is not inverted in dark mode, since an inverted code is not read in many scanner apps. The group logo is drawn in its middle, and the code is then encoded at level H. With `no-logo` on the `body`, it is drawn without the logo at level M. On a closing slide, the code is 200 px wide in the lower right corner, and the backdrop is drawn over it. In the editor, it is moved by a drag as a figure, and it is not a block.
-- A step is the stage at which an element is shown, i.e. a reveal.js fragment: `class="fragment"` with a `data-fragment-index`. Design the complete slide first, then assign the steps. With `?edit`, the steps of a slide are set in the Steps pane, which writes the class and the index into the tags of the slide. A fragment without an index and with `data-final`, e.g. a QR code, is shown last, once every fragment is restored. The word is not build.
-- A line is an inline `svg.line` in the `section`, moved to its place with `translate`, with one `line` and the `marker` of its arrowheads, whose id is unique in the deck. A curve or an elbow has one `path` in place of the `line`, and its kind is read from the `d` of the path. Its color is set with one class `tone-*` on the `svg`, its weight with `weight-2`, `weight-6`, or `weight-8`, and a dash with `dashed`. In the editor, an end of a line drawn or dragged onto an element is glued to it, i.e. moved with the element. The element is then given a name in `data-anchor`, and this name and the place of the end in the box, as two fractions, are written in `data-from` or `data-to` of the `svg`, e.g. `data-to="a1 0 0.5"`. The three attributes are read only in the editor.
-- A shape is a `div.shape` in the `section`, placed with `translate` and sized with `width` and `height` in px in its `style`, with its words in a `p` inside it. The words are centered, or aligned to the left with the class `left` on the `p`. Without a geometry class it is a rectangle, and its geometry is set with one class `rounded`, `ellipse`, `triangle`, `arrow`, `arrow-both`, `brace`, `plus`, or `equals`. Its outline and the tint of its fill are drawn in the tone of one class `tone-*`, and its fill, outline, and corners are set with the classes given in `REFERENCE.md`. A geometry other than a rectangle, a rounded rectangle, or an ellipse is drawn by the theme into an `svg` child, which is not written into the file. In the editor, a shape is drawn with Insert > Shape and changed in the Shape pane.
-- A group is the elements of a slide that share a name in `data-group`. In this attribute, the groups of an element are listed from the outermost to the innermost, e.g. `data-group="g2 g1"` on a member of the group g1 inside the group g2. A locked element has `data-locked`, and the guides of a slide are in `data-guides` on its `section`, e.g. `data-guides="x480 y270"` in slide px. The three are read only in the editor, where a group is selected and dragged together, a locked element is not moved, resized, or rotated, and an element snaps to the guides while the rulers are shown.
-- A plot is an animated 2D figure in a `div.plot`, drawn as SVG from the inline JSON block named by its `data-plot`, with panels, marks, and tabs in the format given in `REFERENCE.md`. In the editor, a plot is moved as a figure, and its data are edited only in its JSON block. The word is not chart or graph.
-- A plate is a layout with the backdrop or figure over the whole slide and the words in a block at the lower left.
-- A block is an element whose text is edited in place with `?edit`: a heading, a paragraph, a list item, a cell, a caption, the `foot`, the `math` div, a `lab` span, or the notes. At a save, each edited block is written into its place in `index.html`, and every byte outside it is kept. A block that the editor cannot match to the file is skipped, counted in the state of its toolbar, and listed on the card of its button Which?. On a deck with a skipped block, `npm run check` fails. While a deck is edited, every backdrop is drawn complete, every step is shown, and the slides change without a transition. On a slide with an element hidden at a step, e.g. with `fade-out`, the steps are cut into layers at each such step, and the slide is shown one layer at a time, chosen in the status bar. A figure, or a block together with its list or table, is moved by dragging, snapped to the edges and centers of the other elements and of the slide unless Cmd is held on a Mac, or Alt elsewhere. With Option held on a Mac, or Ctrl elsewhere, a copy of the element is dragged. While Shift is held, the drag is locked to one axis. The offset is written as the declaration `translate` of the `style` of its tag, in slide pixels, and it is shown at the lower right of the frame while the element is moved. The order of the layers is written as a move of the element in the file. For an element in the flow, and where a move does not give the order, it is written as the declarations `position: relative` and `z-index` of its `style`, so that the layout of the slide is kept. The two are written only by a layer command, a drag in the object list, or the insert of an element that is put in front of older ones. They are taken off by Reset Slide and once the slide is drawn in the same order without them. Esc leaves a text and selects its block, which the arrow keys nudge, and nudges less than a second apart are one entry of the history. Every change is in one history, undone with ⌘Z and redone with ⌘⇧Z. The unsaved edits are kept in the storage of the browser and offered on a card when the deck is opened again, and Open or Present with unsaved changes asks whether to save them first. The file is read once a second, and a change made outside the editor, e.g. by an agent, loads the page again on the same slide with the changed slides marked in the navigator. With unsaved edits, the next save merges them into the changed file, and a card asks which version to keep of a text changed on both sides. With Notes on, every slide gets an empty `aside.notes` to type into, which is written only once it has text. A bold or an italic set with ⌘B or ⌘I is written as `strong` or `em`. In the deck, the key E opens the same slide with `edit`.
-- The chrome is the running head (`run`), the slide number at the bottom right, the footnote line (`foot`) at the bottom left, and the 3 px progress line. The running head is filled automatically from the last section slide, and it reads Appendix slides on the slides after the closing slide. Title, section, and closing slides are not numbered, and the slides after the closing slide are the appendix, numbered A1, A2, and so on. While the mouse is near the bottom of the window, the progress line is magnified into the scrubber of `src/scrub.ts`. A title bar, a rule under a title, cards, all-caps labels, and eyebrows are not part of the theme. A list item is marked with a short orange dash, or with an orange ring in a `ul.dots` and an orange chevron in a `ul.arrows`.
+A hard invariant is never traded away for another goal, and when a change would break one, you stop and ask the person you work for. A convention may be argued with.
 
-## Writing a slide
+1. A talk works without a toolchain, since the compiled `theme/beeson.js` and `theme/editor.js` are committed.
+2. A deck does not fetch anything at show time, since everything it loads is vendored under `theme/vendor/` with its license.
+3. A save of the editor keeps every byte of `index.html` outside the edited text elements.
+4. Nothing in this repository is derived from DyLAN code.
+5. Every feature is supported in all browsers, i.e. a deck can be viewed and presented, and every control can be used, in current Chrome, Firefox, and Safari on a desktop and on a phone. An extra such as an export or an editor command may be missing in one browser, and the user is then told so in a message.
+6. Phones are supported.
+7. Performance on a slow machine is always an objective.
 
-- Use one `h2` per slide, and an `h1` on a title slide. Keep the text column under 66 characters per line, and prefer one paragraph and a few list items to many items.
-- Give an image for each mode with `for-dark` and `for-light`, a white raster figure the class `paper`, and a black-on-white line plot the class `invert`.
-- Write math in MathJax delimiters, `\(` `\)` inline and `\[` `\]` display, inside a `div.math` for a display, and put shared macros into `theme/macros.js`.
-- Reveal a display in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol is colored. Mark the symbol with `\class{name}{...}`, and give the later fragment `data-highlight="name"`, so that the class is colored orange once the fragment is shown, or violet, blue, or red with `data-tone` set to `violet`, `blue`, or `red`. With `data-unhighlight="name"` on a later fragment, the color is taken off the class until the class is named again at a later step. Give the display `data-keep` to hold it at full opacity through the next step, or `data-keep="N"` to hold it through the step of index N.
-- Put a plot in a `zone` or a `plate`, with its JSON block next to it. Reveal its panels and marks with `data-plot-show` and switch its tab with `data-plot-tab`, both on fragments of its slide.
-- Put code in a `pre` with a `code` of the class of its language, e.g. `language-python`, and load `theme/vendor/reveal/highlight.js` after `notes.js`. To step through it, write its groups of lines in `data-line-numbers` on the `code`, separated by bars.
-- Put speaker notes in an `aside.notes`.
-- Color words with a `span` of one class `tone-accent`, `tone-violet`, `tone-blue`, `tone-red`, `tone-subtle`, `tone-muted`, or `tone-text`, which is colored from the start of the slide, and use `data-highlight` for a color that is a step. Write a strikethrough as `s`.
-- Set a width in px in the `style` only on headings, paragraphs, lists, `math` divs, captions, pictures, QR codes, tycho viewers, shapes, backdrops, and the cells of the first row of a table. Set a height only on an image or a video with a width, a shape, a backdrop, or a row of a table.
-- Center the words of a heading, a paragraph, a list, a caption, or a `math` div with the class `center`, which is not written on a `section`. Draw an element at a quarter of its opacity with the class `ghost`, and dim a step from its step on with the fragment class `semi-fade-out`. Clip a picture to the ellipse of its box with the class `oval` on its `img`.
-- To show a step by itself after the step before, give a fragment of the step before `data-autoslide` with the delay in milliseconds. With a delay on the last step, the deck is moved on to the next slide. Do not write `data-moves-on`, which is set when the deck is started.
-- Leave a slide out of the show with `data-visibility="hidden"`, and cut to the next slide without the fade with `data-transition="none"`. To push a slide out with the next one, write `data-transition="fade-in slide-out"` on it and `data-transition="slide-in fade-out"` on the next slide.
-- Put a surface where a backdrop would go, and load `theme/vendor/three/three.js` before `theme/beeson.js`.
-- To draw a backdrop from a file of polylines, name the file in `data-strands`, and choose and color its records with `data-strands-select`, `data-strands-color`, and `data-strands-ramp`, as described in `REFERENCE.md` under Backdrops. To color the strands along the key of `data-strands-ramp` from a colormap of matplotlib in place of the palette, name `viridis`, `plasma`, or `Blues_r` in `data-strands-colormap`. Set the look of a record with its keys `tone`, `color`, `alpha`, `weight`, `head`, `start`, `fade`, and `glow`, and the seconds of the trace with `data-duration`.
-- Put a video in a `zone` or a `plate`, with a `poster` and an MP4 source, and add `data-autoplay` to play it while its slide is shown. To start it on a click, as in PowerPoint, give it `class="fragment play"` and a `data-fragment-index` in place of `data-autoplay`, and its poster is shown until its step. The videos of one step are started together, and the videos of one zone or plate are stacked in one place, with a later one shown over the earlier ones, which are then paused. Put two videos side by side in a `plate` with the class `row`.
-- To glide an element between two slides, give both slides `data-auto-animate`, and give the element the same `data-id` on each.
-- Embed a tycho scene with the element from `build_embed` of pytycho, as in `demo/tycho-scene.py`, and vendor the runtime once in `theme/vendor/tycho/`. The runtime of the template is built from tycho main at `c6bc2f1`, ahead of the next release of tycho, so write a scene of format 0.4 with pytycho of the same commit, and vendor the runtime again from that release. To start a scene on a click, give its viewer `class="fragment play"` and a `data-fragment-index`, e.g. with `class_="zone fragment play", data_fragment_index=1` in `build_embed`, and the viewer holds the first frame of its scene until its step and plays it from its start at the step. The viewers of one step are started together, and two of them are put side by side in a `plate` with the class `row`. In the editor, the same step is written with the effect Play of the Steps pane or with the checkbox Start on a click. This checkbox is in the Video pane for a video and in the Arrange pane for a scene, which is started with its slide again once the checkbox is cleared.
+## Writing a talk
+
+- Write the talk over the demo deck in `index.html`, and keep `theme/` and `brand/` next to it, since `index.html` is the deck that `npm run check`, `npm run pdf`, and `npm run pptx` read by default.
+- Read the section of `REFERENCE.md` on an element before you write one, since every class and attribute of the theme is described there.
+- Use one `h2` per slide and an `h1` on a title slide, and keep a line of a text column under 66 characters.
+- Design the complete slide first, and assign its steps afterward.
+- Take every color from a tone of the theme, and do not add a title bar, a rule under a heading, an all-caps label, or an eyebrow, since none of them is part of the theme.
+- Set a width in px in a `style` only on a heading, a paragraph, a list, a `math` div, a caption, or a cell in the top row of a table. A picture, a QR code, a TyCHO viewer, a shape, and a backdrop may take a width as well.
+- Set a height in px in a `style` only on a shape, a backdrop, a row of a table, or an image or a video that has a width.
+- Give a figure a version for each mode with `for-dark` and `for-light`, or the class `white-figure` or `invert`, since a figure may otherwise be visible in one mode only.
+- Write a math macro used on more than one slide into `theme/macros.js`.
+- Put the speaker notes of a slide in an `aside.notes`.
+- Do not write `data-moves-on`, which is set by the theme when the deck is started.
+- Someone may have the deck open in the editor while you change `index.html`. The editor then loads your change, and at the next save it merges the unsaved edits of this person into it.
+- When you copy a newer `theme/` into a talk, convert every class and attribute listed under "Avoid" in `GLOSSARY.md` to its new name, since the theme reads only the new names.
+- Read a PowerPoint file from its XML, and do not script PowerPoint, Keynote, or any other desktop app.
 
 ## Commands
 
 ```sh
-npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js and theme/editor.js
-npm run typecheck && npm test               # types, then the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the test command, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, the code boxes, the QR codes, the videos and the tycho viewers at their steps, the shapes, the frame cost of the title trace, the time of a step of a zoom and of a layer command, and the editor under node --test
-npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, a poster on every video, the phone layout, a pixel ratio of 1.25, the editor on the deck
-npm run check -- --browser firefox          # the same in Firefox or Safari over WebDriver, without the console, the phone layout, and the pixel ratio
-npm run pdf                                 # slides.pdf, one page per step, with a page count check
-npm run pptx                                # slides.pptx, one click per step, with videos and speaker notes
+npm ci && npm run vendor && npm run build   # the dependencies, theme/vendor/, theme/beeson.js, and theme/editor.js
+npm run check                               # screenshots of every slide in both modes into check/, and the problems of the page
+npm run check -- --browser firefox          # the same in Firefox, or in Safari with --browser safari
+npm run pdf                                 # slides.pdf, one page per step
+npm run pptx                                # slides.pptx, one click per step, with recordings of the scenes and the traced backdrops
+npm run pptx -- --still                     # the same file without recordings, for a browser without an H.264 encoder
 ```
 
-## Conventions
+In a talk, `npm run check`, `npm run pdf`, and `npm run pptx` need only Node.js and Chrome, and not `npm ci`.
 
-- The compiled `theme/beeson.js` and `theme/editor.js` are committed, since a talk must be usable without a toolchain. Rebuild them after every change under `src/`. Nothing of the editor is loaded without `?edit`, and it does not fetch anything either.
-- Everything loaded in a deck is vendored under `theme/vendor/` with its license, and nothing is fetched from the network at show time.
-- The orbit engine is a port of `orbits.ts` of claudiovestini.com (MIT). Do not derive anything in this repository from DyLAN code.
-- The Princeton marks and the group logo in `brand/` are outside the MIT license, see `brand/NOTICE.md`.
-- Colors are the custom properties in `theme/beeson.css`: `--bg`, `--text`, `--subtle`, `--muted`, `--line`, `--accent`, `--violet`, `--blue`, `--red`, and `--data-1` to `--data-8`. The typeface is Latin Modern Roman at 22, 28, 36, 48, 64, and 96 px on the 1920 by 1080 design size, and math is set in the TeX font of MathJax, i.e. Computer Modern, as in a LaTeX document. Body text is 48 px, i.e. the 24 points asked for by the AIAA on a slide 7.5 in high, captions and tables are 36 px, and a code box is 22 px. Orange is used for motion and progress, and violet for structure.
-- Write a talk over the demo deck in `index.html`, and do not copy `theme/` or `brand/` into another folder, since `index.html` is the default deck of `npm run check`, `npm run pdf`, and `npm run pptx`.
-- Read a PowerPoint file from its XML, and do not script PowerPoint, Keynote, or any other desktop app.
+## Before you hand work over
+
+- Run `npm run check` and `npm run pdf`, and hand work over only when `npm run check` passes.
+- Look at the last page of each changed slide in `slides.pdf`, since text that runs off a slide is not reported by `npm run check`.
+- Do not assume that a failure was there before your change.
+
+## Issues and branches
+
+- Before you start a change, search the open issues, the open pull requests, and the remote branches for the same work, and report what you find to the person you work for.
+- Start a change from a GitHub issue. An issue is not needed for a change of under about 20 lines, a change of the documentation alone, or a dependency bump.
+- Extend an existing issue when the change belongs to it, rather than opening a new one. Open a separate issue for a bug that can be reproduced on `main`.
+- Open an issue with `gh issue create --type`, since the issue forms of the group cannot be filled in from the terminal. The type is `Bug` for a crash, a regression, or unintended behavior, `Feature` for behavior that the repository does not have yet, and `Task` for an investigation, a refactor, or a performance improvement without new behavior.
+- Write a `Bug` under the headings What happened, What you expected, Steps or a minimal script to reproduce, and Version and browser. Write any other issue under the headings The problem, What you would like, and Alternatives.
+- Name a branch `<surname>/<N>-<two-or-three-words>` in lowercase, where the surname is the one of the person you work for and `N` is the number of the issue. Create it with `gh issue develop <N> --name <branch> --checkout`, and leave `<N>-` out when the change does not have an issue.
+
+## Commits and pull requests
+
+- Start a bug fix from a regression test that fails for the reported reason, and commit this test first, alone, before the fix.
+- Give each commit one purpose. Write its subject as a lowercase phrase that opens with an imperative verb, without an article at the start or a prefix such as `fix:`, and write the subject of a regression test as `add regression test:` followed by the behavior.
+- Do not add an attribution line, such as `Co-Authored-By`, to a commit message.
+- Open every issue description, pull request description, and comment that you write with the line `:robot: Generated by <harness>:<model>, not yet reviewed by the author :robot:`, where `<harness>` is the name of your harness and `<model>` is the id of your model. Delete this line only when the person you work for tells you that they have read the text.
+- Open a pull request as a draft with `gh pr create --draft`, and fill in the template of the group. Write `Closes #N` on the line below the attribution line, and do not repeat the text of the issue in the description.
+- Mark a pull request as ready for review only when every check is green and the person you work for agrees. When you think that a check itself is broken, say so in the description rather than changing the check.
+- The reasons for these rules are explained for people in the [group contributing guide](https://github.com/beeson-group/.github/blob/main/CONTRIBUTING.md).
+- Merge a pull request only when you are told to by the person you work for.
+
+## Documentation
+
+- A documentation change is not needed for most code changes, since a reader can read the code.
+- Write each fact in one place, and link to it from the others.
+- `README.md` is written for a human reader in the first-person voice of Claudio Vestini. When you edit it, keep this voice, and do not restyle it to the rules of this file.
+
+## Terms
+
+- The words with a narrower meaning than usual are defined in `GLOSSARY.md`.
+- Before you coin a word, use the word that PowerPoint, Keynote, reveal.js, CSS, or everyday English already has.
+- Give a word with a narrower meaning than usual, or a coined word, an entry in `GLOSSARY.md` the moment it is settled, and name classes, attributes, and the labels of the editor after the glossary.
+- Keep one meaning per word across the theme, the editor, `REFERENCE.md`, and the demo deck.
+
+## Work on the template
+
+Before you change `src/`, `theme/beeson.css`, `scripts/`, `test/`, or `.github/`, read `src/AGENTS.md` as well, where the rules for the source of the theme, the editor, the exports, and the tests are written.
 
 ## Skills
 
-The skills of the repository are in `.agents/skills/`, and `.claude/skills` is a link to the same folder, since Claude Code reads only that one. When someone asks to tighten, shorten, clean up, polish, fix, or review existing slides, follow `.agents/skills/refine-slides/SKILL.md`.
+The skills of the repository are kept in `.agents/skills/`, and `.claude/skills` is a link to the same folder for Claude Code. When someone asks you to tighten, shorten, clean up, polish, fix, or review existing slides, follow `.agents/skills/refine-slides/SKILL.md`.
+
+## Sibling repository
+
+TyCHO (`https://github.com/beeson-group/tycho.git`) is the Python package and browser runtime of the group for astrodynamics visualizations, and its viewer can be put on a slide. Read its `AGENTS.md` before you change it.

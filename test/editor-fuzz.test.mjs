@@ -90,9 +90,9 @@ const run = (seed, edits) => `(async () => {
 test('a seeded run of 200 edits with saves is the file again after every edit is undone', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const text = readFileSync('index.html', 'utf8');
+  const text = readFileSync('test-deck.html', 'utf8');
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'edit&still'));
+  await page.goto(deckUrl('test-deck.html', 'edit&still'));
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`)).problems, []);

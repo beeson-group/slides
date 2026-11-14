@@ -12,7 +12,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, press, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const TABLES = 'test/pages/editor-tables.html';
 const TITLE = 'test/pages/editor-r20-12.html';
 const MOD = { mac: 4, other: 2 };
@@ -111,7 +111,7 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(sel, ['figure'], `the click does not select the figure ${at}`);
       await press(page, 'ArrowRight');
       await sleep(300);
-      assert.ok((await render(page)).includes('<figure class="zone" style="translate: 1px 0px">'), `ArrowRight does not nudge the figure ${at}`);
+      assert.ok((await render(page)).includes('<figure class="figure-box" style="translate: 1px 0px">'), `ArrowRight does not nudge the figure ${at}`);
       assert.deepEqual(errors(page), []);
       await page.close();
     }
@@ -190,7 +190,7 @@ for (const platform of PLATFORMS) {
     }
     const made = await boxes(page, ':scope > p');
     assert.deepEqual(made.map((b) => b.text), ['First box', 'Second box', 'Third box']);
-    const block = await boxes(page, '.block > *');
+    const block = await boxes(page, '.title-text > *');
     for (const [i, a] of made.entries()) {
       for (const b of made.slice(i + 1)) assert.ok(!meets(a.frame, b.frame), `the box ${b.text} ${js(b.frame)} is put over the frame of ${a.text} ${js(a.frame)}`);
       assert.ok(a.frame.left >= 119.5 && a.frame.right <= 1800.5, `the box ${a.text} ${js(a.frame)} is outside the margins`);

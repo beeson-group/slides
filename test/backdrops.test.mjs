@@ -4,24 +4,24 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
-import { scene } from '../src/scenes.ts';
+import { builtIn } from '../src/backdrops.ts';
 
-const boxes = `[...document.querySelectorAll('.backdrop[data-scene]')].map((b) => {
+const boxes = `[...document.querySelectorAll('.backdrop[data-backdrop]')].map((b) => {
   const cs = getComputedStyle(b), px = (name) => parseFloat(cs[name]);
   return {
     name: b.closest('section').querySelector('h1, h2').textContent,
-    scene: b.dataset.scene, cx: +b.dataset.cx, cy: +b.dataset.cy, half: +b.dataset.half,
+    scene: b.dataset.backdrop, cx: +b.dataset.cx, cy: +b.dataset.cy, half: +b.dataset.half,
     left: px('left'), top: px('top'), width: px('width'), height: px('height'),
   };
 })`;
 
-// the sides of the box crossed by the strands, in the projection of Orbits. the function is also
+// the sides of the box crossed by the trajectories, in the projection of Orbits. the function is also
 // run in the page, hence it does not use anything outside its body
-function cuts(box, strands) {
+function cuts(box, trajectories) {
   const slide = { width: 1920, height: 1080 };
   const scale = box.height / 2 / box.half,
     found = new Set();
-  for (const s of strands) {
+  for (const s of trajectories) {
     for (let i = 0; i < s.pts.length; i += 2) {
       const x = (s.pts[i] - box.cx) * scale + box.width / 2,
         y = -(s.pts[i + 1] - box.cy) * scale + box.height / 2;
@@ -38,7 +38,7 @@ function cuts(box, strands) {
 // window is read
 const filed = `(async () => {
   const out = [];
-  for (const b of Beeson.backdrops.filter((b) => b.el.dataset.strands !== undefined)) {
+  for (const b of Beeson.backdrops.filter((b) => b.el.dataset.trajectories !== undefined)) {
     const section = b.el.closest('section'), { h, v } = Reveal.getIndices(section);
     Reveal.slide(h, v);
     await b.ready;
@@ -46,7 +46,7 @@ const filed = `(async () => {
     const cs = getComputedStyle(b.el), px = (name) => parseFloat(cs[name]);
     const box = { ...b.view, left: px('left'), top: px('top'), width: px('width'), height: px('height') };
     const name = section.querySelector('h1, h2, .foot').textContent;
-    out.push([name, b.el.dataset.strands, b.strands.length, (${cuts})(box, b.strands)]);
+    out.push([name, b.el.dataset.trajectories, b.trajectories.length, (${cuts})(box, b.trajectories)]);
   }
   return out;
 })()`;
@@ -55,11 +55,11 @@ test('no backdrop is cut at an edge of its box inside the slide', { timeout: 600
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
 
   const cropped = (await page.evaluate(boxes))
-    .map((b) => [b.name, b.scene, cuts(b, scene(b.scene))])
+    .map((b) => [b.name, b.builtIn, cuts(b, builtIn(b.builtIn))])
     .filter((b) => b[2]);
   assert.deepEqual(cropped, []);
 
@@ -86,7 +86,7 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   // the title slide draws brand/transfer.js, whose spiral carries a head of its own from the start
   await new Promise((done) => setTimeout(done, 800));
@@ -99,7 +99,7 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
     Reveal.slide(h, v);
   })()`;
   // the wide ribbon has neither a spacecraft nor data-heads, hence no head
-  await page.evaluate(slideTo('.backdrop[data-scene="wideRibbon"]'));
+  await page.evaluate(slideTo('.backdrop[data-backdrop="wideRibbon"]'));
   await new Promise((done) => setTimeout(done, 800));
   const [ribbonRunning, ribbonPixels] = await page.evaluate(headPixels);
   assert.ok(ribbonRunning, 'the wide ribbon is traced');
@@ -119,7 +119,7 @@ const alphas = (from, to) => `(() => {
   const { data } = ctx.getImageData(0, ${from}, c.width, ${to - from});
   return Array.from({ length: ${to - from} }, (_, r) => Array.from({ length: c.width }, (_, x) => data[4 * (r * c.width + x) + 3]));
 })()`;
-// the pixels of values more than 3 off their most common value. a strand stroked in pieces is beaded
+// the pixels of values more than 3 off their most common value. a trajectory stroked in pieces is beaded
 // at every joint, i.e. at dozens of pixels of a row, while the software rasterizer of Chrome, on the
 // Linux and Windows runners, may leave a pixel of a long line lighter by up to about 25
 const outliers = (values) => {
@@ -128,13 +128,13 @@ const outliers = (values) => {
   const mode = [...counts].reduce((a, b) => (b[1] > a[1] ? b : a))[0];
   return values.filter((v) => Math.abs(v - mode) > 3).length;
 };
-// the row of rows with the most ink, i.e. the center of a horizontal strand
+// the row of rows with the most ink, i.e. the center of a horizontal trajectory
 const center = (rows) => rows.reduce((best, row, r) => (row.reduce((a, b) => a + b) > rows[best].reduce((a, b) => a + b) ? r : best), 0);
 
-// the page traces two straight strands at an opacity of 0.6 in 2 s, the second with a glow, from
-// x = 96 px to 1824 px on the rows y = 324 px and 756 px. a strand stroked in pieces, one per frame,
+// the page traces two straight trajectories at an opacity of 0.6 in 2 s, the second with a glow, from
+// x = 96 px to 1824 px on the rows y = 324 px and 756 px. a trajectory stroked in pieces, one per frame,
 // is beaded at the joints of the pieces, and the glow of the pieces adds up
-test('a strand is traced in one stroke, hence without beads, and its trace ends on its still', { timeout: 60000 }, async (t) => {
+test('a trajectory is traced in one stroke, hence without beads, and its trace ends on its still', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
@@ -150,14 +150,14 @@ test('a strand is traced in one stroke, hence without beads, and its trace ends 
   const row = plain[center(plain)];
   const end = row.findLastIndex((a) => a > 0);
   assert.ok(end > 400 && end < 1600, `the trace has reached x = ${end} px after 0.9 s of 2 s`);
-  assert.ok(outliers(row.slice(150, end - 20)) <= 2, `the alpha along the strand is off at ${outliers(row.slice(150, end - 20))} pixels`);
+  assert.ok(outliers(row.slice(150, end - 20)) <= 2, `the alpha along the trajectory is off at ${outliers(row.slice(150, end - 20))} pixels`);
   const still = plainStill[center(plainStill)];
   assert.ok(outliers(still.slice(150, 1770)) <= 2, `the alpha along the still is off at ${outliers(still.slice(150, 1770))} pixels`);
 
-  // a row of the glow 4 px off the strand, behind the head
+  // a row of the glow 4 px off the trajectory, behind the head
   const r = center(glowing) + 4;
   const off = glowing[r].slice(150, glowing[center(glowing)].findLastIndex((a) => a > 0) - 40).map((a, x) => Math.abs(a - glowingStill[r][150 + x]));
-  assert.ok(glowing[r][300] > 0, 'the glow is drawn 4 px off the strand');
+  assert.ok(glowing[r][300] > 0, 'the glow is drawn 4 px off the trajectory');
   assert.ok(Math.max(...off) <= 3, `the glow during the trace is off its still by up to ${Math.max(...off)}`);
 
   // the drawing left by the trace is the still drawn after it
@@ -173,18 +173,18 @@ test('a strand is traced in one stroke, hence without beads, and its trace ends 
   assert.equal(changed, 0);
 });
 
-// the third slide of the page traces three crossing strands in 2 s, which are finished in the
+// the third slide of the page traces three crossing trajectories in 2 s, which are finished in the
 // reverse of the order of their file. the frames are drawn by frame() at 60 per second on a clock
-// of the test, up to 4 ms before the end of the trace, when the violet strand is 3.5 px short of
+// of the test, up to 4 ms before the end of the trace, when the violet trajectory is 3.5 px short of
 // its end, and then once after the end, when the still is drawn
-test('the last frame of a trace is its still, with the strands overlapped in the order of the file', { timeout: 60000 }, async (t) => {
+test('the last frame of a trace is its still, with the trajectories overlapped in the order of the file', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
   await page.goto(deckUrl('test/pages/trace.html'));
   await page.waitFor(deckSettled);
   await page.evaluate('Reveal.slide(2)');
-  await page.waitFor('Beeson.backdrops.some((o) => Reveal.getCurrentSlide().contains(o.el) && o.strands.length === 3 && o.W > 0)');
+  await page.waitFor('Beeson.backdrops.some((o) => Reveal.getCurrentSlide().contains(o.el) && o.trajectories.length === 3 && o.W > 0)');
   const out = await page.evaluate(`(() => {
     const b = Beeson.backdrops.find((o) => Reveal.getCurrentSlide().contains(o.el));
     // the base canvas is read through a copy, since Chrome may move a canvas read with
@@ -204,10 +204,10 @@ test('the last frame of a trace is its still, with the strands overlapped in the
     const traced = b.finished, last = read();
     b.frame(2001);
     const still = read();
-    // the head of the violet strand is at x = 1820.5 px, at the scale of 1080 px per unit. the
+    // the head of the violet trajectory is at x = 1820.5 px, at the scale of 1080 px per unit. the
     // pixels are compared premultiplied, within 8 of 255. the software rasterizer of Chrome, on the
     // Linux and Windows runners, draws a line and its glow differently by up to 6 when its length
-    // changes, while the two orders of two strands at their crossing differ by up to about 55
+    // changes, while the two orders of two trajectories at their crossing differ by up to about 55
     const premultiplied = (d, i, c) => (c === 3 ? d[i + 3] : (d[i + c] * d[i + 3]) / 255);
     let changed = 0, near = 0;
     for (let i = 0; i < last.length; i += 4) {
@@ -221,14 +221,14 @@ test('the last frame of a trace is its still, with the strands overlapped in the
   assert.equal(out.traced, false, 'the trace is not finished 4 ms before its end');
   assert.equal(out.finished, true);
   assert.equal(out.changed, 0, `${out.changed} pixels away from the head are changed from the last frame to the still`);
-  assert.ok(out.near > 0, 'the end of the violet strand is drawn in the still');
+  assert.ok(out.near > 0, 'the end of the violet trajectory is drawn in the still');
 });
 
-test('the strands of a backdrop with data-stagger are started one after another', { timeout: 60000 }, async (t) => {
+test('the trajectories of a backdrop with data-stagger are started one after another', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   const stagger = await page.evaluate(`(() => {
     const el = document.querySelector('.backdrop[data-stagger]');
@@ -236,20 +236,20 @@ test('the strands of a backdrop with data-stagger are started one after another'
     Reveal.slide(h, v);
     return +el.dataset.stagger;
   })()`);
-  // the clock is taken from the start of the first strand, which a slow runner may delay
+  // the clock is taken from the start of the first trajectory, which a slow runner may delay
   const staggered = `Beeson.backdrops.find((b) => b.el.hasAttribute('data-stagger'))`;
   await page.waitFor(`${staggered}.idx[0] > 0`);
   await new Promise((done) => setTimeout(done, 1300));
   const started = await page.evaluate(`${staggered}.idx.map((j) => j > 0)`);
   const count = started.filter(Boolean).length;
-  // the strands are started in the order of the file, hence the started ones come first
+  // the trajectories are started in the order of the file, hence the started ones come first
   assert.deepEqual(started, started.map((_, i) => i < count));
-  assert.ok(count >= 2 && count <= Math.ceil(1.6 / stagger) + 1, `${count} of ${started.length} strands started`);
+  assert.ok(count >= 2 && count <= Math.ceil(1.6 / stagger) + 1, `${count} of ${started.length} trajectories started`);
 });
 
-// the fourth slide of the page has a straight strand of three points, 864 px apart. the tint at the
-// pointer is the disc of the strands within its radius, hence it reaches the radius on both sides of
-// the pointer and does not run past it, with the pointer on a point of the strand and between points
+// the fourth slide of the page has a straight trajectory of three points, 864 px apart. the tint at the
+// pointer is the disc of the trajectories within its radius, hence it reaches the radius on both sides of
+// the pointer and does not run past it, with the pointer on a point of the trajectory and between points
 test('the tint at the pointer is a disc of its radius', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -283,7 +283,7 @@ test('the tint at the pointer is a disc of its radius', { timeout: 60000 }, asyn
     })()`);
     const where = `with the pointer at x = ${at}, the tint of radius ${tint.r} px`;
     assert.ok(tint.far <= tint.r + 2, `${where} reaches ${tint.far.toFixed(1)} px from the pointer`);
-    assert.ok(tint.left <= -tint.r + 2 && tint.right >= tint.r - 2, `${where} runs along the strand from ${tint.left} px to ${tint.right} px`);
+    assert.ok(tint.left <= -tint.r + 2 && tint.right >= tint.r - 2, `${where} runs along the trajectory from ${tint.left} px to ${tint.right} px`);
   }
 });
 
@@ -319,20 +319,20 @@ test('Beeson.remount, Beeson.preview, and Beeson.fitWindow draw a backdrop for t
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
   const out = await page.evaluate(`(async () => {
-    const el = document.querySelector('.backdrop[data-scene="nest"]');
+    const el = document.querySelector('.backdrop[data-backdrop="tubes"][data-cx="0.97"]');
     const { h, v } = Reveal.getIndices(el.closest('section'));
     Reveal.slide(h, v);
-    const before = Beeson.backdrops.find((b) => b.el === el).strands.length;
-    el.dataset.scene = 'tubes';
+    const before = Beeson.backdrops.find((b) => b.el === el).trajectories.length;
+    el.dataset.backdrop = 'wideRibbon';
     const o = Beeson.remount(el);
     await o.ready;
     const after = Beeson.backdrops.filter((b) => b.el === el);
     const div = document.createElement('div');
     div.style.cssText = 'position: fixed; left: 0; top: 0; width: 192px; height: 108px';
-    div.dataset.scene = 'nest';
+    div.dataset.backdrop = 'tubes';
     div.dataset.half = '0.5';
     div.dataset.cx = '0.97';
     document.body.append(div);
@@ -342,11 +342,11 @@ test('Beeson.remount, Beeson.preview, and Beeson.fitWindow draw a backdrop for t
     const inked = (() => { const c = p.canvases[0], d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; })();
     const fitted = await Beeson.fitWindow(el);
     p.destroy();
-    return { before, entries: after.length, same: after[0] === o, strands: o.strands.length, done: o.done, canvases: el.querySelectorAll(':scope > canvas').length, previewIn: Beeson.backdrops.includes(p), count, inked, fitted };
+    return { before, entries: after.length, same: after[0] === o, trajectories: o.trajectories.length, done: o.done, canvases: el.querySelectorAll(':scope > canvas').length, previewIn: Beeson.backdrops.includes(p), count, inked, fitted };
   })()`);
   assert.equal(out.entries, 1);
   assert.equal(out.same, true);
-  assert.ok(out.strands > out.before, `${out.strands} strands of tubes, ${out.before} of nest`);
+  assert.ok(out.trajectories > out.before, `${out.trajectories} trajectories of wideRibbon, ${out.before} of tubes`);
   assert.equal(out.done, true);
   assert.equal(out.canvases, 2);
   assert.equal(out.previewIn, false);

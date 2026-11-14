@@ -10,7 +10,7 @@
 </head>
 <body>
 <!-- a plot of two panels with a step that shows the second panel and a step that switches its tab,
-     and a trace without its ghost, then a plot whose JSON block is missing -->
+     and a trace without its ghost, then a plot whose JSON script is missing -->
 <div class="reveal">
   <div class="slides">
     <section>
@@ -18,7 +18,7 @@
     </section>
     <section>
       <h2>A plot in a zone</h2>
-      <div class="plot zone" data-plot="data"></div>
+      <div class="plot figure-box" data-plot="data"></div>
       <span class="fragment" data-plot-show="right"></span>
       <span class="fragment" data-plot-tab="two"></span>
       <script type="application/json" id="data">{
@@ -42,7 +42,7 @@
     </section>
     <section>
       <h2>A plot without data</h2>
-      <div class="plot zone" data-plot="missing"></div>
+      <div class="plot figure-box" data-plot="missing"></div>
     </section>
   </div>
 </div>

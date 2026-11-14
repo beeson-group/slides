@@ -1,5 +1,5 @@
 // checks of the surfaces: the effective potential of src/surfaces.ts and its libration points, and the
-// surface of the demo deck in Chrome, stepped through its stages live and in the print view
+// surface of the demo deck in Chrome, stepped through its states live and in the print view
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -71,13 +71,13 @@ test('the zero-velocity curve at the Jacobi constant of L1 passes through L1', (
 
 test('the cut of the effective potential is at -C/2, with C from data-C or else at L1', () => {
   const f = surfaceFunction('effective-potential', { mu: '0.05' });
-  assert.equal(f.stages.cut({ c: '3.39' }).level, -1.695);
-  assert.equal(f.stages.cut({}).level, sum(librationPoints(MU)[0].x, 0));
-  assert.deepEqual(Object.keys(f.stages), ['flat', 'wells', 'bowl', 'sum', 'extrema', 'cut']);
+  assert.equal(f.states.cut({ c: '3.39' }).level, -1.695);
+  assert.equal(f.states.cut({}).level, sum(librationPoints(MU)[0].x, 0));
+  assert.deepEqual(Object.keys(f.states), ['zero', 'gravitational', 'centrifugal', 'effective', 'extrema', 'cut']);
   assert.equal(surfaceFunction('nothing', {}), null);
 });
 
-// the stage of the surface and a digest of its canvas, on the slide of the surface or on each of its
+// the state of the surface and a digest of its canvas, on the slide of the surface or on each of its
 // pages in the print view, for the surfaces of the slides headed title
 const TITLE = 'Explain concepts, visually';
 const surfaces = (title = TITLE) => `Promise.all([...document.querySelectorAll('.surface')].filter((s) => s.getClientRects().length && s.closest('section').querySelector('h2')?.textContent === ${JSON.stringify(title)}).map(async (s) => {
@@ -86,29 +86,29 @@ const surfaces = (title = TITLE) => `Promise.all([...document.querySelectorAll('
   let drawn = 0;
   for (let i = 3; i < data.length; i += 4) if (data[i] > 0) drawn++;
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
-  return { stage: s.dataset.shown, drawn: drawn / (data.length / 4), digest: [...digest.slice(0, 8)].join('.') };
+  return { state: s.dataset.shown, drawn: drawn / (data.length / 4), digest: [...digest.slice(0, 8)].join('.') };
 }))`;
 
-test('the surface of the demo deck is drawn at each of its stages, live and in the print view', { timeout: 120000 }, async (t) => {
+test('the surface of the demo deck is drawn at each of its states, live and in the print view', { timeout: 120000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const stages = ['flat', 'wells', 'bowl', 'sum', 'extrema', 'cut'];
+  const states = ['zero', 'gravitational', 'centrifugal', 'effective', 'extrema', 'cut'];
 
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
-  // the label of each mark shown is at the mark, also after a turn of the camera
+  // the label of each point shown is at the point, also after a turn of the camera
   const live = [], astray = [];
   const labeled = async (where) => {
-    for (const m of (await page.evaluate(`Beeson.surfaces[0].probe()`)).marks) {
-      if (m.fade > 0 && !(m.label < 1)) astray.push(`the label of ${m.name} is ${m.label?.toFixed(1)} px from its mark ${where}`);
+    for (const m of (await page.evaluate(`Beeson.surfaces[0].probe()`)).points) {
+      if (m.fade > 0 && !(m.label < 1)) astray.push(`the label of ${m.name} is ${m.label?.toFixed(1)} px from its point ${where}`);
     }
   };
-  for (let f = -1; f < stages.length - 1; f++) {
+  for (let f = -1; f < states.length - 1; f++) {
     await page.evaluate(`Reveal.slide(${h}, 0, ${f})`);
     live.push(...(await page.evaluate(surfaces())));
-    await labeled(`at the stage ${stages[f + 1]}`);
+    await labeled(`at the state ${states[f + 1]}`);
   }
   // a drag turns the surface, and the slide is not changed by it as by a swipe
   const turned = await page.evaluate(`(async () => {
@@ -122,48 +122,48 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   assert.equal(turned.h, h);
   assert.notEqual(turned.surface.digest, live.at(-1).digest);
   await labeled('after a drag');
-  await page.evaluate(`Reveal.slide(${h}, 0, ${stages.length - 2})`);
+  await page.evaluate(`Reveal.slide(${h}, 0, ${states.length - 2})`);
 
   assert.deepEqual(page.errors, []);
   assert.deepEqual(astray, []);
-  assert.deepEqual(live.map((s) => s.stage), stages);
-  for (const s of live) assert.ok(s.drawn > 0.1, `${(100 * s.drawn).toFixed(1)}% of the canvas is drawn at the stage ${s.stage}`);
-  assert.equal(new Set(live.map((s) => s.digest)).size, stages.length);
+  assert.deepEqual(live.map((s) => s.state), states);
+  for (const s of live) assert.ok(s.drawn > 0.1, `${(100 * s.drawn).toFixed(1)}% of the canvas is drawn at the state ${s.state}`);
+  assert.equal(new Set(live.map((s) => s.digest)).size, states.length);
 
   const print = await browser.newPage();
-  await printView(print, deckUrl('index.html', 'print-pdf&still'));
+  await printView(print, deckUrl('test-deck.html', 'print-pdf&still'));
   const pages = await print.evaluate(surfaces());
   assert.deepEqual(print.errors, []);
-  // the last page is the step that restores the dimmed fragments, at the last stage
-  assert.deepEqual(pages.map((s) => s.stage), [...stages, 'cut']);
-  assert.equal(new Set(pages.map((s) => s.digest)).size, stages.length);
+  // the last page is the step that restores the dimmed fragments, at the last state
+  assert.deepEqual(pages.map((s) => s.state), [...states, 'cut']);
+  assert.equal(new Set(pages.map((s) => s.digest)).size, states.length);
   // the pixels are not compared one by one, since a canvas read back a few times is moved to the
   // processor by Chrome, and the copy of the WebGL image is then rounded differently
   pages.forEach((s, i) => {
     const slide = live[Math.min(i, live.length - 1)];
-    assert.ok(Math.abs(s.drawn - slide.drawn) < 0.002, `the page of the stage ${s.stage} is drawn over ${s.drawn}, and the slide over ${slide.drawn}`);
+    assert.ok(Math.abs(s.drawn - slide.drawn) < 0.002, `the page of the state ${s.state} is drawn over ${s.drawn}, and the slide over ${slide.drawn}`);
   });
 });
 
-// a change of stage takes 1.4 s, or 2.6 s when the cutting plane is slid. a quick step is taken
+// a change of state takes 1.4 s, or 2.6 s when the cutting plane is slid. a quick step is taken
 // 0.4 s after the last one, while the surface is still being changed, as when a talk is stepped back
 // in a hurry, and a settled step is taken once the change has ended
-test('the marks of the surface are drawn on it or hidden at every step, forward to cut and back to wells', { timeout: 120000 }, async (t) => {
+test('the points of the surface are drawn on it or hidden at every step, forward to cut and back to gravitational', { timeout: 120000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
   const probe = `Beeson.surfaces.find((s) => s.el.closest('section') === Reveal.getCurrentSlide()).probe()`;
   const wait = (ms) => new Promise((done) => setTimeout(done, ms));
-  // each stage with the index of the fragment that sets it
-  const forward = [['wells', 0], ['bowl', 1], ['sum', 2], ['extrema', 3], ['cut', 4]];
-  const backward = [['extrema', 3], ['sum', 2], ['bowl', 1], ['wells', 0]];
+  // each state with the index of the fragment that sets it
+  const forward = [['gravitational', 0], ['centrifugal', 1], ['effective', 2], ['extrema', 3], ['cut', 4]];
+  const backward = [['extrema', 3], ['effective', 2], ['centrifugal', 1], ['gravitational', 0]];
   const TOLERANCE = 0.02;
   const floating = [], buried = [];
   const look = (where, p) => {
-    for (const m of p.marks) {
+    for (const m of p.points) {
       if (m.fade <= 0) continue;
       const dz = m.z - m.surface;
       if (dz > TOLERANCE) floating.push(`${m.name} ${dz.toFixed(2)} above the surface ${where}`);
@@ -171,17 +171,17 @@ test('the marks of the surface are drawn on it or hidden at every step, forward 
     }
   };
   const walk = async (steps, pace) => {
-    for (const [stage, f] of steps) {
+    for (const [state, f] of steps) {
       await page.evaluate(`Reveal.slide(${h}, 0, ${f})`);
       for (let ms = 0; ; ms += 130) {
         const p = await page.evaluate(probe);
-        assert.equal(p.stage, stage);
-        look(`${ms} ms after the ${pace} step to ${stage}`, p);
+        assert.equal(p.state, state);
+        look(`${ms} ms after the ${pace} step to ${state}`, p);
         if (pace === 'quick' ? ms >= 390 : p.settled) {
           if (pace === 'settled') {
-            const shown = stage === 'extrema' || stage === 'cut';
-            for (const m of p.marks) assert.equal(m.fade, shown ? 1 : 0, `the fade of ${m.name} at the end of the step to ${stage}`);
-            for (const m of p.marks) if (shown) assert.ok(m.label < 1, `the label of ${m.name} is ${m.label} px from its mark at the end of the step to ${stage}`);
+            const shown = state === 'extrema' || state === 'cut';
+            for (const m of p.points) assert.equal(m.fade, shown ? 1 : 0, `the fade of ${m.name} at the end of the step to ${state}`);
+            for (const m of p.points) if (shown) assert.ok(m.label < 1, `the label of ${m.name} is ${m.label} px from its point at the end of the step to ${state}`);
           }
           break;
         }
@@ -202,76 +202,76 @@ test('the marks of the surface are drawn on it or hidden at every step, forward 
   assert.deepEqual(buried, []);
 });
 
-// the demo slide whose surface marks are picked out with data-surface-marks, data-surface-accent,
-// and data-surface-violet. its surface is at the stage extrema from the fragment of index 4 on
-const MARKED = 'Color the terms and the marks';
+// the demo slide whose surface points are picked out with data-surface-points, data-surface-accent,
+// and data-surface-violet. its surface is at the state extrema from the fragment of index 4 on
+const MARKED = 'Color the terms and the points';
 const SADDLES = ['L1', 'L2', 'L3'], MAXIMA = ['L4', 'L5'];
-// the opacity of a mark left out of data-surface-marks, UNLIT in src/surface.ts
+// the opacity of a point left out of data-surface-points, UNLIT in src/surface.ts
 const UNLIT = 0.18;
 
-// the opacity lit and the tone of each mark of the surface on the current slide, and the opacity of
-// the label of the mark
+// the opacity lit and the tone of each point of the surface on the current slide, and the opacity of
+// the label of the point
 const marked = `(() => {
   const s = Beeson.surfaces.find((s) => s.el.closest('section') === Reveal.getCurrentSlide()), p = s.probe();
-  const label = (name) => Number(s.el.querySelector('.lab[data-at="' + name + '"]').style.opacity);
-  return { stage: p.stage, settled: p.settled, marks: Object.fromEntries(p.marks.map((m) => [m.name, { lit: m.lit, tone: m.tone, label: label(m.name) }])) };
+  const label = (name) => Number(s.el.querySelector('.label[data-at="' + name + '"]').style.opacity);
+  return { state: p.state, settled: p.settled, points: Object.fromEntries(p.points.map((m) => [m.name, { lit: m.lit, tone: m.tone, label: label(m.name) }])) };
 })()`;
 
-// asserts that the marks named in lit are at full opacity in tone, and the other marks are dimmed
-// to UNLIT in the color of the text. with every mark in lit, every mark is in the color of the text
-function expectMarks(seen, lit, tone, where) {
+// asserts that the points named in lit are at full opacity in tone, and the other points are dimmed
+// to UNLIT in the color of the text. with every point in lit, every point is in the color of the text
+function expectPoints(seen, lit, tone, where) {
   const every = lit.length === SADDLES.length + MAXIMA.length;
-  for (const [name, m] of Object.entries(seen.marks)) {
+  for (const [name, m] of Object.entries(seen.points)) {
     const on = lit.includes(name);
     assert.ok(Math.abs(m.lit - (on ? 1 : UNLIT)) < 1e-3, `the lit of ${name} is ${m.lit} ${where}`);
     assert.equal(m.tone, on && !every ? tone : 'text', `the tone of ${name} ${where}`);
   }
 }
 
-test('the marks of a surface are dimmed and colored by data-surface-marks, data-surface-accent, and data-surface-violet', { timeout: 120000 }, async (t) => {
+test('the points of a surface are dimmed and colored by data-surface-points, data-surface-accent, and data-surface-violet', { timeout: 120000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent === ${JSON.stringify(MARKED)})`);
 
-  // the fragment that sets extrema does not have the attributes, hence every mark is lit
+  // the fragment that sets extrema does not have the attributes, hence every point is lit
   await page.evaluate(`Reveal.slide(${h}, 0, 3)`);
   const all = await page.evaluate(marked);
-  assert.equal(all.stage, 'extrema');
-  expectMarks(all, [...SADDLES, ...MAXIMA], 'text', 'at the step that sets extrema');
+  assert.equal(all.state, 'extrema');
+  expectPoints(all, [...SADDLES, ...MAXIMA], 'text', 'at the step that sets extrema');
 
   await page.evaluate(`Reveal.slide(${h}, 0, 4)`);
   const saddles = await page.evaluate(marked);
-  expectMarks(saddles, SADDLES, 'accent', 'at the step of the saddles');
-  // a dimmed label is faded with its mark. a lit label is at least at BEHIND of src/surface.ts, the
-  // opacity of a mark behind the surface
-  for (const name of MAXIMA) assert.ok(saddles.marks[name].label <= UNLIT + 1e-3, `the label of ${name} is at ${saddles.marks[name].label}`);
-  for (const name of SADDLES) assert.ok(saddles.marks[name].label >= 0.3 - 1e-3, `the label of ${name} is at ${saddles.marks[name].label}`);
+  expectPoints(saddles, SADDLES, 'accent', 'at the step of the saddles');
+  // a dimmed label is faded with its point. a lit label is at least at BEHIND of src/surface.ts, the
+  // opacity of a point behind the surface
+  for (const name of MAXIMA) assert.ok(saddles.points[name].label <= UNLIT + 1e-3, `the label of ${name} is at ${saddles.points[name].label}`);
+  for (const name of SADDLES) assert.ok(saddles.points[name].label >= 0.3 - 1e-3, `the label of ${name} is at ${saddles.points[name].label}`);
 
   await page.evaluate(`Reveal.slide(${h}, 0, 5)`);
-  expectMarks(await page.evaluate(marked), MAXIMA, 'violet', 'at the step of the maxima');
+  expectPoints(await page.evaluate(marked), MAXIMA, 'violet', 'at the step of the maxima');
   await page.evaluate(`Reveal.slide(${h}, 0, 4)`);
-  expectMarks(await page.evaluate(marked), SADDLES, 'accent', 'after the step back to the saddles');
+  expectPoints(await page.evaluate(marked), SADDLES, 'accent', 'after the step back to the saddles');
   assert.deepEqual(page.errors, []);
 
-  // without still, a step that changes only the marks leaves the sheets settled. the marks are not
+  // without still, a step that changes only the points leaves the sheets settled. the points are not
   // changed in the frame of the step, and they reach their targets in a few time constants of 0.15 s.
-  // the page is set to motion, since a runner may prefer reduced motion, under which the marks jump
+  // the page is set to motion, since a runner may prefer reduced motion, under which the points jump
   const live = await browser.newPage({ motion: true });
-  await live.goto(deckUrl('index.html'));
+  await live.goto(deckUrl('test-deck.html'));
   await live.waitFor(deckSettled);
   await live.evaluate(`Reveal.slide(${h}, 0, 3)`);
   await live.waitFor(`(${marked}).settled`);
   const step = await live.evaluate(`(() => { Reveal.slide(${h}, 0, 4); return ${marked}; })()`);
-  assert.equal(step.stage, 'extrema');
+  assert.equal(step.state, 'extrema');
   assert.equal(step.settled, true);
-  assert.equal(step.marks.L4.lit, 1);
-  assert.equal(step.marks.L4.tone, 'text');
-  assert.equal(step.marks.L1.tone, 'accent');
+  assert.equal(step.points.L4.lit, 1);
+  assert.equal(step.points.L4.tone, 'text');
+  assert.equal(step.points.L1.tone, 'accent');
   await new Promise((done) => setTimeout(done, 1500));
-  expectMarks(await live.evaluate(marked), SADDLES, 'accent', '1.5 s after the live step of the saddles');
+  expectPoints(await live.evaluate(marked), SADDLES, 'accent', '1.5 s after the live step of the saddles');
   assert.deepEqual(live.errors, []);
 });
 
@@ -279,7 +279,7 @@ test('a surface takes the camera of the surface with the same attributes on the 
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   const index = (title) => `[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent === ${JSON.stringify(title)})`;
   const h = await page.evaluate(index(TITLE)), next = await page.evaluate(index(MARKED));

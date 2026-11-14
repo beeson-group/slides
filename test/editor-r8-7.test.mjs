@@ -2,7 +2,7 @@
 // figure is its frame, i.e. its shown picture with the caption that it holds, as the frame with its
 // grips is drawn, in the X and Y fields, the readouts, Align, Distribute, the snap, Zoom to
 // Selection, a group, and Size and Position…. the figures are a pair of images and one image, in a
-// zone of a content slide and in the plate of a figure slide. after each command the file is
+// figure box of a content slide and in the plate of a figure slide. after each command the file is
 // checked byte for byte after an undo and the edit again after a redo
 
 import assert from 'node:assert/strict';
@@ -17,8 +17,8 @@ import { byteExact, click, drag, press, type } from './helpers/editor.mjs';
 const PLATFORMS = ['mac', 'other'];
 const MODES = ['dark', 'light'];
 const DECK = 'test/pages/editor-r8-5.html';
-const ZONE_PAIR = 0, ZONE_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3;
-const FIGURES = [ZONE_PAIR, ZONE_ONE, PLATE_PAIR, PLATE_ONE];
+const FIGURE_BOX_PAIR = 0, FIGURE_BOX_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3;
+const FIGURES = [FIGURE_BOX_PAIR, FIGURE_BOX_ONE, PLATE_PAIR, PLATE_ONE];
 const NAMES = ['a pair in a zone', 'one image in a zone', 'a pair in a plate', 'one image in a plate'];
 const IMG = '.reveal section.present img';
 const HEADING = '.reveal section.present > h2';
@@ -50,7 +50,7 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const near = (a, b, by = 1) => Math.abs(a - b) <= by;
 const show = (b) => `${Math.round(b.left)}, ${Math.round(b.top)}, ${Math.round(b.width)} × ${Math.round(b.height)}`;
 
-const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...[...el.classList].filter((c) => /^(zone|plate|caption|for-dark|for-light)$/.test(c))].join('.'))`);
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...[...el.classList].filter((c) => /^(figure-box|plate|caption|for-dark|for-light)$/.test(c))].join('.'))`);
 
 // the upper left corner of the slide on the screen, and the screen px per slide px in k
 const SCALE = `(() => { const s = document.querySelector('.reveal .slides'); const r = s.getBoundingClientRect(); return { left: r.left, top: r.top, k: r.width / s.offsetWidth }; })()`;
@@ -98,7 +98,7 @@ async function load(t, platform, mode, n, deck = DECK) {
   if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
   await page.evaluate(`Reveal.slide(${n})`);
   await frames(page);
-  page.figure = n === PLATE_PAIR || n === PLATE_ONE ? 'div.plate' : 'figure.zone';
+  page.figure = n === PLATE_PAIR || n === PLATE_ONE ? 'div.plate' : 'figure.figure-box';
   return page;
 }
 
@@ -229,7 +229,7 @@ for (const platform of PLATFORMS) {
         await frames(page);
         assert.equal(await render(page), edited);
         assert.deepEqual(errors(page), []);
-        // closed before the next page, which would offer its unsaved edits on a card
+        // closed before the next page, which would offer its unsaved edits on a dialog
         await page.close();
       }
     });
@@ -255,7 +255,7 @@ for (const platform of PLATFORMS) {
           assert.ok(near(ALIGNED[side](heading, ref)[0], to), `Align ${side} of ${where} with the heading puts the heading at ${show(heading)}`);
           await roundTrip(page, await render(page));
         }
-        if (n === ZONE_PAIR || n === ZONE_ONE) {
+        if (n === FIGURE_BOX_PAIR || n === FIGURE_BOX_ONE) {
           // the heading, a paragraph, and the figure distributed with the first and the last of
           // them in the order of their tops kept in place, and each kept in the span of the three
           await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
@@ -272,7 +272,7 @@ for (const platform of PLATFORMS) {
           await roundTrip(page, await render(page));
         }
         assert.deepEqual(errors(page), []);
-        // closed before the next page, which would offer its unsaved edits on a card
+        // closed before the next page, which would offer its unsaved edits on a dialog
         await page.close();
       }
     });
@@ -323,7 +323,7 @@ for (const platform of PLATFORMS) {
         assert.equal(await fieldValue(page, 'x'), Math.round(union.left), `X of a group of ${where}`);
         assert.equal(await fieldValue(page, 'y'), Math.round(union.top), `Y of a group of ${where}`);
         assert.deepEqual(errors(page), []);
-        // closed before the next page, which would offer its unsaved edits on a card
+        // closed before the next page, which would offer its unsaved edits on a dialog
         await page.close();
       }
     });
@@ -367,7 +367,7 @@ for (const platform of PLATFORMS) {
         assert.ok(line, `a drag of the heading to the center of the frame of ${where} draws no guide there`);
         await roundTrip(page, await render(page));
         assert.deepEqual(errors(page), []);
-        // closed before the next page, which would offer its unsaved edits on a card
+        // closed before the next page, which would offer its unsaved edits on a dialog
         await page.close();
       }
     });
@@ -414,7 +414,7 @@ for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`a figure whose images are a step is not offered Add as Last Step, and one that is not a step is, on ${platform} in ${mode} mode`, async (t) => {
       const page = await load(t, platform, mode, STEPPED);
-      page.figure = 'figure.zone';
+      page.figure = 'figure.figure-box';
       await pick(page);
       assert.equal((await state(page, 'steps.add')).enabled, false, 'Add as Last Step is enabled on a figure whose images are a step');
       await click(page, IMG, { button: 'right' });
@@ -425,13 +425,13 @@ for (const platform of PLATFORMS) {
       await page.close();
 
       // a figure without a step takes it on its tag
-      const other = await load(t, platform, mode, ZONE_ONE);
+      const other = await load(t, platform, mode, FIGURE_BOX_ONE);
       await pick(other);
       assert.equal((await state(other, 'steps.add')).enabled, true, `${ADD} is dimmed on a figure without a step`);
       await exec(other, 'steps.add');
       await frames(other);
       const edited = await render(other);
-      assert.equal(edited, SOURCE.replace('<figure class="zone">\n        <img src="../../demo/figure-light.png" alt="A figure in both modes">', '<figure class="zone fragment" data-fragment-index="1">\n        <img src="../../demo/figure-light.png" alt="A figure in both modes">'));
+      assert.equal(edited, SOURCE.replace('<figure class="figure-box">\n        <img src="../../demo/figure-light.png" alt="A figure in both modes">', '<figure class="figure-box fragment" data-fragment-index="1">\n        <img src="../../demo/figure-light.png" alt="A figure in both modes">'));
       assert.equal((await state(other, 'steps.add')).enabled, false, `${ADD} is enabled on a figure that it made a step`);
       await roundTrip(other, edited);
       assert.deepEqual(errors(other), []);
@@ -443,7 +443,7 @@ for (const platform of PLATFORMS) {
   test(`Show with Slide on a figure whose images are a step takes the step off both images, on ${platform}`, async (t) => {
     for (const mode of MODES) {
       const page = await load(t, platform, mode, STEPPED);
-      page.figure = 'figure.zone';
+      page.figure = 'figure.figure-box';
       await pick(page);
       assert.equal((await state(page, 'steps.remove')).enabled, true, 'Show with Slide is dimmed on a figure whose images are a step');
       await exec(page, 'steps.remove');
@@ -478,13 +478,13 @@ const count = (text, part) => text.split(part).length - 1;
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`Cut, Copy, and Paste of a figure by their keys, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, PLATE_ONE]) {
+      for (const n of [FIGURE_BOX_PAIR, PLATE_ONE]) {
         const page = await load(t, platform, mode, n);
         const where = `${NAMES[n]} on ${platform} in ${mode} mode`;
         await page.send('Browser.grantPermissions', { origin: server.origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
         await pick(page);
-        const caption = n === ZONE_PAIR ? 'A caption under the pair.' : 'A caption of the one image in a plate.';
-        const img = n === ZONE_PAIR ? '<img class="for-dark"' : '<img src="../../demo/figure-light.png" alt="A plate in both modes">';
+        const caption = n === FIGURE_BOX_PAIR ? 'A caption under the pair.' : 'A caption of the one image in a plate.';
+        const img = n === FIGURE_BOX_PAIR ? '<img class="for-dark"' : '<img src="../../demo/figure-light.png" alt="A plate in both modes">';
 
         await pressEdit(page, platform, 'x', 'cut');
         const cut = await render(page);
@@ -508,9 +508,9 @@ for (const platform of PLATFORMS) {
         await pressEdit(page, platform, 'v', 'paste');
         const pasted = await render(page);
         assert.equal(count(slideOf(pasted, EMPTY), img), 1, `the keys of Copy and Paste do not put ${where} on another slide`);
-        assert.equal(count(slideOf(pasted, EMPTY), caption), n === ZONE_PAIR ? 1 : 0, `the keys of Copy and Paste of ${where} do not bring the caption that it holds`);
-        // a plate pasted onto a content slide is made a zone
-        assert.deepEqual(await selected(page), [n === ZONE_PAIR ? 'figure.zone' : 'div.zone'], `the figure pasted from ${where} is not selected`);
+        assert.equal(count(slideOf(pasted, EMPTY), caption), n === FIGURE_BOX_PAIR ? 1 : 0, `the keys of Copy and Paste of ${where} do not bring the caption that it holds`);
+        // a plate pasted onto a content slide is made a figure box
+        assert.deepEqual(await selected(page), [n === FIGURE_BOX_PAIR ? 'figure.figure-box' : 'div.figure-box'], `the figure pasted from ${where} is not selected`);
         await roundTrip(page, pasted);
         assert.deepEqual(errors(page), []);
         await page.close();
@@ -542,9 +542,9 @@ const SLOTTED = [
   ['Insert > Image', (page) => choose(page, 'insert.image', 'demo/figure-light.png'), 'img', '<img'],
   ['Insert > Video', (page) => choose(page, 'insert.video', 'demo/clip-dark.mp4'), 'video', '<video'],
 ];
-const SLOT_OF = { figure: '.plate', split: '.zone' };
-const TAG_OF = { figure: '<div class="plate">', split: '<div class="zone">' };
-const holders = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present > :is(.zone, .plate)')].map((s) => !!s.querySelector(':scope > .beeson-placeholder'))`);
+const SLOT_OF = { figure: '.plate', split: '.figure-box' };
+const TAG_OF = { figure: '<div class="plate">', split: '<div class="figure-box">' };
+const holders = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present > :is(.figure-box, .plate)')].map((s) => !!s.querySelector(':scope > .beeson-placeholder'))`);
 const holds = (page, slot, el) => page.evaluate(`[...document.querySelectorAll('.reveal section.present > ${slot}')].map((s) => !!s.querySelector(':scope > ${el}'))`);
 const settle = async (page) => {
   await page.evaluate('new Promise((d) => setTimeout(d, 300))');
@@ -598,7 +598,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, 'dark', 0, TWO);
     const runs = [
       ...SLOTTED.map(([what, run, el, tag]) => [what, run, el, tag, [true, false]]),
-      ['the QR icon of the second slot', (page) => click(page, '.reveal section.present > .zone:last-of-type .beeson-placeholder button[data-insert="qr"]'), '.qr', '<div class="qr"', [false, true]],
+      ['the QR icon of the second slot', (page) => click(page, '.reveal section.present > .figure-box:last-of-type .beeson-placeholder button[data-insert="qr"]'), '.qr', '<div class="qr"', [false, true]],
     ];
     for (const [what, run, el, tag, into] of runs) {
       await exec(page, 'selection.clear');
@@ -607,10 +607,10 @@ for (const platform of PLATFORMS) {
       await run(page);
       await settle(page);
       const edited = await render(page);
-      assert.deepEqual(await holds(page, '.zone', el), into, `${what} does not fill the slot ${into.indexOf(true) + 1} of two`);
+      assert.deepEqual(await holds(page, '.figure-box', el), into, `${what} does not fill the slot ${into.indexOf(true) + 1} of two`);
       assert.deepEqual(await holders(page), into.map((x) => !x), `${what} does not take off the placeholder of the slot it fills only`);
-      const zones = [...slideOf(edited, 0).matchAll(/<div class="zone"[^>]*>([\s\S]*?)<\/div>\n/g)].map((m) => m[1].trimStart().startsWith(tag));
-      assert.deepEqual(zones, into, `${what} does not write its element into the slot ${into.indexOf(true) + 1} of the file:\n${slideOf(edited, 0)}`);
+      const figureBoxes = [...slideOf(edited, 0).matchAll(/<div class="figure-box"[^>]*>([\s\S]*?)<\/div>\n/g)].map((m) => m[1].trimStart().startsWith(tag));
+      assert.deepEqual(figureBoxes, into, `${what} does not write its element into the slot ${into.indexOf(true) + 1} of the file:\n${slideOf(edited, 0)}`);
       inScope(edited, page.source);
       await undo(page);
       await settle(page);

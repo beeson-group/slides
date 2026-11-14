@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 const PLATFORMS = ['mac', 'other'];
@@ -103,7 +103,7 @@ const state = (page) => page.evaluate(`(() => {
   const a = document.activeElement;
   return {
     slides: document.querySelectorAll('.reveal .slides > section').length,
-    blocks: Reveal.getCurrentSlide().children.length,
+    children: Reveal.getCurrentSlide().children.length,
     selected: window.BeesonEditor.selection().map((el) => el.tagName.toLowerCase()),
     focus: a === document.body ? 'body' : a.tagName.toLowerCase() + (a.isContentEditable ? ' editable' : ''),
     words: getSelection().toString(),
@@ -180,11 +180,11 @@ for (const platform of PLATFORMS) {
     await caret();
     await press(page, 'Mod+Shift+A');
     await settle(page);
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
     assert.equal(await prevented(page, 'a'), true);
     await caret();
     await choose(page, 'Edit', 'Deselect');
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: [], focus: 'body', words: '' });
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: [], focus: 'body', words: '' });
     // Esc in a text still selects its block
     await caret();
     await press(page, 'Escape');
@@ -220,7 +220,7 @@ for (const platform of PLATFORMS) {
     await watchKeys(page);
     await newFormula(page);
     const inserted = await render(page);
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: ['div'], focus: 'div editable', words: '' });
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: ['div'], focus: 'div editable', words: '' });
     assert.deepEqual(await itemsIn(page, 'Edit', ['Duplicate', 'Deselect', 'Delete']), {
       Duplicate: { keys: K.duplicate, dimmed: false },
       Deselect: { keys: K.deselect, dimmed: false },
@@ -407,8 +407,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-const card = (page, name) => page.evaluate(`(() => { const d = document.querySelector('dialog.beeson-edit-card.${name}'); return d && !d.hidden && d.open ? { text: d.textContent, code: d.querySelector('code')?.textContent ?? null, buttons: [...d.querySelectorAll('.row button')].map((b) => b.textContent) } : null; })()`);
-const cardButton = (page, name, label) => rect(page, `[...document.querySelectorAll('dialog.beeson-edit-card.${name} .row button')].find((b) => b.textContent === ${js(label)})`);
+const card = (page, name) => page.evaluate(`(() => { const d = document.querySelector('dialog.beeson-edit-dialog.${name}'); return d && !d.hidden && d.open ? { text: d.textContent, code: d.querySelector('code')?.textContent ?? null, buttons: [...d.querySelectorAll('.row button')].map((b) => b.textContent) } : null; })()`);
+const cardButton = (page, name, label) => rect(page, `[...document.querySelectorAll('dialog.beeson-edit-dialog.${name} .row button')].find((b) => b.textContent === ${js(label)})`);
 
 // File > Export To > PowerPoint… opens the item of the submenu Export To of the File menu
 async function exportPowerPoint(page) {
@@ -430,13 +430,13 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await exportPowerPoint(page), ['PDF…', 'HTML…', 'PowerPoint…']);
     const shown = await card(page, 'pptx');
     assert.ok(shown, 'the card of PowerPoint… is not open');
-    assert.equal(shown.code, 'npm run pptx');
-    assert.match(shown.text, /saved index\.html/);
+    assert.equal(shown.code, 'npm run pptx -- test-deck.html');
+    assert.match(shown.text, /saved test-deck\.html/);
     assert.deepEqual(shown.buttons, ['Copy Command', 'Close']);
     await page.evaluate(`navigator.clipboard.writeText('nothing').then(() => true)`);
     await click(page, await cardButton(page, 'pptx', 'Copy Command'));
     await settle(page);
-    assert.equal(await page.evaluate('navigator.clipboard.readText()'), 'npm run pptx');
+    assert.equal(await page.evaluate('navigator.clipboard.readText()'), 'npm run pptx -- test-deck.html');
     assert.ok(await card(page, 'pptx'), 'Copy Command closes the card');
     await press(page, 'Escape');
     await settle(page);
@@ -469,7 +469,7 @@ for (const platform of PLATFORMS) {
     await exportPowerPoint(page);
     await click(page, await cardButton(page, 'ask', 'Export the saved file'));
     await settle(page);
-    assert.equal((await card(page, 'pptx'))?.code, 'npm run pptx');
+    assert.equal((await card(page, 'pptx'))?.code, 'npm run pptx -- test-deck.html');
     await press(page, 'Escape');
     await settle(page);
     assert.equal(await render(page), edited, 'the edits are not kept');

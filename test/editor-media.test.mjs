@@ -1,4 +1,4 @@
-// the image and video files of the editor on both platforms: an image dropped onto an empty zone
+// the image and video files of the editor on both platforms: an image dropped onto an empty figure box
 // with a trusted drop, an image and a video inserted from the file chooser, the file of a figure
 // replaced and the poster of a video captured from the inspector, the new files written into media/
 // at a save through an injected folder or downloaded without the pickers, an undo before the save
@@ -25,10 +25,10 @@ const VIDEO = resolve('demo/clip-dark.mp4');
 const IMAGE_BYTES = readFileSync(IMAGE).length;
 const VIDEO_BYTES = readFileSync(VIDEO).length;
 
-const SPLIT_ZONE = '<div class="zone"></div>';
+const SPLIT_FIGURE_BOX = '<div class="figure-box"></div>';
 const DARK = '<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">';
 const LIGHT = '<img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">';
-const PAPER = '<img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">';
+const WHITE_FIGURE = '<img class="white-figure" src="../../demo/figure-light.png" alt="A white raster figure">';
 const CLIP = '<video src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted loop></video>';
 
 let browser;
@@ -62,8 +62,41 @@ const CLEAR = `(async () => {
   return true;
 })()`;
 
-// with drafts, the page keeps its unsaved edits in the storage of the browser
-async function load(platform, { clear = true, drafts = false } = {}) {
+// each path of the files kept in IndexedDB with the size of its file
+const ROWS = `new Promise((done) => { const r = indexedDB.open('beeson-media'); r.onsuccess = () => { const q = r.result.transaction('files').objectStore('files').getAll(); q.onsuccess = () => { done(q.result.map((row) => [row.path, row.blob.size])); r.result.close(); }; }; })`;
+
+// the open of a database answered only once window.__release is called, and the writes to an
+// object store recorded in window.__writes, each done once its transaction is complete
+const HOLD = `(() => {
+  const open = IDBFactory.prototype.open;
+  let release;
+  const released = new Promise((done) => { release = done; });
+  window.__release = () => { release(); return true; };
+  window.__writes = [];
+  IDBFactory.prototype.open = function (...args) {
+    const real = open.apply(this, args);
+    return {
+      get result() { return real.result; },
+      get error() { return real.error; },
+      set onupgradeneeded(fn) { real.onupgradeneeded = fn; },
+      set onerror(fn) { real.onerror = fn; },
+      set onsuccess(fn) { real.onsuccess = () => released.then(fn); },
+    };
+  };
+  for (const name of ['put', 'delete']) {
+    const method = IDBObjectStore.prototype[name];
+    IDBObjectStore.prototype[name] = function (...args) {
+      const write = { name, done: false };
+      window.__writes.push(write);
+      this.transaction.addEventListener('complete', () => { write.done = true; });
+      return method.apply(this, args);
+    };
+  }
+})()`;
+
+// with drafts, the page keeps its unsaved edits in the storage of the browser. with hold, the
+// database of the kept files is opened only once window.__release is called
+async function load(platform, { clear = true, drafts = false, hold = false } = {}) {
   await last?.close().catch(() => {});
   const page = await browser.newPage({ drafts });
   last = page;
@@ -72,6 +105,7 @@ async function load(platform, { clear = true, drafts = false } = {}) {
     await page.goto(`${server.origin}/theme/beeson.css`);
     await page.evaluate(CLEAR);
   }
+  if (hold) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: HOLD });
   await page.goto(url(platform));
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
@@ -92,12 +126,12 @@ async function mediaPage(platform, n = 0, options = {}) {
 // the index of the first slide of the deck that has the text
 const slideWith = (text) => readFileSync(LAYOUTS, 'utf8').split('<section').slice(1).findIndex((s) => s.includes(text));
 
-// a new split slide after the first, whose zone is empty, and the text rendered with it
-async function emptyZone(page) {
+// a new split slide after the first, whose figure box is empty, and the text rendered with it
+async function emptyFigureBox(page) {
   await exec(page, 'slide.new.split');
   await frames(page);
   const text = await render(page);
-  assert.equal(text.split(SPLIT_ZONE).length, 2);
+  assert.equal(text.split(SPLIT_FIGURE_BOX).length, 2);
   return text;
 }
 
@@ -188,17 +222,17 @@ async function reopen(page, text) {
 for (const platform of PLATFORMS) {
   test(`${platform}: an image dropped onto an empty zone is written into media/ at the save`, async () => {
     const page = await mediaPage(platform);
-    const before = await emptyZone(page);
-    const outline = await dropFiles(page, await centerOf(page, '.reveal section.present > .zone'), [IMAGE]);
+    const before = await emptyFigureBox(page);
+    const outline = await dropFiles(page, await centerOf(page, '.reveal section.present > .figure-box'), [IMAGE]);
     assert.match(outline ?? '', /^Add (Image|Media) Here$/);
     await waitText(page, 'media/figure-light.png');
     const after = await render(page);
-    assert.equal(after, before.replace(SPLIT_ZONE, '<div class="zone">\n    <img src="media/figure-light.png">\n  </div>'));
-    assert.match((await shownFrom(page, '.reveal section.present > .zone > img'))[0], /^blob:/);
+    assert.equal(after, before.replace(SPLIT_FIGURE_BOX, '<div class="figure-box">\n    <img src="media/figure-light.png">\n  </div>'));
+    assert.match((await shownFrom(page, '.reveal section.present > .figure-box > img'))[0], /^blob:/);
     assert.equal((await status(page)).undo, true);
     await undoRedo(page, before, after);
     await inScope(page);
-    // the zone is selected, and the Image pane shows the file as one that is not saved yet
+    // the figure box is selected, and the Image pane shows the file as one that is not saved yet
     await page.evaluate(`window.BeesonEditor.exec('shell.format')`).catch(() => {});
     const saved = await page.evaluate(SAVE_INTO(`drop-${platform}`));
     assert.equal(saved.text, after);
@@ -215,8 +249,8 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: an undo before the save leaves nothing on the disk`, async () => {
     const page = await mediaPage(platform);
-    const before = await emptyZone(page);
-    await dropFiles(page, await centerOf(page, '.reveal section.present > .zone'), [IMAGE]);
+    const before = await emptyFigureBox(page);
+    await dropFiles(page, await centerOf(page, '.reveal section.present > .figure-box'), [IMAGE]);
     await waitText(page, 'media/figure-light.png');
     await undo(page);
     assert.equal(await render(page), before);
@@ -230,10 +264,10 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: a video from the file chooser gets a poster of its first frame`, async () => {
     const page = await mediaPage(platform);
-    const before = await emptyZone(page);
+    const before = await emptyFigureBox(page);
     if (platform === 'mac') {
       // ⇧⌘V is Choose File… of Keynote
-      await click(page, await centerOf(page, '.reveal section.present > .panel > h2'));
+      await click(page, await centerOf(page, '.reveal section.present > .text-column > h2'));
       await press(page, 'Escape');
       await press(page, 'Mod+Shift+V');
       assert.equal(await page.evaluate(`document.querySelector('input.beeson-media-input')?.accept ?? null`), 'image/*,video/*,.mp4,.m4v,.webm,.mov');
@@ -254,8 +288,8 @@ for (const platform of PLATFORMS) {
     await choose(page, [VIDEO]);
     await page.waitFor('window.__done', 30000);
     const after = await render(page);
-    assert.equal(after, before.replace(SPLIT_ZONE, '<div class="zone">\n    <video src="media/clip-dark.mp4" poster="media/clip-dark.png" muted loop data-autoplay></video>\n  </div>'));
-    const [src, poster] = await page.evaluate(`(() => { const v = document.querySelector('.reveal section.present > .zone > video'); return [v.getAttribute('src'), v.getAttribute('poster')]; })()`);
+    assert.equal(after, before.replace(SPLIT_FIGURE_BOX, '<div class="figure-box">\n    <video src="media/clip-dark.mp4" poster="media/clip-dark.png" muted loop data-autoplay></video>\n  </div>'));
+    const [src, poster] = await page.evaluate(`(() => { const v = document.querySelector('.reveal section.present > .figure-box > video'); return [v.getAttribute('src'), v.getAttribute('poster')]; })()`);
     assert.match(src, /^blob:/);
     assert.match(poster, /^blob:/);
     await undoRedo(page, before, after);
@@ -270,13 +304,13 @@ for (const platform of PLATFORMS) {
   });
 
   test(`${platform}: Replace… and Capture Poster of the inspector change the file of a figure`, async () => {
-    const page = await mediaPage(platform, slideWith('<figure class="zone fragment"'));
-    await click(page, await centerOf(page, '.reveal section.present figure.zone > img'));
+    const page = await mediaPage(platform, slideWith('<figure class="figure-box fragment"'));
+    await click(page, await centerOf(page, '.reveal section.present figure.figure-box > img'));
     await frames(page);
     assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane ?? null`), 'image');
-    const shown = (await shownFrom(page, '.reveal section.present figure.zone > img')).length;
+    const shown = (await shownFrom(page, '.reveal section.present figure.figure-box > img')).length;
     assert.equal(shown, 2);
-    const dark = await page.evaluate(`getComputedStyle(document.querySelector('.reveal section.present figure.zone > img.for-dark')).display !== 'none'`);
+    const dark = await page.evaluate(`getComputedStyle(document.querySelector('.reveal section.present figure.figure-box > img.for-dark')).display !== 'none'`);
     const old = dark ? DARK : LIGHT;
     await tap(page, 'Replace…');
     await choose(page, [IMAGE]);
@@ -285,7 +319,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), after);
     assert.equal((await status(page)).undo, true);
     await undoRedo(page, page.source, after);
-    assert.match((await shownFrom(page, `.reveal section.present figure.zone > img.${dark ? 'for-dark' : 'for-light'}`))[0], /^blob:/);
+    assert.match((await shownFrom(page, `.reveal section.present figure.figure-box > img.${dark ? 'for-dark' : 'for-light'}`))[0], /^blob:/);
     await inScope(page);
     // the pane names the new file and says that it is not saved yet
     await frames(page);
@@ -300,7 +334,7 @@ for (const platform of PLATFORMS) {
     await page.evaluate(`Reveal.slide(${slideWith(CLIP)})`);
     await frames(page);
     const base = await render(page);
-    await click(page, await centerOf(page, '.reveal section.present .zone > video'));
+    await click(page, await centerOf(page, '.reveal section.present .figure-box > video'));
     await frames(page);
     assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane ?? null`), 'video');
     await tap(page, 'Capture Poster');
@@ -316,11 +350,11 @@ for (const platform of PLATFORMS) {
   });
 
   test(`${platform}: a video dropped onto an image puts a video in its place`, async () => {
-    const page = await mediaPage(platform, slideWith(PAPER));
+    const page = await mediaPage(platform, slideWith(WHITE_FIGURE));
     const outline = await dropFiles(page, await centerOf(page, '.reveal section.present .plate > img'), [VIDEO]);
     assert.equal(outline, 'Replace Image');
     await waitText(page, 'media/clip-dark.mp4');
-    const after = page.source.replace(PAPER, '<video src="media/clip-dark.mp4" poster="media/clip-dark.png" muted loop data-autoplay></video>');
+    const after = page.source.replace(WHITE_FIGURE, '<video src="media/clip-dark.mp4" poster="media/clip-dark.png" muted loop data-autoplay></video>');
     assert.equal(await render(page), after);
     await undoRedo(page, page.source, after);
     await inScope(page);
@@ -330,8 +364,8 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: a save without a press of a key asks for the folder with a dialog`, async () => {
     const page = await mediaPage(platform);
-    await emptyZone(page);
-    await dropFiles(page, await centerOf(page, '.reveal section.present > .zone'), [IMAGE]);
+    await emptyFigureBox(page);
+    await dropFiles(page, await centerOf(page, '.reveal section.present > .figure-box'), [IMAGE]);
     await waitText(page, 'media/figure-light.png');
     // a picker opened without a press, e.g. at an autosave, is refused by the browser
     await page.evaluate(`(async () => {
@@ -368,8 +402,8 @@ for (const platform of PLATFORMS) {
       window.__downloads = [];
       HTMLAnchorElement.prototype.click = function () { window.__downloads.push(fetch(this.href).then((r) => r.blob()).then((b) => ({ name: this.download, size: b.size }))); };
     }`);
-    const before = await emptyZone(page);
-    await dropFiles(page, await centerOf(page, '.reveal section.present > .zone'), [IMAGE]);
+    const before = await emptyFigureBox(page);
+    await dropFiles(page, await centerOf(page, '.reveal section.present > .figure-box'), [IMAGE]);
     await waitText(page, 'media/figure-light.png');
     await page.evaluate('window.BeesonEditor.save()');
     const downloads = await page.evaluate('Promise.all(window.__downloads)');
@@ -380,14 +414,25 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`${platform}: an image dropped before the kept files are read at the start is kept`, async () => {
+    const page = await mediaPage(platform, 0, { hold: true });
+    await emptyFigureBox(page);
+    await dropFiles(page, await centerOf(page, '.reveal section.present > .figure-box'), [IMAGE]);
+    await waitText(page, 'media/figure-light.png');
+    // the database is opened only now, for the files of the start and for the image
+    await page.evaluate('window.__release()');
+    await page.waitFor('window.__writes.length === 2 && window.__writes.every((w) => w.done)');
+    assert.deepEqual(await page.evaluate(ROWS), [['media/figure-light.png', IMAGE_BYTES]]);
+    assert.deepEqual(errors(page), []);
+  });
+
   test(`${platform}: a draft with an image is restored with the image`, async () => {
     let page = await mediaPage(platform, 0, { drafts: true });
-    await emptyZone(page);
-    await dropFiles(page, await centerOf(page, '.reveal section.present > .zone'), [IMAGE]);
+    await emptyFigureBox(page);
+    await dropFiles(page, await centerOf(page, '.reveal section.present > .figure-box'), [IMAGE]);
     await waitText(page, 'media/figure-light.png');
     const edited = await render(page);
     // the draft is kept a second after the edit, and its file in IndexedDB
-    const ROWS = `new Promise((done) => { const r = indexedDB.open('beeson-media'); r.onsuccess = () => { const q = r.result.transaction('files').objectStore('files').getAll(); q.onsuccess = () => { done(q.result.map((row) => [row.path, row.blob.size])); r.result.close(); }; }; })`;
     await page.waitFor(`!!Object.keys(localStorage).find((k) => k.startsWith('beeson-draft:'))`);
     await page.waitFor(`${ROWS}.then((rows) => rows.length === 1)`);
     assert.deepEqual(await page.evaluate(ROWS), [['media/figure-light.png', IMAGE_BYTES]]);

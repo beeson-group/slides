@@ -147,12 +147,18 @@ export class MediaStore {
   }
 
   // the files that IndexedDB keeps for a draft of this deck. with keep false, e.g. when the deck
-  // does not have a draft, they are forgotten
+  // does not have a draft, they are forgotten. the read is on the chain of the writes, so that a
+  // file added while the database is still opened is kept after the others are forgotten
   async load(keep: boolean): Promise<number> {
-    let rows: Row[] = [];
-    try {
-      rows = (await tx('readonly', (s) => s.getAll(ofDeck()))) as Row[];
+    const read = this.kept.then(async () => {
+      const rows = (await tx('readonly', (s) => s.getAll(ofDeck()))) as Row[];
       if (!keep) await tx('readwrite', (s) => s.delete(ofDeck()));
+      return rows;
+    });
+    this.kept = read.catch(() => {});
+    let rows: Row[];
+    try {
+      rows = await read;
     } catch {
       return 0;
     }

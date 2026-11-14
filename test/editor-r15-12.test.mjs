@@ -33,7 +33,7 @@ const near = (a, b, what, tol = 1) => assert.ok(Math.abs(a - b) <= tol, `${what}
 let saves = 0;
 
 // the editor on slide n of deck, served over HTTP, with the storage of the origin emptied
-async function load(t, platform, n, deck = 'index.html') {
+async function load(t, platform, n, deck = 'test-deck.html') {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${deck}?edit&still&theme=light&edit-platform=${platform}`;
@@ -57,7 +57,7 @@ const TEXTS = `(() => {
   const s = document.querySelector('.reveal .slides'), S = s.getBoundingClientRect(), k = S.width / s.offsetWidth;
   const px = (r) => ({ top: (r.top - S.top) / k, bottom: (r.bottom - S.top) / k, left: (r.left - S.left) / k, right: (r.right - S.left) / k });
   const c = Reveal.getCurrentSlide();
-  return [...c.querySelector('.block').children, ...c.querySelectorAll(':scope > p')].map((e) => {
+  return [...c.querySelector('.title-text').children, ...c.querySelectorAll(':scope > p')].map((e) => {
     const range = document.createRange();
     range.selectNodeContents(e);
     const lines = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map(px);

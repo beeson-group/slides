@@ -156,19 +156,19 @@ async function checkEditor() {
   const text = readFileSync(options.deck, 'utf8');
   const opened = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`);
   for (const problem of opened.problems) failures.push(`editor: slide ${problem.slide}, ${problem.tag}: ${problem.reason}`);
-  if (opened.blocks && (await page.evaluate('window.BeesonEditor.render()')) !== text) {
+  if (opened.texts && (await page.evaluate('window.BeesonEditor.render()')) !== text) {
     failures.push('editor: the deck written back without an edit differs from the file');
   }
   // a save writes the file in place with the file pickers of Chrome and Edge, and elsewhere it is
   // a download of the file
-  console.log(`editor: ${opened.blocks} texts on ${opened.sections} slides, saved ${opened.supported ? 'in place' : 'as a download'}`);
+  console.log(`editor: ${opened.texts} texts on ${opened.sections} slides, saved ${opened.supported ? 'in place' : 'as a download'}`);
   for (const error of [...page.errors, ...(await page.evaluate(deckProblems))]) failures.push(`editor: ${error}`);
   await page.close();
 }
 
 // read during a trace on the first slide with a backdrop that draws a head, since the heads of a
-// backdrop are cleared at its end. a head is drawn on the path of a spacecraft, on a record with a
-// head of its own, or on every strand with data-heads set to full or small
+// backdrop are cleared at its end. a head is drawn on the path of a spacecraft, on a trajectory with a
+// head of its own, or on every trajectory with data-heads set to full or small
 async function checkHeads() {
   const page = await browser.newPage({ motion: true });
   await page.goto(deckAt());
@@ -190,7 +190,7 @@ async function checkHeads() {
     return headed.headAfter;
   })()`);
   if (after !== null) {
-    // the first head may be due later in the trace, e.g. at the start of a record of a file,
+    // the first head may be due later in the trace, e.g. at the start of a trajectory of a file,
     // hence the canvas is read every quarter second until 15 s after it is due
     let blank = true;
     for (let i = 0; blank && i < 60 + Math.ceil(4 * after); i++) {

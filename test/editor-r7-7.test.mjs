@@ -12,17 +12,17 @@ import { serve } from '../scripts/webdriver.mjs';
 import { lineText } from '../src/editor/commands/line.ts';
 import { byteExact, click, drag, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
 const SORTER = '.beeson-edit-sorter';
-const FIGURE = '<figure class="zone fragment" data-fragment-index="2">';
+const FIGURE = '<figure class="figure-box fragment" data-fragment-index="2">';
 const LEAD = '<p>The lead-in of a display</p>';
 const P = '.reveal section.present > p';
-const ZONE = '.reveal section.present .zone';
+const FIGURE_BOX = '.reveal section.present .figure-box';
 const SELECTED = '.beeson-overlay > .beeson-frame.selected:not([hidden])';
-const IMG = '.reveal section.present .zone > img:not([hidden])';
+const IMG = '.reveal section.present .figure-box > img:not([hidden])';
 const MATH = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('<h2>Math, an ordered list, and a zone</h2>'));
 
 let browser;
@@ -224,7 +224,7 @@ for (const platform of PLATFORMS) {
     await tap(page, 'Arrange');
     await tap(page, 'Horizontally');
     const text = await render(page);
-    const dx = Number(text.match(/<figure class="zone fragment" data-fragment-index="2" style="translate: (-?\d+)px 0px">/)?.[1]);
+    const dx = Number(text.match(/<figure class="figure-box fragment" data-fragment-index="2" style="translate: (-?\d+)px 0px">/)?.[1]);
     assert.ok(dx < 0, `the offset of the figure is ${dx}`);
     await byteExact(page, [[FIGURE, `${FIGURE.slice(0, -1)} style="translate: ${dx}px 0px">`]]);
     const slide = await rect(page, '.reveal .slides');
@@ -265,7 +265,7 @@ for (const platform of PLATFORMS) {
       [FIGURE, `${FIGURE.slice(0, -1)} style="translate: ${fx}px 0px">`],
     ]);
     const slide = await rect(page, '.reveal .slides');
-    const edges = [await rect(page, P), await rect(page, ZONE)].map((r) => [r.left, r.right]);
+    const edges = [await rect(page, P), await rect(page, FIGURE_BOX)].map((r) => [r.left, r.right]);
     assert.ok(edges.some(([l]) => Math.abs(l - slide.left) <= 1.5), `a frame is not at the left edge: ${js(edges)}`);
     assert.ok(edges.some(([, r]) => Math.abs(r - slide.right) <= 1.5), `a frame is not at the right edge: ${js(edges)}`);
     await roundTrip(page, text);

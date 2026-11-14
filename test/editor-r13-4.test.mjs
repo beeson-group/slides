@@ -10,8 +10,8 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { center, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
-// the slides of index.html with an equation and with a figure in a zone
+const DECK = 'test-deck.html';
+// the slides of index.html with an equation and with a figure in a figure box
 const EQUATIONS = 3;
 const FIGURES = 4;
 const PLATFORMS = ['mac', 'other'];
@@ -91,7 +91,7 @@ for (const platform of PLATFORMS) {
     const before = await render(page);
     await click(page, '.reveal section.present ul > li:last-child');
     await press(page, 'Escape');
-    const [figure] = await boxes(page, ':scope > figure.zone');
+    const [figure] = await boxes(page, ':scope > figure.figure-box');
     await exec(page, 'insert.table', { rows: 3, columns: 3 });
     await frames(page);
     const [table] = await boxes(page, ':scope > table');

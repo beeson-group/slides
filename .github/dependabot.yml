@@ -1,0 +1,26 @@
+# one pull request a month for the actions of the workflows and one for the npm packages, each with
+# releases that are at least a week old. A pull request for the npm packages changes only
+# package.json and package-lock.json, hence run npm run vendor && npm run build on its branch and
+# commit theme/vendor/ and the built theme before the merge
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns:
+          - "*"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    groups:
+      npm:
+        patterns:
+          - "*"

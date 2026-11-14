@@ -4,7 +4,7 @@
 // its poster before its step and played from its start at its step. the videos shown at one step
 // are started together, once each of them can be played, hence two clips side by side are in step.
 // a video whose step is undone is paused and rewound, to its poster when it is still in view. the
-// videos of a zone or a plate are stacked in one place, and a video under a later one that is shown
+// videos of a figure box or a plate are stacked in one place, and a video under a later one that is shown
 // is marked data-covered, hidden once the later one has faded in, and paused. reveal.js 6 starts
 // and pauses the videos inside a fragment, and not a video that is a fragment itself, and it does
 // not pause a video hidden by the style of its fragment, e.g. fade-in-then-out
@@ -39,9 +39,9 @@ const mode = (v: Element) => (v.classList.contains('for-dark') ? 'dark' : v.clas
 // a later video of the same place covers v in its mode, or in both modes without a class of a mode
 const coveredBy = (v: Element, later: Element) => !mode(later) || mode(later) === mode(v);
 
-/** Marks with data-covered each video of a zone or a plate under a later video of the same place that is shown, except in a plate of the class row. */
+/** Marks with data-covered each video of a figure box or a plate under a later video of the same place that is shown, except in a plate of the class row. */
 export function cover(slide: Element): void {
-  for (const place of slide.querySelectorAll('.zone, .plate')) {
+  for (const place of slide.querySelectorAll('.figure-box, .plate')) {
     const videos = [...place.children].filter((c): c is HTMLVideoElement => c instanceof HTMLVideoElement);
     const shown = videos.map((v) => stepShown(v, slide));
     videos.forEach((v, i) => {

@@ -20,9 +20,9 @@ import { injectStyle, make } from '../ui/dom.ts';
 
 export type Transition = 'none' | 'fade' | 'magic' | 'push';
 
-// the classes of a step, of its effect, and of its run time, and ghost, which Magic Move animates
+// the classes of a step, of its effect, and of its run time, and faint, which Magic Move animates
 // as an opacity, left out of the key of a shape
-const RUNTIME = /^(fragment|visible|current-fragment|ghost|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
+const RUNTIME = /^(fragment|visible|current-fragment|faint|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
 
 const slidesOf = (app: App): Element[] => [...app.slides().querySelectorAll(':scope > section')];
 
@@ -77,7 +77,7 @@ export function paired(app: App, el: Element): boolean {
 // the elements of a slide that Magic Move matches: its heading, its figures, its lines, and its
 // shapes, the outermost of each nest, outside the notes. reveal.js matches an svg only by its
 // data-id, and fades out and in again a line without one
-const FIGURES = 'img, video, figure, .zone, .plate, .qr, tycho-viewer, div.math, table, pre, .backdrop, .surface, svg.line, .shape';
+const FIGURES = 'img, video, figure, .figure-box, .plate, .qr, tycho-viewer, div.math, table, pre, .backdrop, .surface, svg.line, .shape';
 
 export function candidates(slide: Element): Element[] {
   const heading = [...slide.querySelectorAll('h1, h2')].find((h) => !h.closest('aside.notes'));
@@ -101,9 +101,9 @@ export function keyOf(el: Element): string {
   const media = el.matches('img, video, tycho-viewer') ? el : el.querySelector('img, video, tycho-viewer');
   if (media) return `media:${media.getAttribute('src') ?? ''}`;
   if (el.matches('.qr')) return `qr:${el.getAttribute('data-qr') ?? ''}`;
-  if (el.matches('.backdrop')) return `backdrop:${el.getAttribute('data-scene') ?? el.getAttribute('data-strands') ?? ''}`;
+  if (el.matches('.backdrop')) return `backdrop:${el.getAttribute('data-backdrop') ?? el.getAttribute('data-trajectories') ?? ''}`;
   if (el.matches('.surface')) return `surface:${el.getAttribute('data-function') ?? ''}`;
-  const kind = ['zone', 'plate', 'math'].find((c) => el.classList.contains(c));
+  const kind = ['figure-box', 'plate', 'math'].find((c) => el.classList.contains(c));
   return kind ? `${kind}:${(el.querySelector('[data-plot]') ?? el).getAttribute('data-plot') ?? ''}` : tag;
 }
 

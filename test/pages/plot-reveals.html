@@ -9,14 +9,14 @@
 <link rel="stylesheet" href="../../theme/beeson.css">
 </head>
 <body>
-<!-- one JSON block shown on two slides. on the first, one panel and one tab are held at frame 0
+<!-- one JSON script shown on two slides. on the first, one panel and one tab are held at frame 0
      until a fragment with data-plot-play is shown. on the second, the tab three is offered at a
      step and then shown, and its axis replaces the axis of the panel left -->
 <div class="reveal">
   <div class="slides">
     <section>
       <h2>A plot held until a step</h2>
-      <div class="plot zone" id="held" data-plot="shared" data-plot-panels="left" data-plot-tabs="one" data-plot-frame="0"></div>
+      <div class="plot figure-box" id="held" data-plot="shared" data-plot-panels="left" data-plot-tabs="one" data-plot-frame="0"></div>
       <span class="fragment" data-plot-play></span>
       <script type="application/json" id="shared">{
         "parameter": { "label": "$t$", "digits": 2 },
@@ -40,7 +40,7 @@
     </section>
     <section>
       <h2>A plot whose tab is offered at a step</h2>
-      <div class="plot zone" id="offered" data-plot="shared"></div>
+      <div class="plot figure-box" id="offered" data-plot="shared"></div>
       <span class="fragment" data-plot-show="three"></span>
       <span class="fragment" data-plot-tab="three"></span>
     </section>

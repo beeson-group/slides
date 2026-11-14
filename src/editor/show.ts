@@ -60,9 +60,11 @@ export function startShow(app: App): Stage {
   let at: At | null = null;
   let loads = 0;
   let full = false;
-  // the time until which the show goes on out of full screen, set at F and at the speaker view of S,
-  // which the browser opens out of full screen
+  // the time until which the show goes on out of full screen, set at F
   let keep = 0;
+  // set at S, since the browser leaves full screen for the speaker view, on a slow machine seconds
+  // later, and the exit may also reach the editor before S. the show goes on at the next exit
+  let speaker = false;
 
   const ours = () => !!fullscreen() && el.contains(fullscreen());
   const enter = () => {
@@ -101,7 +103,7 @@ export function startShow(app: App): Stage {
     if (typeof m.state?.indexh === 'number') at = { h: m.state.indexh, v: m.state.indexv ?? 0 };
     if (m.namespace !== 'beeson') return;
     if (m.eventName === 'edit') end();
-    else if (m.eventName === 'speaker') keep = performance.now() + 2000;
+    else if (m.eventName === 'speaker') speaker = true;
     // the key in the frame lets the editor ask for full screen, in Chrome and Firefox
     else if (m.eventName === 'fullscreen' && !ours()) enter();
     else if (m.eventName === 'fullscreen') {
@@ -114,7 +116,9 @@ export function startShow(app: App): Stage {
   const onChange = () => {
     if (ours()) full = true;
     else if (full) setTimeout(() => {
-      if (!ours() && performance.now() > keep && document.hasFocus()) end();
+      if (ours()) return;
+      if (speaker) speaker = false;
+      else if (performance.now() > keep && document.hasFocus()) end();
     }, 100);
   };
   // a key that reaches the editor while the show is up, e.g. after a click outside the frame

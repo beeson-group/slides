@@ -1,11 +1,11 @@
-// checks of the step model of layers.ts, which the Steps tab of the editor writes into the indexes
+// checks of the step model of shown-steps.ts, which the Steps tab of the editor writes into the indexes
 // of a slide: the plan read from the items, the indexes written for a plan, a move by a drag, the
 // start and Show Last of a step, the arrows of a row, One by one, and the data-keep of a number,
 // which follows its step to its new index
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { itemsOf, moveTo, oneByOne, planOf, remapKeep, setFinal, setStart, setStep, shift, startOf, stepAt } from '../src/editor/layers.ts';
+import { itemsOf, moveTo, oneByOne, planOf, remapKeep, setFinal, setStart, setStep, shift, startOf, stepAt } from '../src/editor/shown-steps.ts';
 
 const at = (index) => ({ fragment: true, index, final: false });
 const loose = { fragment: true, index: null, final: false };

@@ -22,7 +22,7 @@ const inNotes = (app: App, way: 1 | -1 | 0): boolean => {
   return true;
 };
 
-// the box of the frames of the selected elements, or of the block of the text, in slide px
+// the box of the frames of the selected elements, or of the text element of the text, in slide px
 function selectionBox(app: App): { left: number; top: number; width: number; height: number } | null {
   const sel = app.selection;
   const els = sel.kind === 'elements' || sel.kind === 'text' ? sel.items.filter((el) => el.isConnected) : [];

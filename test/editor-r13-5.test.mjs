@@ -59,7 +59,7 @@ async function range(page, a, b) {
   await settle(page);
   await click(page, await at(page, ...b), { modifiers: 'Shift' });
   await settle(page);
-  assert.ok(await page.evaluate(`(() => { const o = document.querySelector('.beeson-table-bars .cell.block'); return !!o && !o.hidden; })()`), 'the range is not selected');
+  assert.ok(await page.evaluate(`(() => { const o = document.querySelector('.beeson-table-bars .cell.range'); return !!o && !o.hidden; })()`), 'the range is not selected');
 }
 
 // a trusted Mod+X or Mod+C, which the browser turns into a cut or a copy event, and what it wrote
@@ -167,10 +167,10 @@ async function lightTable(t, platform) {
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/theme/beeson.css`);
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`)).problems, []);
   await page.evaluate(`window.BeesonEditor.exec('view.lightTable')`);
   await settle(page);

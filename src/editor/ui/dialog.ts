@@ -1,9 +1,9 @@
 // a modal dialog over the dialog element, which traps Tab, gives the focus back on close, and
-// gives its answer as a Promise. it is shown as a sheet of Keynote, i.e. a card at the top of the
+// gives its answer as a Promise. it is shown as a sheet of Keynote, i.e. a dialog at the top of the
 // window under the toolbar, over a scrim that dims the window in both modes of the chrome. the
-// cards of a file in file/files.ts and file/drafts.ts are dialogs of this kind. a Dialog is kept
+// dialogs of a file in file/files.ts and file/drafts.ts are dialogs of this kind. a Dialog is kept
 // in the page between its opens, with the attribute hidden while it is closed, since the tests
-// read a card by its class and its hidden state
+// read a dialog by its class and its hidden state
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from './dom.ts';
@@ -15,31 +15,31 @@ export type DialogButton = { label: string; value: string; title?: string; prima
 export type DialogOptions = { title: string; text?: string; body?: HTMLElement; buttons: DialogButton[]; className?: string; dismissable?: boolean; stay?: string[]; onButton?: (value: string) => void };
 
 const CSS = `
-dialog.beeson-edit-card { --sheet: var(--ed-panel); --sheet-line: var(--ed-menu-line); box-sizing: border-box; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 104px); margin: 88px auto auto; padding: 20px 22px 18px; border: 1px solid var(--sheet-line); border-radius: 12px; background: var(--sheet); color: var(--ed-text); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.14); overflow: auto; }
-dialog.beeson-edit-card[hidden] { display: none; }
-dialog.beeson-edit-card::backdrop { background: rgba(0, 0, 0, 0.36); }
-dialog.beeson-edit-card[open] { animation: beeson-sheet-in 160ms ease-out; }
-dialog.beeson-edit-card[open]::backdrop { animation: beeson-scrim-in 160ms ease-out; }
+dialog.beeson-edit-dialog { --sheet: var(--ed-panel); --sheet-line: var(--ed-menu-line); box-sizing: border-box; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 104px); margin: 88px auto auto; padding: 20px 22px 18px; border: 1px solid var(--sheet-line); border-radius: 12px; background: var(--sheet); color: var(--ed-text); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.14); overflow: auto; }
+dialog.beeson-edit-dialog[hidden] { display: none; }
+dialog.beeson-edit-dialog::backdrop { background: rgba(0, 0, 0, 0.36); }
+dialog.beeson-edit-dialog[open] { animation: beeson-sheet-in 160ms ease-out; }
+dialog.beeson-edit-dialog[open]::backdrop { animation: beeson-scrim-in 160ms ease-out; }
 @keyframes beeson-sheet-in { from { opacity: 0; transform: translateY(-10px); } }
 @keyframes beeson-scrim-in { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { dialog.beeson-edit-card[open], dialog.beeson-edit-card[open]::backdrop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { dialog.beeson-edit-dialog[open], dialog.beeson-edit-dialog[open]::backdrop { animation: none; } }
 @media (prefers-color-scheme: dark) {
-  dialog.beeson-edit-card { --sheet: #313133; --sheet-line: rgba(255, 255, 255, 0.16); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(0, 0, 0, 0.8); }
-  dialog.beeson-edit-card::backdrop { background: rgba(0, 0, 0, 0.5); }
+  dialog.beeson-edit-dialog { --sheet: #313133; --sheet-line: rgba(255, 255, 255, 0.16); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(0, 0, 0, 0.8); }
+  dialog.beeson-edit-dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 }
-dialog.beeson-edit-card h3 { margin: 0 0 6px; font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
-dialog.beeson-edit-card p { margin: 0 0 16px; color: var(--ed-muted); }
-dialog.beeson-edit-card ul { margin: 0 0 16px; padding-left: 18px; max-height: 50vh; overflow-y: auto; color: var(--ed-muted); }
-dialog.beeson-edit-card code { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: var(--ed-text); word-break: break-all; }
-dialog.beeson-edit-card .row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-dialog.beeson-edit-card .row button { font: inherit; min-width: 72px; padding: 4px 14px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); cursor: default; white-space: nowrap; box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12); }
-dialog.beeson-edit-card .row button:hover { filter: brightness(0.97); }
-dialog.beeson-edit-card .row button.primary { border-color: transparent; background: var(--ed-select); color: var(--ed-on-select); }
-dialog.beeson-edit-card .row button[hidden] { display: none; }
-dialog.beeson-edit-card button:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 1px; }
-dialog.beeson-edit-card :is(input, select, textarea):focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 0; }
-dialog.beeson-edit-card.form label { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
-dialog.beeson-edit-card.form input[type="number"] { width: 7ch; font: inherit; padding: 2px 6px; border: 1px solid var(--ed-control-line, var(--ed-line)); border-radius: 5px; background: var(--ed-control); color: var(--ed-text); }
+dialog.beeson-edit-dialog h3 { margin: 0 0 6px; font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
+dialog.beeson-edit-dialog p { margin: 0 0 16px; color: var(--ed-muted); }
+dialog.beeson-edit-dialog ul { margin: 0 0 16px; padding-left: 18px; max-height: 50vh; overflow-y: auto; color: var(--ed-muted); }
+dialog.beeson-edit-dialog code { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: var(--ed-text); word-break: break-all; }
+dialog.beeson-edit-dialog .row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+dialog.beeson-edit-dialog .row button { font: inherit; min-width: 72px; padding: 4px 14px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); cursor: default; white-space: nowrap; box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12); }
+dialog.beeson-edit-dialog .row button:hover { filter: brightness(0.97); }
+dialog.beeson-edit-dialog .row button.primary { border-color: transparent; background: var(--ed-select); color: var(--ed-on-select); }
+dialog.beeson-edit-dialog .row button[hidden] { display: none; }
+dialog.beeson-edit-dialog button:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 1px; }
+dialog.beeson-edit-dialog :is(input, select, textarea):focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 0; }
+dialog.beeson-edit-dialog.form label { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+dialog.beeson-edit-dialog.form input[type="number"] { width: 7ch; font: inherit; padding: 2px 6px; border: 1px solid var(--ed-control-line, var(--ed-line)); border-radius: 5px; background: var(--ed-control); color: var(--ed-text); }
 [data-beside] { --arrow: 50%; }
 [data-beside]::before { content: ""; position: absolute; width: 12px; height: 12px; box-sizing: border-box; background: inherit; border: 0 solid; border-color: inherit; transform: rotate(45deg); pointer-events: none; }
 [data-beside="below"]::before { top: -7px; left: calc(var(--arrow) - 6px); border-width: 1px 0 0 1px; }
@@ -65,7 +65,7 @@ export function trapTab(root: HTMLElement, ev: KeyboardEvent): void {
 }
 
 export class Dialog {
-  readonly el = make('dialog', 'beeson-edit-card') as HTMLDialogElement;
+  readonly el = make('dialog', 'beeson-edit-dialog') as HTMLDialogElement;
   readonly heading = make('h3');
   readonly text = make('p');
   readonly row = make('div', 'row');
@@ -187,7 +187,7 @@ export async function ask(options: DialogOptions, focus?: string): Promise<strin
 
 // the open modal dialog, into which an element that must be clicked while it is open is put,
 // since the rest of the page is inert
-export const host = (): HTMLElement => document.querySelector<HTMLElement>('dialog.beeson-edit-card[open]') ?? document.body;
+export const host = (): HTMLElement => document.querySelector<HTMLElement>('dialog.beeson-edit-dialog[open]') ?? document.body;
 
 // a side of a target at which a popover is put
 export type Side = 'below' | 'above' | 'right' | 'left';
@@ -272,7 +272,7 @@ const boxOf = (r: { left: number; top: number; right: number; bottom: number }):
 const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, figcaption, .caption, .foot';
 
 // the boxes of the lines of the text and of the formulas of el, on the screen. the empty part of
-// a block, e.g. the right of a short line, is left out, since a popover may be put over it
+// a text element, e.g. the right of a short line, is left out, since a popover may be put over it
 export function inkBoxes(el: Element): Box[] {
   const out: Box[] = [];
   const range = document.createRange();
@@ -293,7 +293,7 @@ export function inkBoxes(el: Element): Box[] {
   return out;
 }
 
-// the lines of the text of the blocks of slide, which a popover is kept off
+// the lines of the text of the text elements of slide, which a popover is kept off
 export function slideInk(slide: Element | null): Box[] {
   if (!slide) return [];
   return [...slide.querySelectorAll(TEXT)].filter((el) => !el.parentElement?.closest(TEXT) && !el.closest('aside.notes')).flatMap(inkBoxes);
@@ -327,7 +327,7 @@ export function placeBeside(pop: HTMLElement, target: Box | DOMRectReadOnly, opt
   return p.side;
 }
 
-// the popover of the editor put by the rule of every popover: beside the block of target, which
+// the popover of the editor put by the rule of every popover: beside the text element of target, which
 // is kept clear also where it is empty, since a text typed there grows into it, off the lines of
 // the text of the current slide, and inside the canvas. the boxes are read once, since a target
 // may be typeset again while the popover is open. the function returned stops it

@@ -1,7 +1,7 @@
 // the layout of a slide changed in place, as the Slide Layout of Keynote. the parts of a slide,
 // i.e. its heading, its words, its figures, its footnote, and its notes, are taken out of the
-// wrappers of the old layout and put into those of the new one: the panel of a split slide, the
-// block of a title or a closing slide, and the sec of a section slide. the parts keep their order,
+// wrappers of the old layout and put into those of the new one: the text column of a split slide, the
+// title text of a title or a closing slide, and the sec of a section slide. the parts keep their order,
 // their steps, and their places, and the slide is written again from its own text with the
 // indentation of the file. Reset Slide writes a slide in its own layout and takes the places off
 // its elements. each command is one entry of the history
@@ -21,17 +21,17 @@ import { checkOverlaps } from '../overflow.ts';
 export const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
 const LAYOUT_CLASSES = ['title', 'section', 'closing', 'figure', 'split', 'narrow', 'wide'];
-const WRAPPER_CLASSES = ['panel', 'block', 'sec', 'caption'];
+const WRAPPER_CLASSES = ['text-column', 'title-text', 'sec', 'caption'];
 
 export type Kind = 'heading' | 'words' | 'caption' | 'foot' | 'visual' | 'other';
 
 // the wrapper of each layout that has one, and the kinds of parts that it takes. the words of a
 // figure slide are its caption at the lower left, since the plate takes the rest of the slide
 const WRAP: Partial<Record<Layout, { cls: string; takes: Kind[] }>> = {
-  title: { cls: 'block', takes: ['heading', 'words', 'caption'] },
-  closing: { cls: 'block', takes: ['heading', 'words', 'caption'] },
+  title: { cls: 'title-text', takes: ['heading', 'words', 'caption'] },
+  closing: { cls: 'title-text', takes: ['heading', 'words', 'caption'] },
   section: { cls: 'sec', takes: ['heading', 'words'] },
-  split: { cls: 'panel', takes: ['heading', 'words', 'foot'] },
+  split: { cls: 'text-column', takes: ['heading', 'words', 'foot'] },
   figure: { cls: 'caption', takes: ['words'] },
 };
 
@@ -39,7 +39,7 @@ const WRAP: Partial<Record<Layout, { cls: string; takes: Kind[] }>> = {
 // and taken off again at a change to another layout
 const PLATE = '<div class="plate"></div>';
 
-const VISUAL_CLASSES = ['backdrop', 'surface', 'zone', 'plate', 'qr', 'plot'];
+const VISUAL_CLASSES = ['backdrop', 'surface', 'figure-box', 'plate', 'qr', 'plot'];
 const VISUAL_TAGS = ['figure', 'img', 'video', 'tycho-viewer', 'canvas', 'svg', 'iframe', 'object'];
 const OTHER_TAGS = ['aside', 'script', 'style', 'template', 'link', 'meta', 'noscript'];
 
@@ -182,12 +182,12 @@ export function relayout(body: string, layout: Layout, step: string): string {
     kept.splice(at, 0, ...holders.map((b) => ({ name: b.slice(1, 3).replace(/\W/g, ''), classes: /class="([^"]*)"/.exec(b)?.[1].split(' ') ?? [], lead: '', blank: false, body: b.replace('<ul><li></li></ul>', `<ul>${eol}${step}<li></li>${eol}</ul>`), indent: '' })));
   }
   parts.splice(0, parts.length, ...kept);
-  // a plate is laid out only on a figure slide, and on another slide it is the zone at the right
+  // a plate is laid out only on a figure slide, and on another slide it is the figure box at the right
   if (layout !== 'figure') {
     for (const p of parts) {
       if (p.name !== 'div' || !p.classes.includes('plate') || p.body === PLATE) continue;
-      p.body = p.body.replace(/^(<div\b[^>]*?\bclass\s*=\s*["']?[^"'>]*?)\bplate\b/i, '$1zone');
-      p.classes = p.classes.map((c) => (c === 'plate' ? 'zone' : c));
+      p.body = p.body.replace(/^(<div\b[^>]*?\bclass\s*=\s*["']?[^"'>]*?)\bplate\b/i, '$1figure-box');
+      p.classes = p.classes.map((c) => (c === 'plate' ? 'figure-box' : c));
     }
   }
   const h = headingTag(layout);
@@ -275,7 +275,7 @@ export async function changeLayout(app: App, slides: Element[], layout: Layout):
     const o = origins.get(s);
     return o && o.last === body ? o : { text: body, layout: layoutOf(s), last: body };
   });
-  // the places among the words of each slide of the blocks that the fit of its panel shrank. a
+  // the places among the words of each slide of the text elements that the fit of its text column shrank. a
   // slide written from its first text has none
   const shrunk = slides.map((s, k) => (layout === 'split' || from[k].text !== from[k].last ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
   const codes = slides.map((s) => drawnCodes(app, s));
@@ -358,9 +358,9 @@ function keepCodes(app: App, slide: Element, was: Drawn[]): void {
 // layout. a change back to this layout gives the text again, as the file has it
 const origins = new WeakMap<Element, { text: string; layout: Layout; last: string }>();
 
-// the blocks set in the style Small by the fit of a panel in this session. an undo and a redo put
+// the text elements set in the style Small by the fit of a text column in this session. an undo and a redo put
 // the same elements back, hence a change of layout away from Split takes the style off these
-// blocks only, and a block in the style Small before the change to Split keeps it
+// text elements only, and a text element in the style Small before the change to Split keeps it
 const fitted = new WeakSet<Element>();
 
 // the parts of a slide of the kind words, in their order, which a change of layout keeps
@@ -371,23 +371,23 @@ function wordsOf(app: App, slide: Element): Element[] {
   return parts.filter((el) => kindOf(el.localName, [...el.classList]) === 'words');
 }
 
-// true when a text of the panel runs past its bottom, or into the footnote at its bottom
-function overflows(panel: Element): boolean {
-  const foot = panel.querySelector(':scope > .foot');
-  const box = panel.getBoundingClientRect();
+// true when a text of the text column runs past its bottom, or into the footnote at its bottom
+function overflows(textColumn: Element): boolean {
+  const foot = textColumn.querySelector(':scope > .foot');
+  const box = textColumn.getBoundingClientRect();
   const limit = foot && foot.getBoundingClientRect().height ? foot.getBoundingClientRect().top : box.bottom;
-  return [...panel.children].some((el) => !el.matches('.foot, aside') && el.getBoundingClientRect().bottom > limit + 1);
+  return [...textColumn.children].some((el) => !el.matches('.foot, aside') && el.getBoundingClientRect().bottom > limit + 1);
 }
 
-// the texts moved into the panel of a split slide are shrunk to fit it, as PowerPoint shrinks the
-// text of a placeholder: the paragraphs and the lists of the panel are set in the style Small,
+// the texts moved into the text column of a split slide are shrunk to fit it, as PowerPoint shrinks the
+// text of a placeholder: the paragraphs and the lists of the text column are set in the style Small,
 // within the scale of the theme. a text that still does not fit keeps the mark of overflow.ts. a
 // slide that is not shown is laid out for the measure, hidden, since reveal.js does not lay out a
 // slide away from the current one
 function fitPanel(app: App, slide: Element): void {
-  const panel = slide.querySelector(':scope > .panel');
-  if (!panel || !(slide instanceof HTMLElement) || !laidOut(slide, () => overflows(panel))) return;
-  for (const el of panel.querySelectorAll(':scope > p, :scope > ul, :scope > ol')) {
+  const textColumn = slide.querySelector(':scope > .text-column');
+  if (!textColumn || !(slide instanceof HTMLElement) || !laidOut(slide, () => overflows(textColumn))) return;
+  for (const el of textColumn.querySelectorAll(':scope > p, :scope > ul, :scope > ol')) {
     if (!app.pairing?.elements.get(el)?.open) continue;
     const classes = app.doc.tagState(el).classes.filter((c) => c !== 'fragment');
     if (classes.length) continue;

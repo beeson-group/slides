@@ -4,13 +4,13 @@
 // Format Painter of the Text pane. the Substitutions of the Edit menu switch the smart quotes,
 // dashes, and links of text/substitute.ts. a key of a disabled command is left to the browser,
 // e.g. Return in a heading, which typing.ts writes as a br. a format is set in a text, or on the
-// whole text of the blocks selected on the canvas. with the caret outside a word, a format, a
+// whole text of the text elements selected on the canvas. with the caret outside a word, a format, a
 // tone, or a style is kept by text/carry.ts for the text typed next. Theorem Kind and Theorem
 // Name of the Text pane write data-kind and data-name of a theorem
 
 import type { App, Region } from '../app.ts';
 import type { Command } from '../commands.ts';
-import * as blocks from '../text/blocks.ts';
+import * as textElements from '../text/elements.ts';
 import * as carry from '../text/carry.ts';
 import * as inline from '../text/inline.ts';
 import * as flow from '../text/flow.ts';
@@ -36,7 +36,7 @@ export function theoremOf(app: App): HTMLElement | null {
 const TEXT: Region[] = ['text'];
 const FORMAT: Region[] = ['text', 'canvas'];
 
-// whether the caret, the selected text, or a selected block is in a code box, which does not hold
+// whether the caret, the selected text, or a selected text element is in a code box, which does not hold
 // the styles of a text that Paste Style and the Format Painter set
 function inCode(app: App): boolean {
   if (app.selection.kind === 'text') {
@@ -48,15 +48,15 @@ function inCode(app: App): boolean {
 
 const TONE_LABELS: Record<Exclude<inline.Tone, 'text'>, string> = { accent: 'Accent', violet: 'Violet', blue: 'Blue', red: 'Red', subtle: 'Subtle', muted: 'Muted' };
 // fn run so that an undo and a redo select the text of the slide again, e.g. the caret before an
-// outdent, which the history of the blocks alone puts at the end of the text that changed
+// outdent, which the history of the text elements alone puts at the end of the text that changed
 async function marked(app: App, fn: () => void | Promise<void>): Promise<void> {
   const kept = app.history.keep(() => flow.mark(app));
   await fn();
   kept();
 }
 
-const STYLE_LABELS: Record<blocks.ParagraphStyle, string> = { body: 'Body', small: 'Small', subheading: 'Subheading', caption: 'Caption', footnote: 'Footnote' };
-const LIST_LABELS: Record<blocks.ListKind, string> = { none: 'Paragraphs', ul: 'Dashes', dots: 'Dots', arrows: 'Arrows', ol: 'Numbers' };
+const STYLE_LABELS: Record<textElements.ParagraphStyle, string> = { body: 'Body', small: 'Small', subheading: 'Subheading', caption: 'Caption', footnote: 'Footnote' };
+const LIST_LABELS: Record<textElements.ListKind, string> = { none: 'Paragraphs', ul: 'Arrows', dots: 'Dots', dashes: 'Dashes', ol: 'Numbers' };
 // the labels of Change Case in PowerPoint, each written in its case
 const CASE_LABELS: [inline.Case, string][] = [['sentence', 'Sentence case.'], ['lower', 'lowercase'], ['upper', 'UPPERCASE'], ['title', 'Capitalize Each Word'], ['toggle', 'tOGGLE cASE']];
 
@@ -66,7 +66,7 @@ const CSS = `
 html.beeson-painting .reveal .slides, html.beeson-painting .reveal .slides * { cursor: url("data:image/svg+xml,${encodeURIComponent(BRUSH)}") 2 2, copy !important; }
 `;
 
-// tabIn focuses the formula of the block after the caret, or before it with back, and else puts
+// tabIn focuses the formula of the text element after the caret, or before it with back, and else puts
 // the caret beside the focused formula, or leaves it where it is
 function tabIn(app: App, back: boolean): void {
   const active = document.activeElement;
@@ -89,18 +89,18 @@ function tabIn(app: App, back: boolean): void {
   s?.addRange(r);
 }
 
-// the blocks that Left and Center act on: the heading, the paragraph, the list, the caption, or the
+// the text elements that Left and Center act on: the heading, the paragraph, the list, the caption, or the
 // display of the text or of the selection, and the words of a selected shape, paired with the file,
 // outside a cell and the notes. a list is aligned as a whole
 const ALIGNED = 'h1, h2, h3, p, ul, ol, .caption, div.math';
 function alignTargets(app: App): Element[] {
   const pairing = app.pairing;
   if (!pairing) return [];
-  const els = app.selection.kind === 'elements' ? app.selection.elements().flatMap((el) => (el.matches('div.shape') ? [...el.children] : [el])) : [...flow.spanTargets(app).map((t) => t.host), blocks.textTarget(app)?.host].filter((el): el is Element => !!el);
+  const els = app.selection.kind === 'elements' ? app.selection.elements().flatMap((el) => (el.matches('div.shape') ? [...el.children] : [el])) : [...flow.spanTargets(app).map((t) => t.host), textElements.textTarget(app)?.host].filter((el): el is Element => !!el);
   const out = new Set<Element>();
   for (const el of els) {
-    const block = el.localName === 'li' ? el.closest('ul, ol') : el;
-    if (block?.matches(ALIGNED) && pairing.elements.get(block)?.open && !block.closest('td, th, aside.notes')) out.add(block);
+    const textEl = el.localName === 'li' ? el.closest('ul, ol') : el;
+    if (textEl?.matches(ALIGNED) && pairing.elements.get(textEl)?.open && !textEl.closest('td, th, aside.notes')) out.add(textEl);
   }
   return [...out];
 }
@@ -133,26 +133,26 @@ export function install(app: App): void {
     keys: { mac: ['Enter'], other: ['Enter'] },
     in: [...TEXT, 'notes'],
     undoable: true,
-    enabled: (a) => (inNotes(a) ? notes.canSplitNotesItem(a) : blocks.canSplit(a)),
-    run: (a) => (inNotes(a) ? notes.splitNotesItem(a) : blocks.split(a)),
+    enabled: (a) => (inNotes(a) ? notes.canSplitNotesItem(a) : textElements.canSplit(a)),
+    run: (a) => (inNotes(a) ? notes.splitNotesItem(a) : textElements.split(a)),
   });
   define({
     id: 'text.joinBackward',
     label: (a) => {
-      const kind = inNotes(a) ? null : blocks.joinKind(a);
+      const kind = inNotes(a) ? null : textElements.joinKind(a);
       return kind === 'unlist' ? 'Remove Bullet' : kind === 'outdent' ? c.label('text.outdent') : 'Join Paragraphs';
     },
     keys: { mac: ['Backspace'], other: ['Backspace'] },
     in: [...TEXT, 'notes'],
     undoable: true,
-    enabled: (a) => (inNotes(a) ? notes.canJoinNotesItem(a) : blocks.canJoinBack(a)),
+    enabled: (a) => (inNotes(a) ? notes.canJoinNotesItem(a) : textElements.canJoinBack(a)),
     // the caret of a drop is kept by joinBackward, since an empty paragraph does not change the
     // count of characters by which marked() puts it back
-    run: (a) => (!inNotes(a) && blocks.joinKind(a) === 'drop' ? blocks.joinBackward(a) : marked(a, () => (inNotes(a) ? notes.joinNotesItem(a) : blocks.joinBackward(a)))),
+    run: (a) => (!inNotes(a) && textElements.joinKind(a) === 'drop' ? textElements.joinBackward(a) : marked(a, () => (inNotes(a) ? notes.joinNotesItem(a) : textElements.joinBackward(a)))),
   });
-  define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: blocks.canJoinAhead, run: blocks.joinForward });
+  define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: textElements.canJoinAhead, run: textElements.joinForward });
 
-  // a display of math is not formatted, since its TeX is the text of its block
+  // a display of math is not formatted, since its TeX is the text of its text element
   // a display framed or edited. a text with the focus, e.g. the notes, is not one
   const onMath = (a: App) => {
     const host = a.hostOf(document.activeElement);
@@ -190,9 +190,9 @@ export function install(app: App): void {
     in: FORMAT,
     menu: menu('size', 30),
     undoable: true,
-    enabled: (a) => blocks.canStep(a, true) || carry.canStep(a, true) || carry.canSizeCode(a, true),
-    why: (a) => blocks.styleWhy(a, 'Bigger', true),
-    run: (a) => (carry.canSizeCode(a, true) ? carry.sizeCode(a, true) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => blocks.stepped(s, true)) : blocks.setStyle(a, (s) => blocks.stepped(s, true))),
+    enabled: (a) => textElements.canStep(a, true) || carry.canStep(a, true) || carry.canSizeCode(a, true),
+    why: (a) => textElements.styleWhy(a, 'Bigger', true),
+    run: (a) => (carry.canSizeCode(a, true) ? carry.sizeCode(a, true) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => textElements.stepped(s, true)) : textElements.setStyle(a, (s) => textElements.stepped(s, true))),
   });
   define({
     id: 'text.smaller',
@@ -201,9 +201,9 @@ export function install(app: App): void {
     in: FORMAT,
     menu: menu('size', 31),
     undoable: true,
-    enabled: (a) => blocks.canStep(a, false) || carry.canStep(a, false) || carry.canSizeCode(a, false),
-    why: (a) => blocks.styleWhy(a, 'Smaller', false),
-    run: (a) => (carry.canSizeCode(a, false) ? carry.sizeCode(a, false) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => blocks.stepped(s, false)) : blocks.setStyle(a, (s) => blocks.stepped(s, false))),
+    enabled: (a) => textElements.canStep(a, false) || carry.canStep(a, false) || carry.canSizeCode(a, false),
+    why: (a) => textElements.styleWhy(a, 'Smaller', false),
+    run: (a) => (carry.canSizeCode(a, false) ? carry.sizeCode(a, false) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => textElements.stepped(s, false)) : textElements.setStyle(a, (s) => textElements.stepped(s, false))),
   });
 
   define({
@@ -230,7 +230,7 @@ export function install(app: App): void {
       run: (a) => (carry.canFormat(a) ? carry.chooseTone(a, tone) : inline.setTone(a, tone)),
     }));
 
-  blocks.PARAGRAPH_STYLES.forEach((style, i) =>
+  textElements.PARAGRAPH_STYLES.forEach((style, i) =>
     define({
       id: `text.style.${style}`,
       label: STYLE_LABELS[style],
@@ -238,13 +238,13 @@ export function install(app: App): void {
       menu: menu('style', 50 + i, 'Paragraph Style'),
       undoable: true,
       undo: 'Paragraph Style',
-      enabled: (a) => blocks.canStyle(a, style) || carry.canStyle(a),
-      why: (a) => blocks.styleWhy(a, STYLE_LABELS[style]) ?? `${STYLE_LABELS[style]} is not available, since a list item takes only Body and Small`,
-      checked: (a) => (carry.canStyle(a) ? carry.styleOf(a) : blocks.paragraphStyle(a)) === style,
-      run: (a) => (carry.canStyle(a) ? carry.chooseStyle(a, style) : blocks.setStyle(a, style)),
+      enabled: (a) => textElements.canStyle(a, style) || carry.canStyle(a),
+      why: (a) => textElements.styleWhy(a, STYLE_LABELS[style]) ?? `${STYLE_LABELS[style]} is not available, since a list item takes only Body and Small`,
+      checked: (a) => (carry.canStyle(a) ? carry.styleOf(a) : textElements.paragraphStyle(a)) === style,
+      run: (a) => (carry.canStyle(a) ? carry.chooseStyle(a, style) : textElements.setStyle(a, style)),
     }));
 
-  (['none', 'ul', 'dots', 'arrows', 'ol'] as const).forEach((kind, i) =>
+  (['none', 'ul', 'dots', 'dashes', 'ol'] as const).forEach((kind, i) =>
     define({
       id: `text.list.${kind}`,
       label: LIST_LABELS[kind],
@@ -252,13 +252,13 @@ export function install(app: App): void {
       menu: menu('list', 60 + i, 'List'),
       undoable: true,
       undo: 'List Style',
-      enabled: (a) => (notes.notesListKind(a) ? notes.canSetNotesList(a, kind) : blocks.canSetList(a, kind) || carry.canList(a)),
-      why: (a) => blocks.listWhy(a, LIST_LABELS[kind]),
-      checked: (a) => (notes.notesListKind(a) ?? (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a))) === kind,
+      enabled: (a) => (notes.notesListKind(a) ? notes.canSetNotesList(a, kind) : textElements.canSetList(a, kind) || carry.canList(a)),
+      why: (a) => textElements.listWhy(a, LIST_LABELS[kind]),
+      checked: (a) => (notes.notesListKind(a) ?? (carry.canList(a) ? carry.listOf(a) : textElements.listKind(a))) === kind,
       // an undo and a redo select the text again, as an undo of a format does in Keynote
       run: async (a) => {
         const kept = a.history.keep(() => flow.mark(a));
-        await (notes.notesListKind(a) ? notes.setNotesList(a, kind) : carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind));
+        await (notes.notesListKind(a) ? notes.setNotesList(a, kind) : carry.canList(a) ? carry.chooseList(a, kind) : textElements.setList(a, kind));
         kept();
       },
     }));
@@ -283,19 +283,19 @@ export function install(app: App): void {
     }));
   // Start at of the Bullets and Numbering dialog of PowerPoint, typed into the Text pane as
   // { start: n }
-  define({ id: 'text.list.start', label: 'Start At', in: TEXT, undoable: true, enabled: (a) => !!blocks.startList(a), run: (a, arg) => blocks.setStart(a, Number((arg as { start?: unknown } | undefined)?.start)) });
+  define({ id: 'text.list.start', label: 'Start At', in: TEXT, undoable: true, enabled: (a) => !!textElements.startList(a), run: (a, arg) => textElements.setStart(a, Number((arg as { start?: unknown } | undefined)?.start)) });
   // Tab is taken in every item of a list, also where it does not change the level, so that it
   // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
   // Ctrl+] and Ctrl+[ those of Google Docs elsewhere, where the menu shows Tab and Shift+Tab, since
   // ] and [ are typed with AltGr on a German or an Italian keyboard
-  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Tab', 'Mod+]'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, true)) });
-  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Shift+Tab', 'Mod+['] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, false)) });
+  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Tab', 'Mod+]'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => textElements.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, true)) });
+  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Shift+Tab', 'Mod+['] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => textElements.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, false)) });
   // Tab and Shift+Tab in a text outside a list and a table keep the focus in the text, as a text
   // box of Keynote takes them. a tab is not typed, since the theme draws it as a space. the key
-  // stops at each formula of the block, which Enter opens, and goes on from the last to the text
+  // stops at each formula of the text element, which Enter opens, and goes on from the last to the text
   for (const back of [false, true]) {
     const key = back ? 'Shift+Tab' : 'Tab';
-    define({ id: back ? 'text.tabBack' : 'text.tab', label: key, keys: { mac: [key], other: [key] }, in: TEXT, enabled: (a) => !document.activeElement?.closest('td, th') && !blocks.inList(a) && !flow.canLevel(a), run: (a) => tabIn(a, back) });
+    define({ id: back ? 'text.tabBack' : 'text.tab', label: key, keys: { mac: [key], other: [key] }, in: TEXT, enabled: (a) => !document.activeElement?.closest('td, th') && !textElements.inList(a) && !flow.canLevel(a), run: (a) => tabIn(a, back) });
   }
 
   // the link opens its dialog, which makes the change one entry of the history. a test or a script
@@ -392,12 +392,12 @@ type Define = (command: Command) => Command;
 type MenuOf = (group: string, order: number, submenu?: string) => Command['menu'];
 
 // the style of a figure that Copy Style takes and Paste Style sets, as the Image pane sets it: the
-// classes paper and invert of an image, null when taken from a video, and the mode it is shown in
-type FigureStyle = { paper: boolean | null; invert: boolean | null; mode: Mode };
+// classes white-figure and invert of an image, null when taken from a video, and the mode it is shown in
+type FigureStyle = { whiteFigure: boolean | null; invert: boolean | null; mode: Mode };
 type Copied = { text: inline.TextStyle; center: boolean | null } | { figure: FigureStyle };
 
 // the images and videos of the selected elements: a selected one, or the one shown in a selected
-// figure, zone, or plate
+// figure, figure box, or plate
 function figuresOf(app: App): Element[] {
   if (app.selection.kind !== 'elements') return [];
   const open = (m: Element) => !!app.pairing?.elements.get(m)?.open;
@@ -411,25 +411,25 @@ function figuresOf(app: App): Element[] {
 
 function readFigure(el: Element): FigureStyle {
   const image = el.localName === 'img';
-  return { paper: image ? el.classList.contains('paper') : null, invert: image ? el.classList.contains('invert') : null, mode: modeOf(el) };
+  return { whiteFigure: image ? el.classList.contains('white-figure') : null, invert: image ? el.classList.contains('invert') : null, mode: modeOf(el) };
 }
 
-// the style of the selected figure, else of the text or the block
+// the style of the selected figure, else of the text or the text element
 function readCopied(app: App): Copied | null {
   const [figure] = figuresOf(app);
   if (figure) return { figure: readFigure(figure) };
   const text = inline.readStyle(app);
-  const [block] = alignTargets(app);
-  return text ? { text, center: block ? centered(block) : null } : null;
+  const [textEl] = alignTargets(app);
+  return text ? { text, center: textEl ? centered(textEl) : null } : null;
 }
 
-// the mode on every figure, and paper and invert on an image, each class changed only where it
+// the mode on every figure, and white-figure and invert on an image, each class changed only where it
 // differs
 function pasteFigure(app: App, style: FigureStyle): void {
   for (const el of figuresOf(app)) {
     const classes: Record<string, boolean> = { 'for-dark': style.mode === 'dark', 'for-light': style.mode === 'light' };
     if (el.localName === 'img') {
-      if (style.paper !== null) classes.paper = style.paper;
+      if (style.whiteFigure !== null) classes['white-figure'] = style.whiteFigure;
       if (style.invert !== null) classes.invert = style.invert;
     }
     const changed = Object.fromEntries(Object.entries(classes).filter(([name, on]) => el.classList.contains(name) !== on));
@@ -439,8 +439,8 @@ function pasteFigure(app: App, style: FigureStyle): void {
 
 // the Copy Style and Paste Style of Keynote with its keys on a Mac, and with the keys of the Format
 // Painter of PowerPoint for Windows elsewhere, and the Format Painter of the Text pane. the style of
-// a text goes to a text or a block, and the style of a figure to a figure. a click on the painter
-// takes the style of the selection, and the next text, block, or figure clicked or selected on the
+// a text goes to a text or a text element, and the style of a figure to a figure. a click on the painter
+// takes the style of the selection, and the next text, text element, or figure clicked or selected on the
 // slide is given it. with sticky, as after a double click on the painter, it stays armed until it
 // is clicked again or Esc is pressed. the switches Smart Quotes, Smart Dashes, and Smart Web and
 // Email Links are in the Substitutions of the Edit menu
@@ -502,7 +502,7 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
   });
 
   // the style is set once the press on the slide is released and the browser has put the caret or
-  // the range, or once a block is selected by the click
+  // the range, or once a text element is selected by the click
   document.addEventListener('pointerup', (ev) => {
     if (!painter.armed || !(ev.target instanceof Element) || !ev.target.closest('.reveal .slides')) return;
     setTimeout(() => {
@@ -527,4 +527,5 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
   smart('quotes', 'Smart Quotes', 90);
   smart('dashes', 'Smart Dashes', 91);
   smart('links', 'Smart Web and Email Links', 92);
+  smart('markdown', 'Markdown Formatting', 93);
 }

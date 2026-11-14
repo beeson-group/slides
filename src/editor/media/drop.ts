@@ -1,7 +1,7 @@
 // image and video files dragged from the Finder or the Explorer onto the slide. a file dropped onto
-// an image or a video, or onto a zone or a plate that shows one, replaces its file, as a drop onto
-// an image in Keynote. a file dropped onto an empty zone or plate fills it, and one dropped anywhere
-// else on the slide is put into a new zone, as a drop onto the slide of PowerPoint. an empty zone or
+// an image or a video, or onto a figure box or a plate that shows one, replaces its file, as a drop onto
+// an image in Keynote. a file dropped onto an empty figure box or plate fills it, and one dropped anywhere
+// else on the slide is put into a new figure box, as a drop onto the slide of PowerPoint. an empty figure box or
 // plate is drawn with the placeholder of placeholder.ts. the target is outlined while the files are
 // dragged over it. the browser does not open a file dropped onto the chrome of the editor in place
 // of the deck
@@ -29,13 +29,13 @@ export function targetAt(app: App, x: number, y: number): Target | null {
   const under = document.elementsFromPoint(x, y);
   for (const el of under) {
     if (!slide.contains(el) || el === slide || el.closest('aside.notes')) continue;
-    // a locked picture is not replaced and a locked zone is not filled, nor is a picture under
+    // a locked picture is not replaced and a locked figure box is not filled, nor is a picture under
     // them. the file is added to the slide, as a file dropped onto a locked image of Keynote
     if (el.closest('[data-locked]')) break;
     const m = el.closest('img, video');
     const replace = m && slide.contains(m) ? mediaIn(app, m) : null;
     if (replace) return { replace };
-    const slot = el.closest('figure, .zone, .plate');
+    const slot = el.closest('figure, .figure-box, .plate');
     if (slot && slide.contains(slot) && isSlot(app, slot)) {
       if (isEmptySlot(app, slot)) return { fill: slot };
       const shown = mediaIn(app, slot);
@@ -69,7 +69,7 @@ export function install(app: App): void {
   box.hidden = true;
   document.body.append(box);
 
-  // the buttons and the hint of the placeholder of a zone to fill are hidden under the tag
+  // the buttons and the hint of the placeholder of a figure box to fill are hidden under the tag
   const marked = () => document.querySelectorAll('.beeson-placeholder.dropping');
   const hide = () => {
     box.hidden = true;

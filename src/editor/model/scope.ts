@@ -19,16 +19,16 @@ const STEP_CLASSES = ['play'];
 
 // the data attributes of AGENTS.md and REFERENCE.md, those of reveal.js that the theme gives a
 // meaning, and data-group and data-locked, which are new and named among the open decisions, the
-// glue of model/glue.ts, which only the editor reads, and the kind and the name of a theorem and
-// the key of a citation
+// attachment of model/attach.ts, which only the editor reads, and the kind and the name of a
+// theorem and the key of a citation
 export const DATA_ATTRS = [
   'data-at', 'data-auto', 'data-auto-animate', 'data-autoplay', 'data-azimuth', 'data-cx', 'data-cy', 'data-duration',
   'data-dx', 'data-dy', 'data-elevation', 'data-final', 'data-fragment-index', 'data-function', 'data-half',
   'data-heads', 'data-highlight', 'data-id', 'data-keep', 'data-keep-theme', 'data-line-numbers', 'data-live',
   'data-loop', 'data-mu', 'data-plot', 'data-plot-frame', 'data-plot-panels', 'data-plot-paused', 'data-plot-play',
-  'data-plot-show', 'data-plot-tab', 'data-plot-tabs', 'data-qr', 'data-run', 'data-scene', 'data-stage',
-  'data-stagger', 'data-strands', 'data-strands-color', 'data-strands-colormap', 'data-strands-ramp',
-  'data-strands-select', 'data-strands-shade', 'data-surface-accent', 'data-surface-marks', 'data-surface-stage',
+  'data-plot-show', 'data-plot-tab', 'data-plot-tabs', 'data-qr', 'data-run', 'data-backdrop',
+  'data-stagger', 'data-trajectories', 'data-trajectories-color', 'data-trajectories-colormap', 'data-trajectories-ramp',
+  'data-trajectories-select', 'data-trajectories-shade', 'data-surface-accent', 'data-surface-points', 'data-surface-state',
   'data-surface-violet', 'data-tone', 'data-turn', 'data-unhighlight', 'data-zoom', 'data-zscale',
   'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked', 'data-autoslide',
   'data-guides', 'data-anchor', 'data-from', 'data-to', 'data-kind', 'data-name', 'data-key',
@@ -54,9 +54,9 @@ export const LINE_ATTRS: Record<string, string[]> = {
 // well, which a resize stretches
 const SIZED_TAGS = new Set(['img', 'video', 'tycho-viewer']);
 const STRETCHED_TAGS = new Set(['img', 'video']);
-// the text blocks whose width is set in a style in px, as a text box of Keynote and PowerPoint
+// the text elements whose width is set in a style in px, as a text box of Keynote and PowerPoint
 const TEXT_TAGS = new Set(['h1', 'h2', 'h3', 'p', 'ul', 'ol']);
-const textBlock = (tag: string, classes: string[]) => TEXT_TAGS.has(tag) || (tag === 'div' && classes.includes('math')) || classes.includes('caption');
+const takesWidth = (tag: string, classes: string[]) => TEXT_TAGS.has(tag) || (tag === 'div' && classes.includes('math')) || classes.includes('caption');
 const PX = /^\d+px$/;
 
 // the declarations of the mask and the flip of an image, written by canvas/mask.ts, with the form
@@ -73,7 +73,7 @@ const MASK_DECLARATIONS: Record<string, RegExp> = {
 };
 
 // the class names in the selectors of a stylesheet. the comments, the strings, and the innermost
-// blocks, i.e. the declarations, are cut first, so that e.g. url(a.png) is not read as a class
+// braces, i.e. the declarations, are cut first, so that e.g. url(a.png) is not read as a class
 export function themeClasses(css: string): string[] {
   const text = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/"[^"]*"|'[^']*'/g, '').replace(/\{[^{}]*\}/g, '{}');
   const out = new Set<string>();
@@ -94,7 +94,7 @@ export function declarationProblem(tag: string, classes: string[], name: string,
   if (name === 'width' && (SIZED_TAGS.has(tag) || classes.includes('qr'))) return null;
   // the box of a backdrop resized by its grips
   if ((name === 'width' || name === 'height') && tag === 'div' && classes.includes('backdrop')) return PX.test(value.trim()) ? null : `${name} ${value} on a backdrop`;
-  if (name === 'width') return textBlock(tag, classes) && PX.test(value.trim()) ? null : `width on a ${tag}`;
+  if (name === 'width') return takesWidth(tag, classes) && PX.test(value.trim()) ? null : `width on a ${tag}`;
   // the height of a row is written in px on its tr by Distribute Rows Evenly
   if (name === 'height' && tag === 'tr') return PX.test(value.trim()) ? null : `height ${value} on a tr`;
   if (name === 'height') return STRETCHED_TAGS.has(tag) && PX.test(value.trim()) ? null : `height ${value} on a ${tag}`;

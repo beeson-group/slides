@@ -60,14 +60,14 @@ async function load(t, platform, { n = 0, mode = 'light', width = 1600, height =
   const page = await browser.newPage({ width, height });
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
-  const url = `${server.origin}/index.html?edit&still&theme=${mode}&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=${mode}&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   await page.evaluate(WATCH);
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (n) await page.evaluate(`Reveal.slide(${n})`);
@@ -285,7 +285,7 @@ const TABLE_STATE = `(() => {
     const b = ink(el);
     if (b) others.push({ what: el.localName + ':' + el.textContent.trim().slice(0, 24), box: b });
   }
-  for (const el of slide.querySelectorAll('.zone, .plate, .surface, figure img:not([hidden])')) {
+  for (const el of slide.querySelectorAll('.figure-box, .plate, .surface, figure img:not([hidden])')) {
     const r = el.getBoundingClientRect();
     if (r.width && r.height && getComputedStyle(el).display !== 'none') others.push({ what: el.localName + '.' + el.className, box: box(r) });
   }

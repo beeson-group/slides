@@ -233,7 +233,7 @@ export function installKeys(app: App): void {
     if (ev.isComposing || ev.keyCode === 229) return;
     if (dialogKey(app, ev)) return;
     const region = app.region();
-    // the handle of a block is outside the slide, and its keys are those of the canvas
+    // the handle of a text element is outside the slide, and its keys are those of the canvas
     const active = document.activeElement;
     const onBar = region === 'canvas' && active instanceof Element && active !== document.body && active !== document.documentElement && !active.closest('.reveal, .beeson-handle');
     const command = app.commands.forKey(ev, region, !onBar);
@@ -252,7 +252,7 @@ export function installKeys(app: App): void {
 }
 
 // the keys of the dialogs of today, which are not commands yet: Enter on a formula opens its TeX,
-// and Esc closes the TeX field or a card of a file
+// and Esc closes the TeX field or a dialog of a file
 function dialogKey(app: App, ev: KeyboardEvent): boolean {
   const active = document.activeElement;
   if ((ev.key === 'Enter' || ev.key === ' ') && !app.math.isOpen() && active instanceof Element && active.matches('mjx-container') && app.hostOf(active)) {

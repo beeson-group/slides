@@ -35,10 +35,10 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
 async function open(platform) {
   const page = await browser.newPage();
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const status = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
   assert.deepEqual(status.problems, []);
   await page.evaluate(`Reveal.slide(${EQUATIONS})`);

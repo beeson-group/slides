@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 const IMG = 'section.present figure img.for-light';
@@ -87,7 +87,7 @@ async function undoes(page, before, what) {
 // the start tags of the figure and of its two images in the text, and the computed angles of the three
 async function figureState(page) {
   const text = await render(page);
-  const start = text.indexOf('<figure class="zone"');
+  const start = text.indexOf('<figure class="figure-box"');
   const tags = text.slice(start, text.indexOf('</figure>', start)).match(/<(figure|img)\b[^>]*>/g);
   const turned = await page.evaluate(`(() => { const f = document.querySelector('section.present figure'); return [f, ...f.querySelectorAll('img')].map((el) => getComputedStyle(el).rotate); })()`);
   return { tags, turned };
@@ -151,7 +151,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform);
     await groupTurnedFigure(page, platform);
     const grouped = await render(page);
-    assert.match(grouped, /<figure class="zone" style="rotate: 20deg[^"]*" data-group/);
+    assert.match(grouped, /<figure class="figure-box" style="rotate: 20deg[^"]*" data-group/);
     await typeField(page, 'angle', 30);
     await typeField(page, 'angle', 75);
     const turned = await render(page);

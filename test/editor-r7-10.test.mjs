@@ -17,9 +17,9 @@ const PLATFORMS = ['mac', 'other'];
 // the slides of the demo deck with the stepped list and with the figure of a dark and light pair
 const STEPS = 2;
 const FIGURE = 4;
-const IMG = '.reveal section.present figure.zone > img';
-const DARK = '.reveal section.present figure.zone > img.for-dark';
-const LIGHT = '.reveal section.present figure.zone > img.for-light';
+const IMG = '.reveal section.present figure.figure-box > img';
+const DARK = '.reveal section.present figure.figure-box > img.for-dark';
+const LIGHT = '.reveal section.present figure.figure-box > img.for-light';
 const PARA = '.reveal section.present > p';
 
 let browser;
@@ -51,7 +51,7 @@ const focused = (page) => page.evaluate(`(() => {
 
 // the editor on the slide n of a deck served over HTTP, in a window of 1600 by 1000 px as in the
 // shoot of the council, with the Format tab shown
-async function load(t, platform, { deck = 'index.html', n = FIGURE } = {}) {
+async function load(t, platform, { deck = 'test-deck.html', n = FIGURE } = {}) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;
@@ -159,7 +159,7 @@ const controlOf = (page, find) => page.evaluate(`(() => {
 })()`);
 
 // the declaration translate of the start tag of the figure of the pair in the text of the editor
-const figureTranslate = async (page) => (await render(page)).match(/<figure class="zone"[^>]*>/)?.[0].match(/translate: ([^;"]+)/)?.[1] ?? null;
+const figureTranslate = async (page) => (await render(page)).match(/<figure class="figure-box"[^>]*>/)?.[0].match(/translate: ([^;"]+)/)?.[1] ?? null;
 
 for (const platform of PLATFORMS) {
   for (const control of CONTROLS) {
@@ -182,7 +182,7 @@ for (const platform of PLATFORMS) {
       await click(page, IMG);
       await frames(page);
       // the click selects the figure, or the image alone where the figure was selected before it
-      assert.deepEqual(await selected(page), [control.image ? 'img.for-dark' : 'figure.zone']);
+      assert.deepEqual(await selected(page), [control.image ? 'img.for-dark' : 'figure.figure-box']);
       // ArrowRight nudges the figure by one slide pixel, also from its image
       await press(page, 'ArrowRight');
       await frames(page);
@@ -195,7 +195,7 @@ for (const platform of PLATFORMS) {
         await press(page, 'Escape');
         await frames(page);
       }
-      assert.deepEqual(await selected(page), ['figure.zone'], 'Esc does not select the figure of the image');
+      assert.deepEqual(await selected(page), ['figure.figure-box'], 'Esc does not select the figure of the image');
       await press(page, 'Backspace');
       await frames(page);
       assert.equal(await page.evaluate(`document.querySelectorAll(${js(IMG)}).length`), 0, 'Backspace does not delete the figure');
@@ -250,7 +250,7 @@ for (const platform of PLATFORMS) {
 
 // the start tags of the paragraph and of the pair of images of the figure slide
 const P_TAG = '<p>Export your matplotlib figure';
-const FIG_TAG = '<figure class="zone">';
+const FIG_TAG = '<figure class="figure-box">';
 const DARK_TAG = '<img class="for-dark" src="demo/figure-dark.png" alt="Zero-velocity curves of the Earth–Moon system, dark version">';
 const LIGHT_TAG = '<img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version">';
 const withAttr = (tag, attr) => tag.replace(/>$/, ` ${attr}>`);
@@ -270,7 +270,7 @@ for (const platform of PLATFORMS) {
     await click(page, IMG);
     await click(page, PARA, { modifiers: 'Shift' });
     await frames(page);
-    assert.deepEqual((await selected(page)).sort(), ['figure.zone', 'p']);
+    assert.deepEqual((await selected(page)).sort(), ['figure.figure-box', 'p']);
     await press(page, platform === 'mac' ? 'Mod+Alt+G' : 'Mod+G');
     await frames(page);
     await byteExact(page, [[P_TAG, '<p data-group="g1">Export your matplotlib figure'], [FIG_TAG, withAttr(FIG_TAG, 'data-group="g1"')]]);
@@ -281,7 +281,7 @@ for (const platform of PLATFORMS) {
     await flipMode(page);
     await click(page, IMG);
     await frames(page);
-    assert.deepEqual((await selected(page)).sort(), ['figure.zone', 'p'], 'the click in light mode does not select the group');
+    assert.deepEqual((await selected(page)).sort(), ['figure.figure-box', 'p'], 'the click in light mode does not select the group');
     await drag(page, IMG, { dx: -60, dy: -40 });
     await frames(page);
     const text = await render(page);
@@ -323,16 +323,16 @@ for (const platform of PLATFORMS) {
     await frames(page);
     await byteExact(page, [[DARK_TAG, DARK_TAG.replace('>', ' style="scale: -1 1">')], [LIGHT_TAG, LIGHT_TAG.replace('>', ' style="scale: -1 1">')]]);
     await roundTrip(page);
-    // the alt, the mode, and Paper of the dark image are its own
+    // the alt, the mode, and White Figure of the dark image are its own
     await page.evaluate(`Reveal.slide(${FIGURE})`);
     await click(page, IMG);
     await frames(page);
     await exec(page, 'figure.alt', 'Curves of the dark version');
-    await exec(page, 'figure.paper');
+    await exec(page, 'figure.whiteFigure');
     await frames(page);
     const text = await render(page);
     assert.ok(text.includes('<img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version" style="scale: -1 1">'), 'the alt or Paper of the dark image is written on the light image');
-    assert.ok(text.includes('<img class="for-dark paper" src="demo/figure-dark.png" alt="Curves of the dark version" style="scale: -1 1">'));
+    assert.ok(text.includes('<img class="for-dark white-figure" src="demo/figure-dark.png" alt="Curves of the dark version" style="scale: -1 1">'));
     assert.deepEqual(errors(page), []);
   });
 }
@@ -350,7 +350,7 @@ for (const platform of PLATFORMS) {
       if (key === 'Backspace') await press(page, key);
       else await exec(page, key);
       await frames(page);
-      const figure = page.source.match(/\n *<figure class="zone">[\s\S]*?<\/figure>/)[0];
+      const figure = page.source.match(/\n *<figure class="figure-box">[\s\S]*?<\/figure>/)[0];
       await byteExact(page, [[figure, '']]);
       await roundTrip(page);
     });

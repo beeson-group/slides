@@ -14,8 +14,8 @@ import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const MOD = { mac: 4, other: 2 };
-const INDEX = 'index.html';
-// a paragraph and a QR code of 320 px in the flow of slide 1, a paragraph in the panel of slide 2, a
+const INDEX = 'test-deck.html';
+// a paragraph and a QR code of 320 px in the flow of slide 1, a paragraph in the text column of slide 2, a
 // closing slide, and a heading, a paragraph, a list, and a paragraph without offsets on slide 4
 const FLOW = 'test/pages/editor-r36-1.html';
 
@@ -163,10 +163,10 @@ for (const platform of PLATFORMS) {
     await entry(page, before, 'Duplicate');
   });
 
-  // item 1: a paragraph in the panel of a split slide, i.e. the container of its text column
-  test(`1: a paragraph in the panel of a split slide duplicated is put 20 px off its source (${platform})`, async (t) => {
+  // item 1: a paragraph in the text column of a split slide
+  test(`1: a paragraph in the text column of a split slide duplicated is put 20 px off its source (${platform})`, async (t) => {
     const { page, boxes, select, selection, duplicate } = await load(t, platform, FLOW, 1);
-    const PANEL = ':scope > .panel > p';
+    const PANEL = ':scope > .text-column > p';
     const [p] = await boxes(PANEL);
     await select(PANEL);
     assert.deepEqual(await selection(), ['p']);
@@ -181,30 +181,30 @@ for (const platform of PLATFORMS) {
   // drawn where they were
   test(`1: a heading in the block of a title slide duplicated is put 20 px off its source (${platform})`, async (t) => {
     const { page, boxes, select, selection, duplicate } = await load(t, platform, INDEX, 0);
-    const H1 = ':scope > .block > h1';
+    const H1 = ':scope > .title-text > h1';
     const [h] = await boxes(H1);
-    const rest = await boxes(':scope > .block > :not(h1)');
+    const rest = await boxes(':scope > .title-text > :not(h1)');
     await select(H1);
     assert.deepEqual(await selection(), ['h1']);
     const before = await render(page);
     await duplicate();
     near(await boxes(H1), [h, off(h, 20)], 'the duplicate of the heading is not 20 px off it');
-    near(await boxes(':scope > .block > :not(h1)'), rest, 'the words of the block are not drawn where they were');
+    near(await boxes(':scope > .title-text > :not(h1)'), rest, 'the words of the block are not drawn where they were');
     await entry(page, before, 'Duplicate');
   });
 
   // item 1: the same on the closing slide of the deck, whose block has no offsets
   test(`1: a heading in the block of a closing slide without offsets duplicated is put 20 px off its source (${platform})`, async (t) => {
     const { page, boxes, select, selection, duplicate } = await load(t, platform, FLOW, 2);
-    const H1 = ':scope > .block > h1';
+    const H1 = ':scope > .title-text > h1';
     const [h] = await boxes(H1);
-    const rest = await boxes(':scope > .block > :not(h1)');
+    const rest = await boxes(':scope > .title-text > :not(h1)');
     await select(H1);
     assert.deepEqual(await selection(), ['h1']);
     const before = await render(page);
     await duplicate();
     near(await boxes(H1), [h, off(h, 20)], 'the duplicate of the heading is not 20 px off it');
-    near(await boxes(':scope > .block > :not(h1)'), rest, 'the words of the block are not drawn where they were');
+    near(await boxes(':scope > .title-text > :not(h1)'), rest, 'the words of the block are not drawn where they were');
     await entry(page, before, 'Duplicate');
   });
 
@@ -256,11 +256,11 @@ for (const platform of PLATFORMS) {
     await entry(page, before, 'Paste');
   });
 
-  // item 4: a duplicate of the paragraph in the panel after a deleted duplicate takes the place
+  // item 4: a duplicate of the paragraph in the text column after a deleted duplicate takes the place
   // that it freed
   test(`4: a paragraph in the flow duplicated after a deleted duplicate takes the place that it freed (${platform})`, async (t) => {
     const { page, boxes, select, duplicate } = await load(t, platform, FLOW, 1);
-    const PANEL = ':scope > .panel > p';
+    const PANEL = ':scope > .text-column > p';
     const [p] = await boxes(PANEL);
     await select(PANEL);
     await duplicate();

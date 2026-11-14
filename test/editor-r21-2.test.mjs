@@ -14,7 +14,7 @@ import { click, drag, press } from './helpers/editor.mjs';
 const DECK = 'test/pages/editor-r21-2.html';
 const PLATFORMS = ['mac', 'other'];
 const BACK = 'section.present .backdrop';
-const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const TUBES = '<div class="backdrop" data-backdrop="tubes" data-cx="0.97" data-cy="0" data-half="0.5">';
 
 let browser;
 let server;
@@ -40,7 +40,7 @@ const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e
 const at = (page, u, v) => page.evaluate(`(() => { const r = document.querySelector('${BACK}').getBoundingClientRect(); return { x: r.left + r.width * ${u}, y: r.top + r.height * ${v} }; })()`);
 const scale = (page) => page.evaluate(`document.querySelector('section.present').getBoundingClientRect().width / 1920`);
 // the start tag of the backdrop of the first slide in a rendered text
-const backTag = (text) => text.match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0];
+const backTag = (text) => text.match(/<div class="backdrop" data-backdrop="tubes"[^>]*>/)[0];
 
 // the editor on the deck at slide n. with motion, the page does not ask for reduced motion and the
 // URL is without still, so that a backdrop can be traced
@@ -100,7 +100,7 @@ for (const platform of PLATFORMS) {
       await page.evaluate(`window.BeesonEditor.exec('${id}', { ...${arg}, els: [document.querySelector('section.present p'), document.querySelector('${BACK}')] })`);
       const text = await render(page);
       assert.notEqual(text, page.source, `${id} did not write the paragraph`);
-      assert.equal(backTag(text), NEST, `${id} wrote the backdrop`);
+      assert.equal(backTag(text), TUBES, `${id} wrote the backdrop`);
       await undo(page);
       assert.equal(await render(page), page.source);
     }
@@ -113,7 +113,7 @@ for (const platform of PLATFORMS) {
     const ROWS = '.beeson-edit-objects .row';
     const rowAt = (name) => page.evaluate(`(() => { const r = [...document.querySelectorAll('${ROWS}')].find((r) => r.querySelector('.name').textContent.startsWith(${JSON.stringify(name)})).getBoundingClientRect(); return { x: r.left + r.width / 3, y: r.top + r.height / 2 }; })()`);
     const P = 'Text: A paragraph';
-    const B = 'Backdrop: Lyapunov Families';
+    const B = 'Backdrop: Cislunar Manifolds';
     for (const modifiers of ['Mod', 'Shift']) {
       await click(page, await rowAt(P));
       assert.deepEqual(await selected(page), ['p']);
@@ -136,7 +136,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await selected(page), ['h2', 'p']);
     await drag(page, 'section.present p', { dx: 40 * (await scale(page)), dy: 0 });
     await frames(page);
-    assert.equal(backTag(await render(page)), NEST);
+    assert.equal(backTag(await render(page)), TUBES);
   });
 
   test(`Reset Slide draws a resized backdrop again at the size of its box, and so do its undo and redo (${platform})`, async () => {

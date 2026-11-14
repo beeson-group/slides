@@ -27,7 +27,7 @@ after(async () => {
 
 // the editor on a deck served over HTTP, where a save is written into the origin private file
 // system, with every block paired with the file
-async function open(platform, deck = 'index.html') {
+async function open(platform, deck = 'test-deck.html') {
   const page = await browser.newPage();
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -208,8 +208,8 @@ for (const platform of ['mac', 'other']) {
     await press(page, 'Mod+D');
     await settle(page);
     edited = await page.evaluate('window.BeesonEditor.render()');
-    assert.ok(edited.includes('data-plot="zone-plot-1"') && edited.includes('id="zone-plot-1"'), 'the id of the copy has no suffix');
-    assert.equal(edited.split('id="zone-plot"').length, 2);
+    assert.ok(edited.includes('data-plot="figure-box-plot-1"') && edited.includes('id="figure-box-plot-1"'), 'the id of the copy has no suffix');
+    assert.equal(edited.split('id="figure-box-plot"').length, 2);
     await roundTrip(page);
   });
 
@@ -325,7 +325,7 @@ for (const platform of ['mac', 'other']) {
     await settle(page);
     assert.equal((await rows(page)).length, 10);
     const edited = await page.evaluate('window.BeesonEditor.render()');
-    for (const gone of ['Show your steps one at a time', 'Code boxes, you guessed it...', 'Color the terms and the marks']) assert.ok(!edited.includes(gone), gone);
+    for (const gone of ['Show your steps one at a time', 'Code boxes, you guessed it...', 'Color the terms and the points']) assert.ok(!edited.includes(gone), gone);
     await roundTrip(page);
   });
 
@@ -357,13 +357,13 @@ for (const platform of ['mac', 'other']) {
     t.after(() => page.close?.());
     await click(page, await row(page, 4));
     await settle(page);
-    await selectFigure(page, '.reveal .slides section.present figure.zone img.for-dark, .reveal .slides section.present figure.zone img');
+    await selectFigure(page, '.reveal .slides section.present figure.figure-box img.for-dark, .reveal .slides section.present figure.figure-box img');
     await settle(page);
     assert.equal(await page.evaluate(`window.BeesonEditor.state('element.delete').enabled`), true);
     await press(page, 'Delete');
     await settle(page);
     assert.equal(await page.evaluate(`!!window.Reveal.getCurrentSlide().querySelector('figure')`), false);
-    const figure = page.source.slice(page.source.lastIndexOf('\n', page.source.indexOf('<figure class="zone">')), page.source.indexOf('</figure>') + '</figure>'.length);
+    const figure = page.source.slice(page.source.lastIndexOf('\n', page.source.indexOf('<figure class="figure-box">')), page.source.indexOf('</figure>') + '</figure>'.length);
     assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source.replace(figure, ''));
     await roundTrip(page);
   });

@@ -1,4 +1,4 @@
-// checks of the plot element of src/plot.ts, i.e. the parser of the JSON block, the interpolation
+// checks of the plot element of src/plot.ts, i.e. the parser of the JSON script, the interpolation
 // between frames, the loop, and the markup of the labels. a plot of a test deck is played and
 // printed in Chrome
 
@@ -285,7 +285,7 @@ test('a plot is played while its slide is shown, and its steps show a panel and 
   await page.evaluate('Reveal.next()');
   assert.equal((await page.evaluate(state)).playing, false);
   const error = await page.evaluate(`document.querySelector('[data-plot="missing"] .plot-error').textContent`);
-  assert.match(error, /the JSON block with the id "missing" is not found/);
+  assert.match(error, /the JSON script with the id "missing" is not found/);
   assert.deepEqual(page.errors.filter((e) => !e.includes('"missing"')), []);
 });
 

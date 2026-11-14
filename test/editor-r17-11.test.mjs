@@ -33,10 +33,10 @@ const labels = (page) => page.evaluate(`({ undo: window.BeesonEditor.state('edit
 
 // the editor on slide n of the demo deck, served over HTTP
 async function load(t, platform, n = 0) {
-  const text = readFileSync('index.html', 'utf8');
+  const text = readFileSync('test-deck.html', 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
@@ -58,9 +58,9 @@ const PLACES = (mark) => `(() => {
   const px = (e) => { const r = e.getBoundingClientRect(); return { left: (r.left - S.left) / k, top: (r.top - S.top) / k, right: (r.right - S.left) / k, bottom: (r.bottom - S.top) / k }; };
   const c = Reveal.getCurrentSlide();
   const lines = [];
-  for (const e of c.querySelectorAll('.block > *')) for (const r of e.getClientRects()) lines.push({ left: (r.left - S.left) / k, top: (r.top - S.top) / k });
+  for (const e of c.querySelectorAll('.title-text > *')) for (const r of e.getClientRects()) lines.push({ left: (r.left - S.left) / k, top: (r.top - S.top) / k });
   const box = [...c.querySelectorAll(':scope > p')].filter((p) => p.classList.contains('beeson-pending') || (${js(mark)} && p.textContent.startsWith(${js(mark)})));
-  return { lines, box: box.map(px), inBlock: !!c.querySelector('.block .beeson-pending') };
+  return { lines, box: box.map(px), inTitleText: !!c.querySelector('.title-text .beeson-pending') };
 })()`;
 const places = (page, mark = '') => page.evaluate(PLACES(mark));
 const near = (a, b, tol = 0.6) => Math.abs(a - b) <= tol;
@@ -92,12 +92,12 @@ for (const platform of PLATFORMS) {
       await sleep(300);
       const empty = await places(page);
       assert.equal(empty.box.length, 1, `Text does not add a text box as a child of the section ${at}`);
-      assert.equal(empty.inBlock, false, `the text box is put into the block ${at}`);
+      assert.equal(empty.inTitleText, false, `the text box is put into the title text ${at}`);
       sameLines(start, empty, `the insert ${at}`);
       // the box is inside the margins of the slide, and off the words of the block and the lockup
       const b = empty.box[0];
       assert.ok(b.left >= 119.5 && b.right <= 1800.5 && b.top >= 0 && b.bottom <= 1080, `the text box ${js(b)} is outside the margins ${at}`);
-      const words = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); const S = s.getBoundingClientRect(), k = S.width / s.offsetWidth; return [...Reveal.getCurrentSlide().querySelectorAll('.block > *')].filter((e) => e.textContent.trim()).map((e) => { const r = e.getBoundingClientRect(); return { left: (r.left - S.left) / k, top: (r.top - S.top) / k, right: (r.right - S.left) / k, bottom: (r.bottom - S.top) / k }; }); })()`);
+      const words = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); const S = s.getBoundingClientRect(), k = S.width / s.offsetWidth; return [...Reveal.getCurrentSlide().querySelectorAll('.title-text > *')].filter((e) => e.textContent.trim()).map((e) => { const r = e.getBoundingClientRect(); return { left: (r.left - S.left) / k, top: (r.top - S.top) / k, right: (r.right - S.left) / k, bottom: (r.bottom - S.top) / k }; }); })()`);
       for (const w of words) assert.ok(!meets(b, w), `the text box ${js(b)} lies over the words ${js(w)} ${at}`);
       if (n === 0) assert.ok(!meets(b, { left: 120, top: 60, right: 560, bottom: 132 }), `the text box ${js(b)} lies over the lockup ${at}`);
       await type(page, 'a');
@@ -116,7 +116,7 @@ for (const platform of PLATFORMS) {
       // the new paragraphs are children of the section, before the foot and the notes
       const slide = written.split(/<section/)[n + 1];
       assert.match(slide, /<p style="[^"]*translate: [\d.-]+px [\d.-]+px[^"]*">a<\/p>/, `the box is not written with its translate ${at}`);
-      assert.ok(slide.indexOf('>a</p>') > slide.indexOf('</div>', slide.indexOf('class="block"')), `the box is written into the block ${at}`);
+      assert.ok(slide.indexOf('>a</p>') > slide.indexOf('</div>', slide.indexOf('class="title-text"')), `the box is written into the block ${at}`);
       if (slide.includes('aside class="notes"')) assert.ok(slide.indexOf('>c</p>') < slide.indexOf('aside class="notes"'), `the box is written after the notes ${at}`);
       await undo(page);
       sameLines(start, await places(page), `an undo ${at}`);

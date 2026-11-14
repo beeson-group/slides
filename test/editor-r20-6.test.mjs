@@ -17,11 +17,13 @@ const DECK = 'test/pages/editor-r20-6.html';
 const PLATFORMS = ['mac', 'other'];
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PANEL = '#beeson-edit-panel-format';
-const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
-const NEST_UNIT = `\n  ${NEST}</div>`;
+const TUBES = '<div class="backdrop" data-backdrop="tubes" data-cx="0.97" data-cy="0" data-half="0.5">';
+const TUBES_UNIT = `\n  ${TUBES}</div>`;
 const BACK = 'section.present .backdrop';
 const BARE = '<section>\n  <h2>A content slide without a backdrop</h2>';
-const GROUND = `<section>\n  ${NEST}</div>\n  <h2>A content slide without a backdrop</h2>`;
+const GROUND = `<section>\n  ${TUBES}</div>\n  <h2>A content slide without a backdrop</h2>`;
+// the start tag of the drawing of tubes on the slide with a backdrop, after the one of the title slide
+const tubesTag = (text) => text.match(/<h2>A content slide with a backdrop<\/h2>[\s\S]*?(<div class="backdrop" data-backdrop="tubes"[^>]*>)/)[1];
 
 let browser;
 let server;
@@ -49,7 +51,7 @@ const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e
 const live = (page) => page.evaluate(`(() => {
   const el = document.querySelector('${BACK}');
   const o = el && Beeson.backdrops.find((b) => b.el === el);
-  return o ? { ...o.view, strands: o.strands.length, raf: o.raf, done: o.done, canvases: el.querySelectorAll(':scope > canvas').length, count: Beeson.backdrops.filter((b) => b.el === el).length } : null;
+  return o ? { ...o.view, trajectories: o.trajectories.length, raf: o.raf, done: o.done, canvases: el.querySelectorAll(':scope > canvas').length, count: Beeson.backdrops.filter((b) => b.el === el).length } : null;
 })()`);
 // the point at fractions u, v of the box of the backdrop of the current slide, in CSS pixels
 const at = (page, u, v) => page.evaluate(`(() => { const r = document.querySelector('${BACK}').getBoundingClientRect(); return { x: r.left + r.width * ${u}, y: r.top + r.height * ${v} }; })()`);
@@ -126,7 +128,7 @@ test('the scope rule takes a width and a height in px on a backdrop', () => {
   assert.equal(declarationProblem('div', ['backdrop'], 'width', '920px'), null);
   assert.equal(declarationProblem('div', ['backdrop'], 'height', '1080px'), null);
   assert.match(declarationProblem('div', ['backdrop'], 'width', '50%'), /width/);
-  assert.match(declarationProblem('div', ['zone'], 'height', '300px'), /height/);
+  assert.match(declarationProblem('div', ['figure-box'], 'height', '300px'), /height/);
 });
 
 for (const platform of PLATFORMS) {
@@ -166,7 +168,7 @@ for (const platform of PLATFORMS) {
     await click(page, await at(page, 0.7, 0.6));
     await exec(page, 'element.delete');
     const edited = await render(page);
-    assert.equal(edited, replaced(page.source, NEST_UNIT, ''));
+    assert.equal(edited, replaced(page.source, TUBES_UNIT, ''));
     await undo(page);
     await frames(page);
     assert.equal(await render(page), page.source);
@@ -204,8 +206,8 @@ for (const platform of PLATFORMS) {
     assert.equal(await undoLabel(page), 'Undo Move Backdrop');
     let edited = await render(page);
     // the drawing is at 1080 slide px per unit, hence 108 px to the left shows 0.1 more of its right
-    const panned = '<div class="backdrop" data-scene="nest" data-cx="1.07" data-cy="0.05" data-half="0.5">';
-    assert.equal(edited, replaced(page.source, NEST, panned));
+    const panned = '<div class="backdrop" data-backdrop="tubes" data-cx="1.07" data-cy="0.05" data-half="0.5">';
+    assert.equal(edited, replaced(page.source, TUBES, panned));
     assert.deepEqual(await selected(page), ['backdrop']);
     const v = await live(page);
     assert.ok(Math.abs(v.cx - 1.07) < 1e-9 && Math.abs(v.cy - 0.05) < 1e-9, JSON.stringify(v));
@@ -217,7 +219,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Shift+ArrowUp');
     edited = await render(page);
     assert.doesNotMatch(edited, /translate/);
-    const tag = edited.match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0];
+    const tag = tubesTag(edited);
     const cx = Number(tag.match(/data-cx="([^"]+)"/)[1]), cy = Number(tag.match(/data-cy="([^"]+)"/)[1]);
     assert.ok(Math.abs(cx - (0.97 + 1 / 1080)) < 2e-3 && Math.abs(cy + 20 / 1080) < 2e-3, tag);
     await undo(page);
@@ -239,24 +241,24 @@ for (const platform of PLATFORMS) {
     await press(page, 'Enter');
     await frames(page);
     let edited = await render(page);
-    assert.equal(edited, replaced(page.source, NEST, NEST.replace('data-half="0.5"', 'data-half="0.4"')));
+    assert.equal(edited, replaced(page.source, TUBES, TUBES.replace('data-half="0.5"', 'data-half="0.4"')));
     assert.equal((await live(page)).half, 0.4);
     await checkEdit(page, edited);
     page = await reopen(page);
     await click(page, await at(page, 0.7, 0.6));
-    // a new scene is drawn by a new Orbits of the theme, and an undo draws nest again
-    await exec(page, 'backdrop.scene', { value: 'tubes' });
+    // a new built-in backdrop is drawn by a new Orbits of the theme, and an undo draws tubes again
+    await exec(page, 'backdrop.builtIn', { value: 'wideRibbon' });
     await frames(page);
     edited = await render(page);
-    assert.equal(edited, replaced(page.source, NEST, NEST.replace('nest', 'tubes')));
-    const tubes = await live(page);
-    assert.equal(tubes.count, 1);
-    assert.equal(tubes.canvases, 2);
+    assert.equal(edited, replaced(page.source, TUBES, TUBES.replace('tubes', 'wideRibbon')));
+    const ribbon = await live(page);
+    assert.equal(ribbon.count, 1);
+    assert.equal(ribbon.canvases, 2);
     await undo(page);
     await frames(page);
-    const nest = await live(page);
-    assert.ok(nest.strands < tubes.strands, `nest has ${nest.strands} strands and tubes ${tubes.strands}`);
-    assert.equal(nest.count, 1);
+    const tubes = await live(page);
+    assert.ok(tubes.trajectories < ribbon.trajectories, `tubes has ${tubes.trajectories} trajectories and wideRibbon ${ribbon.trajectories}`);
+    assert.equal(tubes.count, 1);
     await redo(page);
     await checkEdit(page, edited);
     page = await reopen(page);
@@ -265,15 +267,15 @@ for (const platform of PLATFORMS) {
     await tap(page, 'L1');
     await tap(page, 'Moon');
     edited = await render(page);
-    assert.equal(edited, replaced(page.source, NEST_UNIT, `\n  ${NEST}\n    <span class="lab" data-at="L1" data-dy="-34">\\(\\LL{1}\\)</span>\n    <span class="lab" data-at="moon" data-dy="36">Moon</span>\n  </div>`));
-    const labs = await page.evaluate(`[...document.querySelectorAll('${BACK} .lab')].map((l) => l.style.left)`);
+    assert.equal(edited, replaced(page.source, TUBES_UNIT, `\n  ${TUBES}\n    <span class="label" data-at="L1" data-dy="-34">\\(\\LL{1}\\)</span>\n    <span class="label" data-at="moon" data-dy="36">Moon</span>\n  </div>`));
+    const labs = await page.evaluate(`[...document.querySelectorAll('${BACK} .label')].map((l) => l.style.left)`);
     assert.equal(labs.length, 2);
     assert.ok(labs.every((l) => l && l !== '0px'), `the labels are at ${labs}`);
     await tap(page, 'L1');
     await tap(page, 'Moon');
     assert.equal(await render(page), page.source);
     await tap(page, 'Live');
-    assert.equal(await render(page), replaced(page.source, NEST, NEST.replace('>', ' data-live>')));
+    assert.equal(await render(page), replaced(page.source, TUBES, TUBES.replace('>', ' data-live>')));
     await undo(page);
     await tap(page, 'Edit Window…');
     assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-mask-bar[open]')`), true);
@@ -303,14 +305,17 @@ for (const platform of PLATFORMS) {
     await exec(page, 'insert.backdrop');
     await page.waitFor(`document.querySelectorAll('.beeson-backdrop-gallery [data-tile]').length >= 3`);
     const tiles = await page.evaluate(`[...document.querySelectorAll('.beeson-backdrop-gallery [data-tile]')].map((t) => t.dataset.tile)`);
-    for (const name of ['nest', 'tubes', 'wideRibbon']) assert.ok(tiles.includes(name), `the gallery does not have ${name}`);
+    for (const name of ['tubes', 'wideRibbon']) assert.ok(tiles.includes(name), `the gallery does not have ${name}`);
     // each tile is drawn on two canvases of its own, outside Beeson.backdrops
     assert.ok((await page.evaluate(`document.querySelectorAll('.beeson-backdrop-gallery [data-tile] canvas').length`)) >= 6);
     const count = await page.evaluate('Beeson.backdrops.length');
-    await click(page, '.beeson-backdrop-gallery [data-tile="nest"]');
+    await click(page, '.beeson-backdrop-gallery [data-tile="wideRibbon"]');
     await frames(page);
     const edited = await render(page);
-    assert.equal(edited, replaced(page.source, BARE, GROUND));
+    // the window of the tile is fitted to the box of the slide, which is narrower than the box of the tile
+    const added = edited.match(/<section>\n  (<div class="backdrop" data-backdrop="wideRibbon"[^>]*>)<\/div>\n  <h2>A content slide without a backdrop<\/h2>/)[1];
+    assert.match(added, /^<div class="backdrop" data-backdrop="wideRibbon" data-cx="[-\d.]+" data-cy="[-\d.]+" data-half="[\d.]+">$/);
+    assert.equal(edited, replaced(page.source, BARE, `<section>\n  ${added}</div>\n  <h2>A content slide without a backdrop</h2>`));
     assert.deepEqual(await selected(page), ['backdrop']);
     assert.equal(await page.evaluate('Beeson.backdrops.length'), count + 1);
     assert.equal(await undoLabel(page), 'Undo Add Backdrop');
@@ -320,11 +325,11 @@ for (const platform of PLATFORMS) {
     await frames(page);
     await click(page, await at(page, 0.7, 0.6));
     await exec(page, 'insert.backdrop');
-    await page.waitFor(`!!document.querySelector('.beeson-backdrop-gallery [data-tile="tubes"]')`);
-    await click(page, '.beeson-backdrop-gallery [data-tile="tubes"]');
+    await page.waitFor(`!!document.querySelector('.beeson-backdrop-gallery [data-tile="wideRibbon"]')`);
+    await click(page, '.beeson-backdrop-gallery [data-tile="wideRibbon"]');
     await frames(page);
     const tag = (await render(page)).match(/<h2>A content slide with a backdrop<\/h2>[\s\S]*?(<div class="backdrop"[^>]*>)/)[1];
-    assert.match(tag, /^<div class="backdrop" data-scene="tubes" data-cx="[-\d.]+" data-cy="[-\d.]+" data-half="[\d.]+">$/);
+    assert.match(tag, /^<div class="backdrop" data-backdrop="wideRibbon" data-cx="[-\d.]+" data-cy="[-\d.]+" data-half="[\d.]+">$/);
     assert.equal(await undoLabel(page), 'Undo Replace Backdrop');
     assert.equal((await live(page)).count, 1);
   });
@@ -344,16 +349,16 @@ for (const platform of PLATFORMS) {
     await drag(page, grip, { dx: -200 * (await scale(page)), dy: 0 });
     await frames(page);
     const edited = await render(page);
-    const tag = edited.match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0];
-    assert.match(tag, /^<div class="backdrop" data-scene="nest" data-cx="[\d.]+" data-cy="0" data-half="0\.5" style="translate: -200px 0px; width: 920px; height: 1080px">$/);
+    const tag = tubesTag(edited);
+    assert.match(tag, /^<div class="backdrop" data-backdrop="tubes" data-cx="[\d.]+" data-cy="0" data-half="0\.5" style="translate: -200px 0px; width: 920px; height: 1080px">$/);
     assert.ok(Math.abs(Number(tag.match(/data-cx="([^"]+)"/)[1]) - (0.97 - 100 / 1080)) < 1e-3, tag);
-    assert.equal(edited, replaced(page.source, NEST, tag));
+    assert.equal(edited, replaced(page.source, TUBES, tag));
     const now = await page.evaluate(moon);
     assert.ok(Math.abs(now.x - before.x) < 1 && Math.abs(now.y - before.y) < 1, `the Moon moved from ${JSON.stringify(before)} to ${JSON.stringify(now)}`);
     assert.equal(await undoLabel(page), 'Undo Resize Backdrop');
     await checkEdit(page, edited);
     await exec(page, 'slide.reset');
-    assert.doesNotMatch((await render(page)).match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0], /style=/);
+    assert.doesNotMatch(tubesTag((await render(page))), /style=/);
   });
 
   test(`the Slide pane and the Format menu reach the backdrop of a slide (${platform})`, async () => {
@@ -363,7 +368,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const titles = await page.evaluate(`[...document.querySelectorAll('${PANEL} h5')].map((h) => h.textContent)`);
     assert.ok(titles.includes('Backdrop'), `the Slide pane has ${titles}`);
-    assert.ok((await page.evaluate(`document.querySelector('${PANEL}').textContent`)).includes('Lyapunov Families'));
+    assert.ok((await page.evaluate(`document.querySelector('${PANEL}').textContent`)).includes('Cislunar Manifolds'));
     await tap(page, 'Select');
     assert.deepEqual(await selected(page), ['backdrop']);
     for (const [id, label] of [['backdrop.edit', 'Edit Window'], ['backdrop.fitWindow', 'Fit Window'], ['backdrop.preview', 'Preview']]) {
@@ -374,7 +379,8 @@ for (const platform of PLATFORMS) {
     await page.evaluate('Reveal.slide(2)');
     await frames(page);
     await tap(page, 'Add Backdrop…');
-    assert.equal(await page.evaluate(`!!document.querySelector('.beeson-backdrop-gallery')`), true);
+    // the gallery is drawn once the files of its drawings are answered, e.g. brand/transfer.js
+    await page.waitFor(`!!document.querySelector('.beeson-backdrop-gallery')`);
     await press(page, 'Escape');
     assert.equal(await render(page), page.source);
   });
@@ -386,7 +392,7 @@ for (const platform of PLATFORMS) {
     const ROWS = '.beeson-edit-objects .row';
     const rowsOf = () => page.evaluate(`[...document.querySelectorAll('${ROWS}')].map((r) => [r.dataset.kind, r.querySelector('.name').textContent, r.getAttribute('aria-selected')])`);
     const names = await rowsOf();
-    assert.deepEqual(names.at(-1).slice(0, 2), ['Backdrop', 'Backdrop: Lyapunov Families']);
+    assert.deepEqual(names.at(-1).slice(0, 2), ['Backdrop', 'Backdrop: Cislunar Manifolds']);
     assert.equal(names.filter((r) => r[0] === 'Backdrop').length, 1);
     const rowAt = (i) => page.evaluate(`(() => { const r = [...document.querySelectorAll('${ROWS}')].at(${i}).getBoundingClientRect(); return { x: r.left + r.width / 3, y: r.top + r.height / 2 }; })()`);
     await click(page, await rowAt(-1));
@@ -403,19 +409,19 @@ for (const platform of PLATFORMS) {
     await drag(page, await rowAt(0), { dy: from.y - top.y + 30 });
     await frames(page);
     assert.equal((await rowsOf()).at(-1)[0], 'Backdrop');
-    assert.ok(!(await render(page)).includes(`${NEST}</div>\n  <h2>`), 'the heading was written behind the backdrop');
+    assert.ok(!(await render(page)).includes(`${TUBES}</div>\n  <h2>`), 'the heading was written behind the backdrop');
     // the padlock of the row locks the backdrop
     await page.evaluate(`[...document.querySelectorAll('${ROWS}')].at(-1).querySelector('.lock').click()`);
     await frames(page);
     const edited = await render(page);
-    assert.equal(edited.match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0], NEST.replace('>', ' data-locked>'));
+    assert.equal(tubesTag(edited), TUBES.replace('>', ' data-locked>'));
     assert.equal(await undoLabel(page), 'Undo Lock');
   });
 
   test(`Zoom In, Zoom Out, Fit Window, the marks of a cut edge, and Duplicate act on a selected backdrop (${platform})`, async () => {
     const page = await backdropPage(platform, 1);
     await click(page, await at(page, 0.7, 0.6));
-    const half = (h) => replaced(page.source, NEST, NEST.replace('data-half="0.5"', `data-half="${h}"`));
+    const half = (h) => replaced(page.source, TUBES, TUBES.replace('data-half="0.5"', `data-half="${h}"`));
     await exec(page, 'backdrop.zoomIn');
     assert.equal(await render(page), half('0.4'));
     assert.equal(await undoLabel(page), 'Undo Zoom In');
@@ -437,10 +443,10 @@ for (const platform of PLATFORMS) {
     await exec(page, 'backdrop.fitWindow');
     await frames(page);
     const fit = await render(page);
-    const tag = fit.match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0];
-    assert.match(tag, /^<div class="backdrop" data-scene="nest" data-cx="[-\d.]+" data-cy="[-\d.]+" data-half="[\d.]+">$/);
-    assert.notEqual(tag, NEST);
-    assert.equal(fit, replaced(page.source, NEST, tag));
+    const tag = tubesTag(fit);
+    assert.match(tag, /^<div class="backdrop" data-backdrop="tubes" data-cx="[-\d.]+" data-cy="[-\d.]+" data-half="[\d.]+">$/);
+    assert.notEqual(tag, TUBES);
+    assert.equal(fit, replaced(page.source, TUBES, tag));
     assert.equal(await undoLabel(page), 'Undo Fit Window');
     await undo(page);
     assert.equal(await render(page), page.source);
@@ -448,7 +454,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'edit.duplicate');
     await frames(page);
     const dup = await render(page);
-    assert.equal(dup, replaced(page.source, NEST_UNIT, NEST_UNIT + NEST_UNIT));
+    assert.equal(dup, replaced(page.source, TUBES_UNIT, TUBES_UNIT + TUBES_UNIT));
     assert.deepEqual(await selected(page), ['backdrop']);
     assert.equal(await page.evaluate(`document.querySelectorAll('${BACK}').length`), 2);
     await checkEdit(page, dup);
