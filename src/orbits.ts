@@ -208,13 +208,6 @@ export function ramp(a: number, b: number, factor: number): number[] {
   return out;
 }
 
-// count values from a to b, crowded toward a with the exponent p
-export function spaced(a: number, b: number, count: number, p: number): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < count; i++) out.push(a + (b - a) * Math.pow(i / (count - 1), p));
-  return out;
-}
-
 // x of the collinear point L1, L2, or L3 at the mass ratio mu, by Newton on the force balance along
 // the x axis, from the leading terms of the series of each point in mu
 export function lagrange(n: 1 | 2 | 3, mu = MU): number {
@@ -245,25 +238,6 @@ export function lyapunovFamily(n: 1 | 2, amplitudes: number[], h: number, start 
   const lead = ramp(start, amplitudes[0], 1.2);
   const values = lead.concat(amplitudes).map((A) => xL + sign * A);
   return family(guess, 0, values, [4], [3], h, () => 0.3, () => 6, lead.length);
-}
-
-// the distant retrograde orbits over the distances given of the crossing on the Earth side of the
-// Moon. the seed is the Keplerian speed in the rotating frame
-export function droFamily(distances: number[], h: number): Member[] {
-  const guess = (x0: number) => {
-    const d = 1 - MU - x0;
-    const s = new Float64Array(6);
-    s[0] = x0;
-    s[4] = Math.sqrt(MU / d) + d;
-    return s;
-  };
-  const tmin = (x0: number) => {
-    const d = 1 - MU - x0;
-    return (0.4 * Math.PI) / (Math.sqrt(MU / (d * d * d)) + 1);
-  };
-  const lead = ramp(0.02, distances[0], 1.12);
-  const values = lead.concat(distances).map((d) => 1 - MU - d);
-  return family(guess, 0, values, [4], [3], h, tmin, (x0) => 10 * tmin(x0), lead.length);
 }
 
 // the whole orbit from its half, mirrored in the x axis
