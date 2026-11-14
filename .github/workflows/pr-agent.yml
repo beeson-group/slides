@@ -27,11 +27,13 @@ jobs:
   pr_agent_job:
     # a bot does not review the work of a bot. Anyone can comment on a pull request of a public
     # repository, hence a command in a comment is taken only from an owner, a member, or a
-    # collaborator
+    # collaborator, and only on a pull request, since the action reads the number of an issue as
+    # the number of a pull request
     if: >-
       ${{ github.event.sender.type != 'Bot' &&
       (github.event_name != 'issue_comment' ||
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) }}
+      (github.event.issue.pull_request &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
