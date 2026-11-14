@@ -3,9 +3,10 @@
 The members are read from broucke-input.tyd of the TyCHO Broucke example through build.py of the
 same folder, whose read_input() checks the SHA-256 of the file and whose declare_frames() declares
 the frame tree. The positions are stored in the rotating-pulsating frame and are taken to the other
-frames through this tree. Run it from any folder as
+frames through this tree. TyCHO is looked for in the folder named by the variable TYCHO, and else in
+a checkout next to this repository. Run it from the folder of this repository as
 
-    uv run --project /Users/claudiovestini/git/tycho/code python /Users/claudiovestini/git/slides/demo/broucke.py
+    uv run --project ../tycho/code python demo/broucke.py
 
 and the file is written next to this script.
 """
@@ -13,6 +14,7 @@ and the file is written next to this script.
 import importlib.util
 import itertools
 import json
+import os
 import pathlib
 import sys
 
@@ -21,7 +23,8 @@ import pytycho as ty
 from pytycho._evaluate import Context, FrameTree
 from pytycho._thin import _segment_distance
 
-BROUCKE = pathlib.Path("/Users/claudiovestini/git/tycho/code/examples/broucke")
+TYCHO = pathlib.Path(os.environ.get("TYCHO", pathlib.Path(__file__).resolve().parents[2] / "tycho"))
+BROUCKE = TYCHO / "code" / "examples" / "broucke"
 OUTPUT = pathlib.Path(__file__).resolve().parent / "broucke-sample.js"
 # the frame keys of the file, mapped to frames of the TyCHO frame tree declared in build.py
 FRAMES = {
