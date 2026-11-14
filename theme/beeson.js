@@ -1,4 +1,4 @@
-/*! beeson.js 0.9.0-beta.1, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
+/*! beeson.js 0.9.0-beta.2, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
 "use strict";
 (() => {
   // src/backdrops.ts
@@ -5448,7 +5448,7 @@ void main() {
     preview,
     fitWindow,
     refreshChrome,
-    version: "0.9.0-beta.1"
+    version: "0.9.0-beta.2"
   };
   window.Beeson = Beeson;
 })();
