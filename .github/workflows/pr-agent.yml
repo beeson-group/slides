@@ -32,7 +32,7 @@ jobs:
       startsWith(github.event.comment.body, '/') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     # a new push to a pull request cancels the review of the commit before it, since it would
     # describe and review a head that no longer exists. The issue number of a pull request is
     # its number, hence a run that a comment started shares the group with the runs of the same
