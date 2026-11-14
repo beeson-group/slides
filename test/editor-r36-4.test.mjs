@@ -18,8 +18,8 @@ const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
 const TILES = '.beeson-backdrop-gallery [data-tile]';
 const MENU = '.beeson-edit-menu.select';
-const KEYS = ['logo', 'nest', 'tubes', 'wideRibbon', 'broucke'];
-const LIST = ['Beeson Logo', 'Lyapunov Families', 'Cislunar Manifolds', 'Earth Manifolds', 'Broucke Families'];
+const KEYS = ['logo', 'tubes', 'wideRibbon', 'broucke'];
+const LIST = ['Beeson Logo', 'Cislunar Manifolds', 'Earth Manifolds', 'Broucke Families'];
 const LOGO_TITLE = 'brand/transfer.js is not found next to the deck';
 const BROUCKE_TITLE = 'demo/broucke-sample.js is not found next to the deck';
 
@@ -95,12 +95,12 @@ for (const platform of PLATFORMS) {
     const list = await openList(page);
     assert.deepEqual(list.map((e) => e.key), KEYS);
     assert.deepEqual(list.map((e) => e.name), LIST);
-    assert.deepEqual(list.map((e) => e.disabled), [true, false, false, false, true]);
+    assert.deepEqual(list.map((e) => e.disabled), [true, false, false, true]);
     assert.equal(list[0].title, LOGO_TITLE);
-    assert.equal(list[4].title, BROUCKE_TITLE);
+    assert.equal(list[3].title, BROUCKE_TITLE);
     assert.match(list[0].text, /File not found/);
-    assert.match(list[4].text, /File not found/);
-    assert.ok(list.slice(1, 4).every((e) => e.title === e.name && !/File not found/.test(e.text)));
+    assert.match(list[3].text, /File not found/);
+    assert.ok(list.slice(1, 3).every((e) => e.title === e.name && !/File not found/.test(e.text)));
     // a dimmed tile is not focused by a key, and a click on it adds no backdrop
     assert.equal(await page.evaluate(`(() => { const b = document.querySelector('${TILES}[data-tile="broucke"]'); b.focus(); return document.activeElement === b; })()`), false);
     for (const key of ['broucke', 'logo']) {
@@ -120,7 +120,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, TALK, 0);
     await selectBackdrop(page);
     const items = await popupItems(page, 'Drawing');
-    assert.deepEqual(items, LIST.map((name, i) => [name, i === 0 || i === 4]));
+    assert.deepEqual(items, LIST.map((name, i) => [name, i === 0 || i === 3]));
     await page.evaluate(`[...document.querySelectorAll('${MENU} .item')].find((i) => i.textContent.includes('Broucke')).setAttribute('data-pick', '')`);
     await click(page, `${MENU} .item[data-pick]`);
     await frames(page);
@@ -132,7 +132,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Space');
     await page.waitFor(`!!document.querySelector('${MENU}')`);
     await press(page, 'Home');
-    assert.equal(await highlighted(page), 'Lyapunov Families');
+    assert.equal(await highlighted(page), 'Cislunar Manifolds');
     await press(page, 'End');
     assert.equal(await highlighted(page), 'Earth Manifolds');
     const seen = [];
@@ -143,7 +143,7 @@ for (const platform of PLATFORMS) {
     assert.ok(seen.every((n) => n !== 'Beeson Logo' && n !== 'Broucke Families'), seen.join(', '));
     await press(page, 'Home');
     await press(page, 'b');
-    assert.equal(await highlighted(page), 'Lyapunov Families');
+    assert.equal(await highlighted(page), 'Cislunar Manifolds');
     // Enter runs the drawing of the backdrop, which changes nothing
     await press(page, 'Enter');
     await frames(page);
@@ -159,18 +159,18 @@ for (const platform of PLATFORMS) {
     assert.equal(failures(page, 'demo/broucke-sample.js'), 1, page.errors.join('\n'));
   });
 
-  test(`a talk with a Broucke drawing of its own file offers Broucke Families from this file, with the Family popup as it was (${platform})`, async (t) => {
+  test(`a talk with a Broucke drawing of its own file offers Broucke Families from this file, with the popups of the drawing of the deck as they were (${platform})`, async (t) => {
     const page = await load(t, platform, OWN, 1);
     const list = await openList(page);
     assert.deepEqual(list.map((e) => e.name), LIST);
-    assert.deepEqual(list.map((e) => e.disabled), [true, false, false, false, false]);
+    assert.deepEqual(list.map((e) => e.disabled), [true, false, false, false]);
     assert.equal(list[0].title, LOGO_TITLE);
-    assert.equal(list[4].title, 'Broucke Families');
+    assert.equal(list[3].title, 'Broucke Families');
     await click(page, `${TILES}[data-tile="broucke"]`);
     await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`);
     await frames(page);
     const text = await render(page);
-    assert.match(text, /<div class="backdrop" data-trajectories="\.\.\/\.\.\/demo\/broucke-sample\.js" data-trajectories-select="frame=pulsating,family=7"[^>]*><\/div>\s*<h2>A content slide without a backdrop/);
+    assert.match(text, /<div class="backdrop" data-trajectories="\.\.\/\.\.\/demo\/broucke-sample\.js" data-trajectories-select="family=7,branch=periapsis,frame=pulsating"[^>]*><\/div>\s*<h2>A content slide without a backdrop/);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Add Backdrop');
     await undo(page);
     assert.equal(await render(page), page.source);
@@ -187,7 +187,7 @@ for (const platform of PLATFORMS) {
     await page.evaluate('Reveal.slide(2)');
     await frames(page);
     await selectBackdrop(page);
-    assert.deepEqual((await popupItems(page, 'Family')).map((i) => i[0]), ['Family 7', 'Family 7 (Inertial)', 'Family 11', 'Family 11 (Inertial)', 'Families 7 and 11', 'Families 7 and 11 (Inertial)']);
+    assert.deepEqual((await popupItems(page, 'Family')).map((i) => i[0]), ['7', '11', '7/11']);
     await press(page, 'Escape');
     assert.equal(await render(page), page.source);
   });

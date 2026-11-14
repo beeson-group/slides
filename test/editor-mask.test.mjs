@@ -20,7 +20,7 @@ const PANEL = '#beeson-edit-panel-format';
 const DARK = '<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">';
 const LIGHT = '<img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">';
 const WHITE_FIGURE = '<img class="white-figure" src="../../demo/figure-light.png" alt="A white raster figure">';
-const NEST = '<div class="backdrop" data-backdrop="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const TUBES = '<div class="backdrop" data-backdrop="tubes" data-cx="0.97" data-cy="0" data-half="0.5">';
 const IMG = 'section.present figure.figure-box img.for-dark';
 const BAR = 'dialog.beeson-mask-bar';
 
@@ -212,10 +212,11 @@ for (const platform of PLATFORMS) {
     assert.equal(await editing(page), false);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-mask-cut').length`), 0);
     const edited = await render(page);
-    const tag = edited.match(/<div class="backdrop" data-backdrop="nest"[^>]*>/)[0];
-    assert.match(tag, /^<div class="backdrop" data-backdrop="nest" data-cx="[\d.]+" data-cy="0" data-half="0\.25">$/);
-    assert.notEqual(tag, NEST);
-    assert.equal(edited, replaced(page.source, NEST, tag));
+    // the second drawing of tubes in the deck, after the one of the closing slide
+    const tag = edited.match(/<div class="backdrop" data-backdrop="tubes"[^>]*>/g)[1];
+    assert.match(tag, /^<div class="backdrop" data-backdrop="tubes" data-cx="[\d.]+" data-cy="0" data-half="0\.25">$/);
+    assert.notEqual(tag, TUBES);
+    assert.equal(edited, replaced(page.source, TUBES, tag));
     const view = () => page.evaluate(`(() => { const o = Beeson.backdrops.find((b) => b.el.matches('section.present .backdrop')); return o.view; })()`);
     assert.equal((await view()).half, 0.25);
     // an undo draws the window of the file again, with its labels

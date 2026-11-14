@@ -18,7 +18,7 @@ const MENU = '.beeson-edit-menu.select';
 const TITLE = '<section class="title">';
 const SECTION = '<section class="section">';
 const STEPS = '<h2>Show your steps one at a time';
-const NEST = '<div class="backdrop" data-backdrop="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const TUBES = '<div class="backdrop" data-backdrop="tubes" data-cx="0.97" data-cy="0" data-half="0.5">';
 
 let browser;
 let server;
@@ -129,14 +129,14 @@ async function checkHistory(page, text) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`Broucke Families chosen on the Lyapunov Families of slide 3 takes off the window, writes the motion of the entry, and is whole in its box (${platform})`, async (t) => {
+  test(`Broucke Families chosen on the Cislunar Manifolds of slide 3 takes off the window, writes the motion of the entry, and is whole in its box (${platform})`, async (t) => {
     const page = await load(t, platform, 2);
     await selectBackdrop(page);
     await chooseDrawing(page, 'Broucke Families', page.source);
     const text = await render(page);
     const tag = tagOf(text, STEPS);
     for (const name of ['data-cx', 'data-cy', 'data-half', 'data-backdrop']) assert.equal(attr(tag, name), null, `${name} is kept in ${tag}`);
-    assert.equal(attr(tag, 'data-trajectories-select'), 'frame=pulsating,family=7');
+    assert.equal(attr(tag, 'data-trajectories-select'), 'family=7,branch=periapsis,frame=pulsating');
     assert.equal(attr(tag, 'data-duration'), '3');
     assert.equal(attr(tag, 'data-stagger'), '0.6');
     assert.doesNotMatch(backdropOf(text, STEPS), /class="label"/);
@@ -150,7 +150,7 @@ for (const platform of PLATFORMS) {
     await checkHistory(page, text);
   });
 
-  test(`Beeson Logo chosen on the Lyapunov Families of slide 3 writes the fitted window and the 20 s of the entry (${platform})`, async (t) => {
+  test(`Beeson Logo chosen on the Cislunar Manifolds of slide 3 writes the fitted window and the 20 s of the entry (${platform})`, async (t) => {
     const page = await load(t, platform, 2);
     await selectBackdrop(page);
     await chooseDrawing(page, 'Beeson Logo', page.source);
@@ -169,16 +169,16 @@ for (const platform of PLATFORMS) {
     await checkHistory(page, text);
   });
 
-  test(`Lyapunov Families chosen on the Broucke backdrop of slide 2 writes the fitted window and takes off the motion of the file (${platform})`, async (t) => {
+  test(`Cislunar Manifolds chosen on the Broucke backdrop of slide 2 writes the fitted window and takes off the motion of the file (${platform})`, async (t) => {
     const page = await load(t, platform, 1);
     await selectBackdrop(page);
-    await chooseDrawing(page, 'Lyapunov Families', page.source);
+    await chooseDrawing(page, 'Cislunar Manifolds', page.source);
     const text = await render(page);
     const tag = tagOf(text, SECTION);
-    assert.equal(attr(tag, 'data-backdrop'), 'nest');
+    assert.equal(attr(tag, 'data-backdrop'), 'tubes');
     for (const name of ['data-trajectories', 'data-trajectories-select', 'data-duration', 'data-stagger']) assert.equal(attr(tag, name), null, `${name} is kept in ${tag}`);
     const v = await fit(page);
-    assert.ok(Math.abs(v.cx - 0.936) < 0.01 && Math.abs(v.half - 0.296) < 0.01, `the fitted window is ${js(v)}`);
+    assert.ok(Math.abs(v.cx - 0.276) < 0.01 && Math.abs(v.half - 1.418) < 0.01, `the fitted window is ${js(v)}`);
     for (const [k, name] of [['cx', 'data-cx'], ['cy', 'data-cy'], ['half', 'data-half']]) {
       assert.ok(Math.abs(Number(attr(tag, name)) - v[k]) < 0.001, `${name}="${attr(tag, name)}" for the fitted ${v[k]}`);
     }
@@ -205,9 +205,9 @@ for (const platform of PLATFORMS) {
     await selectBackdrop(page);
     await chooseDrawing(page, 'Broucke Families', page.source);
     const drawing = await render(page);
-    await choosePopup(page, 'Family', 'Family 11 (Inertial)', drawing);
+    await choosePopup(page, 'Family', '11', drawing);
     const family = await render(page);
-    assert.equal(tagOf(family, STEPS), tagOf(drawing, STEPS).replace('frame=pulsating,family=7', 'frame=inertial,family=11'));
+    assert.equal(tagOf(family, STEPS), tagOf(drawing, STEPS).replace('family=7,branch=periapsis,frame=pulsating', 'family=11,frame=pulsating'));
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Family');
     await choosePopup(page, 'Colormap', 'Plasma', family);
     const colormap = await render(page);
@@ -224,9 +224,9 @@ for (const platform of PLATFORMS) {
   test(`between two named scenes the Drawing popup keeps the window, the labels, and the motion (${platform})`, async (t) => {
     const page = await load(t, platform, 2);
     await selectBackdrop(page);
-    await chooseDrawing(page, 'Cislunar Manifolds', page.source);
+    await chooseDrawing(page, 'Earth Manifolds', page.source);
     const text = await render(page);
-    assert.equal(text, page.source.replace(NEST, NEST.replace('nest', 'tubes')));
+    assert.equal(text, page.source.replace(TUBES, TUBES.replace('tubes', 'wideRibbon')));
     assertFields(await fields(page), tagOf(text, STEPS));
     await checkHistory(page, text);
   });

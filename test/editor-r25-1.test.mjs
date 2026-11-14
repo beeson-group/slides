@@ -92,7 +92,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'backdrop.select');
     await frames(page);
     const items = await drawingItems(page);
-    assert.deepEqual(items, ['Beeson Logo', 'Lyapunov Families', 'Cislunar Manifolds', 'Earth Manifolds', 'Broucke Families', 'mark'], 'the popup leaves out an entry whose file is not found');
+    assert.deepEqual(items, ['Beeson Logo', 'Cislunar Manifolds', 'Earth Manifolds', 'Broucke Families', 'mark'], 'the popup leaves out an entry whose file is not found');
     assert.ok((await requested(page)).length > 0, 'the popup does not read the files');
     assert.deepEqual(errors(page).filter((e) => !FILES.test(e)), []);
   });
