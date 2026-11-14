@@ -141,8 +141,8 @@ test('every animation of a slide plays on after a flip of the mode, with the key
         assert.ok(await page.evaluate(flip), `${deck}, slide ${i + 1}: the flip with the ${how} is a view transition`);
         // the flip takes 450 ms, but the mode is set only once the old view is captured, over a second
         // later on a slow runner. the end of the flip is thus waited for, and an animation is read
-        // again after it. a slow runner may hold a video for a moment, hence the animations are read
-        // until each has advanced, for up to 5 s
+        // again after it. a slow runner may hold a video, e.g. for seconds at the seek of its loop,
+        // hence the animations are read until each has advanced, for up to 60 s
         const flipped = `Beeson.theme.get() !== '${theme}' && !document.documentElement.matches('.to-dark, .to-light')`;
         const started = Date.now();
         if (!(await page.waitFor(flipped, 60000).then(() => true, () => false))) {
@@ -161,7 +161,7 @@ test('every animation of a slide plays on after a flip of the mode, with the key
         }
         if (Date.now() - started > longest.ms) longest = { ms: Date.now() - started, at: `${deck}, slide ${i + 1}, ${how}, ${before.map((a) => a.kind).join(' ')}` };
         let after = await page.evaluate(animations);
-        for (let wait = 0; wait < 5000 && after.some((a, k) => !a.ended && a.at === before[k]?.at); wait += 250) {
+        for (let wait = 0; wait < 60000 && after.some((a, k) => !a.ended && a.at === before[k]?.at); wait += 250) {
           await sleep(250);
           after = await page.evaluate(animations);
         }
