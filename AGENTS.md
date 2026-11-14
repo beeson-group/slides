@@ -72,7 +72,7 @@ In a talk, `npm run check`, `npm run pdf`, and `npm run pptx` need only Node.js 
 
 ## Reviewing a pull request
 
-PR-Agent reviews in the workflow `pr-agent` every pull request that a branch of this repository opens, and it reads this file as its review context, this section included. A pull request from a fork is reviewed only after a person with write access comments a command, and a pull request of a bot is not reviewed.
+PR-Agent reviews in the workflow `pr-agent` every pull request that a branch of this repository opens, and it reads this file as its review context, this section included. It does not take an event that a bot sends. A pull request from a fork is reviewed only after a person with write access comments a command, and a command of a person with write access reviews any pull request, one that a bot authored included.
 
 - Treat the hard invariants above as the review criteria, and name the invariant that a finding breaks. A change that breaks one is a finding to fix before the pull request is merged, not a suggestion.
 - Do not suggest a change in `theme/vendor/`, which is vendored with its license, or in `theme/beeson.js` or `theme/editor.js`, which are compiled and committed on purpose.

@@ -9,71 +9,87 @@ name: pr-agent
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
-  issue_comment:  # zizmor: ignore[dangerous-triggers] a command is taken only from an owner, a member, or a collaborator, see the guard below
+  issue_comment:  # zizmor: ignore[dangerous-triggers] a comment is taken only from a person with write access, see the authorize job
     types: [created]
 
-# the token of the job comments on the pull request, and it does not need more than that
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-
 jobs:
-  pr_agent_job:
-    # a bot does not review the work of a bot. Anyone can comment on a pull request of a public
-    # repository, hence a run is started by a comment only on a pull request, only when it opens
-    # with a command, and only from an owner, a member, or a collaborator, since the action reads
-    # the number of an issue as the number of a pull request. A comment without a command starts
-    # nothing, hence it does not cancel the review that is running either. A pull request from a
-    # fork is skipped here, since its token is read-only and it carries no secret, and only a
-    # command of a person with write access reviews it, with the token and the secrets of this
-    # repository
+  # an event that a bot sends does not start a review. A pull request from a fork is left to a
+  # command of a person with write access, since the event of the fork carries a read-only token
+  # and the secrets stay in this repository, where the command then runs. A comment is taken
+  # only on a pull request and only from an owner, a member, or a collaborator, since the
+  # action reads the number of an issue as the number of a pull request
+  authorize:
     if: >-
       ${{ github.event.sender.type != 'Bot' &&
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository) &&
       (github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))) }}
+    # the job reads the permission of the sender, and it does not need more than that
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      authorized: ${{ steps.check.outputs.authorized }}
+    steps:
+      # the association of a comment and the role of the sender say nothing about the access to
+      # this repository, and the body of a comment may open with a space, hence the trimmed
+      # body and the effective permission are checked in this job, which carries neither a
+      # secret nor a concurrency group, so a comment that is not a command of a person with
+      # write access never cancels the review that is running
+      - name: Check the comment and the permission of the sender
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENDER: ${{ github.event.sender.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          trimmed="${COMMENT_BODY#"${COMMENT_BODY%%[![:space:]]*}"}"
+          authorized=false
+          if [ "${{ github.event_name }}" != issue_comment ] || [[ "$trimmed" == /* ]]; then
+            perm="$(gh api "repos/${{ github.repository }}/collaborators/$SENDER/permission" --jq .permission)"
+            case "$perm" in write | maintain | admin) authorized=true ;; esac
+          fi
+          echo "authorized=$authorized" >> "$GITHUB_OUTPUT"
+
+  # the review runs only on an event that the job above authorized, hence a comment that is
+  # not authorized never reaches the group below and never cancels a review that is running
+  pr_agent_job:
+    needs: authorize
+    if: needs.authorize.outputs.authorized == 'true'
+    # the token of the job comments on the pull request, and it does not need more than that
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     timeout-minutes: 45
     # a new push to a pull request cancels the review of the commit before it, since it would
     # describe and review a head that no longer exists. The issue number of a pull request is
     # its number, hence a run that a comment started shares the group with the runs of the same
-    # pull request. The group sits on the job and not on the workflow, since the workflow gives
-    # it to every run that is started, also to one whose job a comment without a command skips,
-    # and such a run would cancel the review that is running
+    # pull request
     concurrency:
       group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
       cancel-in-progress: true
     steps:
-      # the association of a comment and the role of the sender say nothing about their access to
-      # this repository, hence the effective permission is checked before the step that holds the
-      # NRP key. A person without write access, an org member with read access above all, then
-      # starts a run in which the step of the key is skipped
-      - name: Check the sender's permission
-        id: permission
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SENDER: ${{ github.event.sender.login }}
-        run: |
-          perm="$(gh api "repos/${{ github.repository }}/collaborators/$SENDER/permission" --jq .permission)"
-          echo "permission=$perm" >> "$GITHUB_OUTPUT"
       - name: PR Agent action step
         id: pragent
-        if: ${{ contains(fromJSON('["write", "maintain", "admin"]'), steps.permission.outputs.permission) }}
         uses: docker://pragent/pr-agent:0.50.0-github_action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GLM-5.3 reviews, and Qwen3.8-Flash-Next takes a call that fails. The gateway takes the
           # reasoning of a model out of the answer, hence the commands receive clean JSON. A
-          # prompt is fitted into 64k tokens, and a call may think for up to ten minutes
+          # prompt is fitted into 64k tokens, and a call may think for up to ten minutes. A call
+          # of the primary that runs out of time goes to the fallback at once, since a second
+          # attempt of ten minutes would burn a third of the job
           config.model: "openai/glm-5"
           config.fallback_models: '["openai/qwen3"]'
           config.custom_model_max_tokens: "1000000"
           config.max_model_tokens: "64000"
           config.ai_timeout: "600"
+          config.retry_same_model_on_timeout: "false"
           OPENAI.API_BASE: "https://ellm.nrp-nautilus.io/v1"
           OPENAI.KEY: ${{ secrets.NRP_API_KEY }}
           github_action_config.auto_describe: "true"
