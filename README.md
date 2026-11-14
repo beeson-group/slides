@@ -60,7 +60,7 @@ If you want to help us with improving this tool, here is how you can get set up:
    npm run typecheck
    node --test test/editor-keys.test.mjs
    ```
-5. Take screenshots of every slide (which your agents can check from the `check/` folder), export to PDF.
+5. Automated script for taking screenshots of every slide (which your agents can check from the `check/` folder), and export to PDF.
    ```sh
    npm run check
    npm run pdf
