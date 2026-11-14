@@ -33,7 +33,7 @@ export function install(app: App): void {
     menu: { bar: 'Edit', group: 'find', order: 40 },
     run: (_, arg) => finder.show('find', queryOf(arg)),
   });
-  // with the panel closed, the match found is selected in its block, as after Find Next in Keynote
+  // with the panel closed, the match found is selected in its text element, as after Find Next in Keynote
   c.define({
     id: 'find.next',
     label: 'Find Next',
@@ -52,7 +52,7 @@ export function install(app: App): void {
     enabled: () => !!finder.query,
     run: () => finder.step(-1, !finder.open),
   });
-  // Use Selection for Find of Keynote: the text selected in a block becomes the query
+  // Use Selection for Find of Keynote: the text selected in a text element becomes the query
   const selected = () => getSelection()?.toString().trim() ?? '';
   c.define({
     id: 'find.useSelection',

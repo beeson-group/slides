@@ -89,14 +89,14 @@ const word = (page) => page.evaluate(`(() => {
 })()`);
 
 // the state after a key: the file, the label of the last entry of the history, the number of
-// blocks of the slide, the selection, and whether the caret is in the paragraph
+// children of the slide, the selection, and whether the caret is in the paragraph
 const outcome = async (page) => ({
   text: await render(page),
   undo: await undoLabel(page),
   ...(await page.evaluate(`(() => {
     const p = Reveal.getCurrentSlide().querySelector(':scope > p'), s = getSelection(), a = document.activeElement;
     return {
-      blocks: Reveal.getCurrentSlide().children.length,
+      children: Reveal.getCurrentSlide().children.length,
       selected: window.BeesonEditor.selection().map((el) => el.tagName.toLowerCase()),
       focus: a === document.body ? 'body' : a.tagName.toLowerCase() + (a.isContentEditable ? ' editable' : ''),
       caret: !!(p && s.rangeCount && p.contains(s.anchorNode) && a.contains(s.anchorNode)),

@@ -16,7 +16,7 @@ import { fragmentRoot, mergePairing, pairFragment, parseFragment } from './fragm
 import { elementText, layoutText, textStyle, type ElementKind, type ElementOptions, type NewLayout } from './templates.ts';
 
 // what the document model is given by the editor. tags are the start tags changed since the last
-// save, changed is called after each change, and restore puts a block back with its formulas
+// save, changed is called after each change, and restore puts a text element back with its formulas
 export type DocHost = {
   source(): Source | null;
   pairing(): Pairing | null;
@@ -351,16 +351,16 @@ export class Doc {
     return node;
   }
 
-  // the content of a block set to a text with each formula as its TeX, as one entry of the history
-  async setContent(block: Element, content: string, label = 'content'): Promise<void> {
-    const before = contentWithTex(block);
+  // the content of a text element set to a text with each formula as its TeX, as one entry of the history
+  async setContent(textEl: Element, content: string, label = 'content'): Promise<void> {
+    const before = contentWithTex(textEl);
     const put = async (c: string) => {
-      if (this.host.restore) await this.host.restore(block, c);
-      else await setContentWithTex(block, c);
+      if (this.host.restore) await this.host.restore(textEl, c);
+      else await setContentWithTex(textEl, c);
       this.host.changed();
     };
     await put(content);
-    this.host.record({ label, undo: () => put(before), redo: () => put(content), els: [block] });
+    this.host.record({ label, undo: () => put(before), redo: () => put(content), els: [textEl] });
   }
 
   // takes el off the page, with the text of its unit. its unit is then left out of the file
@@ -432,7 +432,7 @@ export class Doc {
     parent.insertBefore(node, before && before.parentNode === parent ? before : null);
     // every step is shown while the deck is edited, which reveal.js marks only on the fragments of
     // its start, hence the highlights of a new slide are colored once its fragments are marked. an
-    // element is left unmarked, since a marked paragraph is not a body paragraph of text/blocks.ts
+    // element is left unmarked, since a marked paragraph is not a body paragraph of text/elements.ts
     if (node.localName === 'section') for (const f of node.querySelectorAll('.fragment')) f.classList.add('visible');
     const mj = window.MathJax;
     if (mj?.typesetPromise) await mj.typesetPromise([node]);

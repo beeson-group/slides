@@ -119,18 +119,18 @@ for (const platform of PLATFORMS) {
 }
 
 // the shown element of selector whose text holds needle, as an expression
-const blockOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
+const textElementOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
 
 // the caret put at the mark | of at, e.g. 'where |', into the block of selector, by a click into the
 // block and a collapse of the selection in the first text node that holds the text around the mark
 async function caretAt(page, selector, at) {
   const needle = at.replace('|', '');
   const k = at.indexOf('|');
-  const point = await page.evaluate(`(() => { const r = ${blockOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 4, y: r.top + r.height / 2 }; })()`);
+  const point = await page.evaluate(`(() => { const r = ${textElementOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 4, y: r.top + r.height / 2 }; })()`);
   await click(page, point);
   await frames(page);
   await page.evaluate(`(() => {
-    const el = ${blockOf(selector, needle)};
+    const el = ${textElementOf(selector, needle)};
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const i = n.data.indexOf(${js(needle)});
@@ -233,7 +233,7 @@ for (const platform of PLATFORMS) {
   test(`3: an item and a paragraph emptied in the editor are saved empty, and the item is drawn without its dash outside the editor (${platform})`, async (t) => {
     const page = await load(t, platform, DECK, 0);
     for (const [selector, needle] of [[`${SLIDE} li`, 'Two'], [`${SLIDE} > p`, 'Gone soon']]) {
-      const at = await page.evaluate(`(() => { const r = ${blockOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2 }; })()`);
+      const at = await page.evaluate(`(() => { const r = ${textElementOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2 }; })()`);
       await click(page, at);
       await frames(page);
       await press(page, 'End');
@@ -257,7 +257,7 @@ for (const platform of PLATFORMS) {
 // the block of selector with the text needle emptied by a click into it, End, a Backspace for each
 // character, and Esc
 async function empty(page, selector, needle) {
-  const at = await page.evaluate(`(() => { const r = ${blockOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2 }; })()`);
+  const at = await page.evaluate(`(() => { const r = ${textElementOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2 }; })()`);
   await click(page, at);
   await frames(page);
   await press(page, 'End');

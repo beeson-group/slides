@@ -54,12 +54,12 @@ async function load(t, platform) {
 const TABLE = `document.querySelector('.reveal section.present table')`;
 const size = (page) => page.evaluate(`[${TABLE}.rows.length, ${TABLE}.rows[0].cells.length]`);
 const texts = (page) => page.evaluate(`[...${TABLE}.rows].map((tr) => [...tr.cells].map((c) => c.textContent.trim()))`);
-// the row and column of the cell of the caret, or null, the cell selected as a block, and the
+// the row and column of the cell of the caret, or null, the cell selected as a range, and the
 // elements selected
 const where = (page) => page.evaluate(`(() => {
   const c = document.activeElement?.closest?.('td, th');
   const at = c ? [[...${TABLE}.rows].indexOf(c.parentElement), [...c.parentElement.cells].indexOf(c)] : null;
-  return { at, block: !!document.querySelector('.beeson-table-bars .cell.block:not([hidden])'), selected: window.BeesonEditor.selection().map((e) => e.tagName) };
+  return { at, range: !!document.querySelector('.beeson-table-bars .cell.range:not([hidden])'), selected: window.BeesonEditor.selection().map((e) => e.tagName) };
 })()`);
 
 // the caret at the end of the text of the cell B2, as after a click into it
@@ -84,7 +84,7 @@ const ADDS = [
 const IDS = { 'Alt+ArrowUp': 'table.rowAbove', 'Alt+ArrowDown': 'table.rowBelow', 'Alt+ArrowLeft': 'table.columnBefore', 'Alt+ArrowRight': 'table.columnAfter' };
 // after the undo of an add with the caret in a cell, from the menu as from a key, the caret is back
 // in the cell B2 (R19.3)
-const UNDONE = { at: [1, 1], block: false, selected: [] };
+const UNDONE = { at: [1, 1], range: false, selected: [] };
 
 // item 1: with the caret in a cell, the keys did nothing on Windows and Linux, although the menu of
 // the cell lists them
@@ -103,7 +103,7 @@ test('Alt with an arrow adds a row or a column with the caret in a cell, as one 
     await wait(page);
     assert.deepEqual(await size(page), shape, `the table after ${key}`);
     assert.equal(await undoLabel(page), `Undo ${label}`);
-    assert.deepEqual(await where(page), { at, block: false, selected: [] }, `the caret after ${key}`);
+    assert.deepEqual(await where(page), { at, range: false, selected: [] }, `the caret after ${key}`);
     const added = await render(page);
     await undo(page);
     await wait(page);
@@ -170,11 +170,11 @@ for (const platform of PLATFORMS) {
       await undo(page);
       await undo(page);
     }
-    // the cell selected as a block by Esc
+    // the cell selected as a range by Esc
     await caretInB2(page);
     await press(page, 'Escape');
     await wait(page);
-    assert.equal(await page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.block:not([hidden])')`), true, 'Esc does not select the cell');
+    assert.equal(await page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.range:not([hidden])')`), true, 'Esc does not select the cell');
     await watched(page);
     const url = await where();
     await press(page, 'Alt+ArrowLeft');

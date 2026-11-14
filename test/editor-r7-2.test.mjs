@@ -134,7 +134,7 @@ async function choose(page, bar, ...path) {
 // a trusted click on the button labeled label of the open dialog with class name
 async function cardButton(page, name, label) {
   const at = await page.evaluate(`(() => {
-    const b = [...document.querySelectorAll('dialog.beeson-edit-card.${name}:not([hidden]) button')].find((b) => b.textContent === ${js(label)});
+    const b = [...document.querySelectorAll('dialog.beeson-edit-dialog.${name}:not([hidden]) button')].find((b) => b.textContent === ${js(label)});
     if (!b) return null;
     const r = b.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -145,7 +145,7 @@ async function cardButton(page, name, label) {
 }
 
 const card = (page, name) => page.evaluate(`(() => {
-  const c = document.querySelector('dialog.beeson-edit-card.${name}');
+  const c = document.querySelector('dialog.beeson-edit-dialog.${name}');
   return c && !c.hidden ? { title: c.querySelector('h3').textContent, text: c.querySelector('p')?.textContent ?? '', buttons: [...c.querySelectorAll('button')].map((b) => b.textContent) } : null;
 })()`);
 
@@ -468,18 +468,18 @@ for (const platform of PLATFORMS) {
     await written(page, [name]);
     await page.goto(page.url);
     await page.waitFor(ready);
-    await page.waitFor(`(() => { const b = document.querySelector('dialog.beeson-edit-card:not([hidden]) button.primary'); return b?.textContent === ${js(`Open ${name}`)}; })()`);
-    const shown = await page.evaluate(`(() => { const c = [...document.querySelectorAll('dialog.beeson-edit-card')].find((c) => !c.hidden); return { title: c.querySelector('h3').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement.textContent, text: c.querySelector('p').textContent }; })()`);
+    await page.waitFor(`(() => { const b = document.querySelector('dialog.beeson-edit-dialog:not([hidden]) button.primary'); return b?.textContent === ${js(`Open ${name}`)}; })()`);
+    const shown = await page.evaluate(`(() => { const c = [...document.querySelectorAll('dialog.beeson-edit-dialog')].find((c) => !c.hidden); return { title: c.querySelector('h3').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement.textContent, text: c.querySelector('p').textContent }; })()`);
     assert.equal(shown.title, 'Choose the file of this deck');
     assert.deepEqual(shown.buttons, [`Open ${name}`, 'Choose editor-layouts.html…']);
     assert.equal(shown.focused, `Open ${name}`);
     assert.match(shown.text, new RegExp(`Open ${name.replace(/\./g, '\\.')}, the file of this deck that you chose on `));
-    const at = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-card:not([hidden]) button.primary').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const at = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-dialog:not([hidden]) button.primary').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, at);
     await page.waitFor(`window.BeesonEditor.status().state === 'loaded'`);
     assert.equal(await page.evaluate('window.__picked ?? false'), false);
     assert.deepEqual((await status(page)).problems, []);
-    assert.equal(await page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-card')].some((c) => !c.hidden)`), false);
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-dialog')].some((c) => !c.hidden)`), false);
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page).filter((e) => !e.includes('offline')), []);
   });

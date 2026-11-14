@@ -230,7 +230,7 @@ test('a dialog keeps Tab inside, answers with the button pressed, and gives the 
   await press(page, 'Space');
   await page.waitFor(`window.answer !== 'none'`);
   assert.equal(await page.evaluate('window.answer'), 'delete');
-  assert.equal(await page.evaluate(`document.querySelectorAll('dialog.beeson-edit-card[open]').length`), 0);
+  assert.equal(await page.evaluate(`document.querySelectorAll('dialog.beeson-edit-dialog[open]').length`), 0);
   assert.deepEqual(page.errors, []);
 });
 

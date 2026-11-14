@@ -339,7 +339,7 @@ async function choose(page, path) {
   await page.send('DOM.setFileInputFiles', { files: [path], objectId: result.objectId });
 }
 
-const ASK = 'dialog.beeson-edit-card.beeson-poster-ask[open]';
+const ASK = 'dialog.beeson-edit-dialog.beeson-poster-ask[open]';
 
 // state video-capture-poster of round 2: in a deck opened from a file, the page has an origin of
 // its own, which the video of the folder does not share, hence the browser kept the frames of the

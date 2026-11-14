@@ -57,7 +57,7 @@ const TEXTS = `(() => {
   const s = document.querySelector('.reveal .slides'), S = s.getBoundingClientRect(), k = S.width / s.offsetWidth;
   const px = (r) => ({ top: (r.top - S.top) / k, bottom: (r.bottom - S.top) / k, left: (r.left - S.left) / k, right: (r.right - S.left) / k });
   const c = Reveal.getCurrentSlide();
-  return [...c.querySelector('.block').children, ...c.querySelectorAll(':scope > p')].map((e) => {
+  return [...c.querySelector('.title-text').children, ...c.querySelectorAll(':scope > p')].map((e) => {
     const range = document.createRange();
     range.selectNodeContents(e);
     const lines = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map(px);

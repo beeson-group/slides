@@ -1,9 +1,9 @@
 // a `.surface`: the graph z = f(x, y) of a function of surfaces.ts over its rectangle, drawn with
 // three.js under an orbit camera that turns slowly and is turned by a drag. its state is set by the
 // fragments of its slide with data-surface-state, and a change of state is animated. a state shows
-// one or more sheets, i.e. layers of the function, each raised by its own lift and colored with the
-// ramp of its layer. the heights and the lift of a sheet are morphed, and its colors are blended
-// into those of its next layer. a sheet that is added or removed is faded, and the camera is moved
+// one or more sheets, each a height of the function raised by its own lift and colored with its
+// own ramp. the heights and the lift of a sheet are morphed, and its colors are blended into those
+// of its next ramp. a sheet that is added or removed is faded, and the camera is moved
 // to frame the sheets shown. the points are faded in on the first sheet, dimmed unless named by
 // data-surface-points of the fragment, and filled in orange or violet when named by
 // data-surface-accent or data-surface-violet. the cutting plane is slid to its level, where the curve of intersection is drawn. three.js is the global THREE of
@@ -13,7 +13,7 @@
 
 import type * as Three from 'three';
 import { FUNCTION_NAMES, RAMPS, levelCurves, sample, surfaceFunction } from './surfaces.ts';
-import type { State, SurfaceFunction } from './surfaces.ts';
+import type { Height, Sheet, State, SurfaceFunction } from './surfaces.ts';
 
 declare global {
   interface Window {
@@ -35,13 +35,13 @@ type Paint = { key: string; texture: Three.DataTexture; range: [number, number] 
 // one sheet of a surface. the mesh is drawn after the depth mesh, which writes only the depth of
 // the same triangles, so that a sheet faded out shows its nearest side alone. A and B are the
 // heights at the start and the end of a change, nondimensional, paintA and paintB are blended by
-// tone, which is moved from toneFrom to 1, and layer is the layer of the state, empty when the
-// sheet is not part of it
+// tone, which is moved from toneFrom to 1, and height is the height of the state that the sheet
+// draws, null when the sheet is not part of it
 type SheetMesh = {
   group: Three.Group;
   mesh: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   depth: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
-  layer: string;
+  height: Height | null;
   A: Float64Array;
   B: Float64Array;
   from: Pose;
@@ -139,7 +139,7 @@ void main() {
 
 // the color of the height in the ramps A and B, each spread over its range of heights and blended
 // by uTone, a Lambert shade under a fixed light, and grid lines of constant x and y, antialiased
-// over one pixel. the height is that of the layer, before the lift of the sheet
+// over one pixel. the height is that of the function, before the lift of the sheet
 const SURFACE_FRAGMENT = /* glsl */ `
 uniform sampler2D uRampA;
 uniform sampler2D uRampB;
@@ -297,9 +297,9 @@ export class Surface {
   private zoom: number;
   private canvas: HTMLCanvasElement;
   private labels: HTMLElement[];
-  private grids = new Map<string, Float64Array>();
+  private grids = new Map<Height, Float64Array>();
   private normals = new WeakMap<Float64Array, Float32Array>();
-  private ranges = new Map<string, [number, number]>();
+  private ranges = new Map<Height, [number, number]>();
   private textures = new Map<string, Three.DataTexture>();
   private zeros = new Float64Array((CELLS + 1) ** 2);
   // the color of the grid lines of every sheet
@@ -370,10 +370,12 @@ export class Surface {
     el.setAttribute('data-prevent-swipe', '');
     this.labels = [...el.querySelectorAll<HTMLElement>('.label')];
 
-    for (const [name, f] of Object.entries(fn.layers)) {
+    // the heights drawn at the states, each sampled once. a state is built from the attributes of
+    // the element alone here, since a fragment changes only the cut of a state
+    for (const f of new Set(Object.values(fn.states).flatMap((state) => state({ ...el.dataset }).sheets.map((sheet) => sheet.height)))) {
       const g = sample(f, fn.x, fn.y, CELLS, CELLS, fn.floor);
-      this.grids.set(name, g);
-      this.ranges.set(name, this.range(g));
+      this.grids.set(f, g);
+      this.ranges.set(f, this.range(g));
       for (const z of g) { if (z < this.zmin) this.zmin = z; if (z > this.zmax) this.zmax = z; }
     }
     this.pointA = new Float64Array(fn.points.length);
@@ -405,8 +407,14 @@ export class Surface {
     this.fit();
   }
 
-  // the color range of a layer: from its 5th percentile, so that the deep wells do not take the
-  // whole ramp, to its maximum, in world units. a flat layer is drawn in the middle of the ramp
+  // the first sheet of the initial state of the function
+  private initialSheet(): Sheet {
+    return this.fn.states[this.fn.initial]({ ...this.el.dataset }).sheets[0];
+  }
+
+  // the color range of the sampled heights g: from their 5th percentile, so that the deep wells do
+  // not take the whole ramp, to their maximum, in world units. a flat sheet is drawn in the middle
+  // of the ramp
   private range(g: Float64Array): [number, number] {
     const sorted = Float64Array.from(g).sort();
     const lo = sorted[Math.floor(0.05 * (sorted.length - 1))] * this.zscale, hi = sorted[sorted.length - 1] * this.zscale;
@@ -430,15 +438,15 @@ export class Surface {
     return t;
   }
 
-  // the ramp of a layer and its range in world units. an unknown ramp is reported, and the ramp
+  // the ramp of sheet and its range in world units. an unknown ramp is reported, and the ramp
   // theme is drawn in its place
-  private paintOf(layer: string): Paint {
-    let { ramp, range } = this.fn.tones[layer] ?? { ramp: 'theme' };
+  private paintOf(sheet: Sheet): Paint {
+    let { ramp, range } = sheet.tone;
     if (ramp !== 'theme' && !(ramp in RAMPS)) {
-      console.error(`beeson: unknown ramp "${ramp}" of the layer ${layer} of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(', ')}`);
+      console.error(`beeson: unknown ramp "${ramp}" of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(', ')}`);
       ramp = 'theme';
     }
-    const world: [number, number] = range ? [range[0] * this.zscale, range[1] * this.zscale] : (this.ranges.get(layer) ?? [-1, 1]);
+    const world: [number, number] = range ? [range[0] * this.zscale, range[1] * this.zscale] : (this.ranges.get(sheet.height) ?? [-1, 1]);
     return { key: `${ramp}|${world.join('|')}`, texture: this.texture(ramp), range: world };
   }
 
@@ -466,7 +474,7 @@ export class Surface {
     }
     geometry.setIndex(new THREE.BufferAttribute(index, 1));
     const cell = Math.max(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]) / 24;
-    const paint = this.paintOf(fn.initial);
+    const paint = this.paintOf(this.initialSheet());
     // the two materials share their uniforms, and their shaders are compiled into one program,
     // thus the depth mesh writes the depths at which the mesh is drawn
     const uniforms = {
@@ -499,7 +507,7 @@ export class Surface {
     group.visible = false;
     this.scene.add(group);
     const hidden: Pose = { lift: 0, alpha: 0 };
-    const s: SheetMesh = { group, mesh, depth, layer: '', A: this.zeros, B: this.zeros, from: hidden, to: hidden, shown: hidden, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
+    const s: SheetMesh = { group, mesh, depth, height: null, A: this.zeros, B: this.zeros, from: hidden, to: hidden, shown: hidden, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
     this.sheets[i] = s;
     return s;
   }
@@ -673,25 +681,25 @@ export class Surface {
     this.pointKey = pointKey;
     this.stateName = name;
     this.el.dataset.shown = name;
-    const s = this.zscale, sheets = state.sheets.length ? state.sheets : [{ layer: this.fn.initial, lift: 0 }], main = sheets[0];
-    const grid = (layer: string) => this.grids.get(layer) ?? this.zeros;
-    // a sheet added or removed while the first sheet is given another layer is split from it or
+    const s = this.zscale, sheets = state.sheets.length ? state.sheets : [this.initialSheet()], main = sheets[0];
+    const grid = (height: Height) => this.grids.get(height) ?? this.zeros;
+    // a sheet added or removed while the first sheet is given another height is split from it or
     // merged into it, and otherwise it is grown from a flat sheet at the lift of the first sheet or
     // flattened onto it, so that it is raised or lowered together with the framing of the camera
     const first = this.sheets[0];
-    const merge = !first || first.layer !== main.layer;
+    const merge = !first || first.height !== main.height;
     const was = first ? { heights: this.current(first), lift: first.shown.lift, paint: first.tone < 0.5 ? first.paintA : first.paintB } : null;
     const lifts: number[] = [];
     for (let i = 0; i < Math.max(this.sheets.length, sheets.length); i++) {
       const sheet = this.sheet(i), next = sheets[i], seen = sheet.shown.alpha > 0;
       if (!next && !seen) {
-        sheet.layer = '';
+        sheet.height = null;
         sheet.from = sheet.to = sheet.shown;
         continue;
       }
       const heights = this.current(sheet);
       if (next) {
-        const paint = this.paintOf(next.layer);
+        const paint = this.paintOf(next);
         if (seen) {
           sheet.A = heights;
           sheet.from = sheet.shown;
@@ -706,18 +714,18 @@ export class Surface {
           sheet.paintA = sheet.paintB = paint;
           sheet.tone = 1;
         }
-        sheet.B = grid(next.layer);
+        sheet.B = grid(next.height);
         sheet.to = { lift: next.lift * s, alpha: 1 };
-        sheet.layer = next.layer;
+        sheet.height = next.height;
         this.repaint(sheet, paint);
         lifts.push(next.lift * s);
       } else {
         sheet.A = heights;
         sheet.from = sheet.shown;
-        sheet.layer = '';
-        sheet.B = merge ? grid(main.layer) : this.zeros;
+        sheet.height = null;
+        sheet.B = merge ? grid(main.height) : this.zeros;
         sheet.to = { lift: main.lift * s, alpha: 0 };
-        this.repaint(sheet, merge ? this.paintOf(main.layer) : sheet.paintB);
+        this.repaint(sheet, merge ? this.paintOf(main) : sheet.paintB);
       }
     }
     const to: Shown = {
@@ -875,7 +883,7 @@ export class Surface {
   // the level or the heights have changed
   private trace(): void {
     const lead = this.sheet(0);
-    const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.layer}` : '';
+    const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.height ? [...this.grids.keys()].indexOf(lead.height) : -1}` : '';
     if (key === this.drawn) return;
     this.drawn = key;
     const curves = key ? levelCurves(this.current(lead), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];

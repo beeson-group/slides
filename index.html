@@ -29,7 +29,7 @@ try {
 <!-- title: a plate, with the transfer of the group logo traced at the right and the words at the lower left -->
 <section class="title">
   <div class="backdrop" data-trajectories="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128"></div>
-  <div class="block">
+  <div class="title-text">
     <h1 style="translate: 8px -239px">Presenting in HTML</h1>
     <p class="sub" style="translate: 8px -261px">Template for the Beeson group</p>
     <p class="who" style="translate: 8px -54px"><br></p>
@@ -142,9 +142,9 @@ try {
 <section>
   <h2 style="width: 1000px">Embedding 3D elements</h2>
   <p style="width: 1000px">Use <code>three.js</code> elements to enhance your explanations. Think 3B1B. Ask your agent!</p>
-  <div class="math fragment" data-fragment-index="1" data-surface-state="wells" data-highlight="ug" data-tone="blue" style="width: 1000px">\[\class{ug}{U_g} = -(1-\mu)/\rho_1 - \mu/\rho_2,\]</div>
-  <div class="math fragment" data-fragment-index="2" data-surface-state="bowl" data-highlight="uc" data-tone="red" style="margin-top: 0">\[\class{uc}{U_c} = -(x^2 + y^2)/2,\]</div>
-  <div class="math fragment" data-fragment-index="3" data-surface-state="sum" style="margin-top: 0">\[\tilde U = \class{ug}{U_g} + \class{uc}{U_c}.\]</div>
+  <div class="math fragment" data-fragment-index="1" data-surface-state="gravitational" data-highlight="ug" data-tone="blue" style="width: 1000px">\[\class{ug}{U_g} = -(1-\mu)/\rho_1 - \mu/\rho_2,\]</div>
+  <div class="math fragment" data-fragment-index="2" data-surface-state="centrifugal" data-highlight="uc" data-tone="red" style="margin-top: 0">\[\class{uc}{U_c} = -(x^2 + y^2)/2,\]</div>
+  <div class="math fragment" data-fragment-index="3" data-surface-state="effective" style="margin-top: 0">\[\tilde U = \class{ug}{U_g} + \class{uc}{U_c}.\]</div>
   <p class="fragment" data-fragment-index="4" data-unhighlight="ug uc" data-surface-state="extrema">Libration points satisfy \(\nabla \tilde U = 0\). Collinear points are unstable, triangular ones stable.</p>
   <p class="fragment" data-fragment-index="7" data-surface-state="cut" data-C="3.39" style="width: 1222px">The Hill’s region is the set of points satisfying \(-2\tilde U \ge C\).</p>
   <div class="surface" data-function="effective-potential" data-mu="0.05">
@@ -172,7 +172,7 @@ try {
 </tycho-viewer>
 <!-- tycho-viewer end -->
   <div class="foot" style="translate: 1046px -40px">Earth–Moon \(\LL{1}\) Halo family, see <code>demo/tycho-scene.py</code>.</div>
-  <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline blocks. The viewer shows the \(\LL{1}\) halo family of the Earth–Moon system in the rotating frame above, and below in the inertial frames centered on the barycenter and on the Moon. It is a kiosk without controls. While it is in focus, you select a larger or a smaller member with the up and down arrow keys, and you pause it with the space bar.</aside>
+  <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline scripts. The viewer shows the \(\LL{1}\) halo family of the Earth–Moon system in the rotating frame above, and below in the inertial frames centered on the barycenter and on the Moon. It is a kiosk without controls. While it is in focus, you select a larger or a smaller member with the up and down arrow keys, and you pause it with the space bar.</aside>
 </section>
 
 <section>
@@ -195,7 +195,7 @@ try {
 
 <section class="closing">
   <div class="backdrop" data-backdrop="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>
-  <div class="block">
+  <div class="title-text">
     <h1>Thank you</h1>
     <p class="sub">Questions</p>
     <p class="who"><strong>github.com/beeson-group/slides</strong><br>Please use this template. Any contributions are also appreciated :)</p>

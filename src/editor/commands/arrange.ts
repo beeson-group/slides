@@ -1,5 +1,5 @@
 // the commands of the selection on the canvas and of the Arrange menu: Select All, Deselect, the
-// ladder of Esc from a text to its block to nothing, Return into the text of a block, Tab between
+// ladder of Esc from a text to its text element to nothing, Return into the text of a text element, Tab between
 // the elements, the nudges by 1 and 10 slide pixels, and the reset of a place or a width. their keys
 // are run by the one keyboard dispatch of commands.ts
 
@@ -9,7 +9,7 @@ import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, containerOf, frameRect, linesOf, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, turnable } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
-import { followAgain } from '../model/glue.ts';
+import { followAgain } from '../model/attach.ts';
 import { view, xy } from '../canvas/frames.ts';
 import { angleOf, drawnUnder, fieldOf, groupAngle, groupOf, leaveGroup, selectIn } from './order.ts';
 import { cornerBoxOf } from './align.ts';
@@ -21,7 +21,7 @@ import { injectStyle } from '../ui/dom.ts';
 // a faint step is drawn faint while every step is shown at full opacity, as in theme/beeson.css
 const CSS = `html.beeson-editing .reveal .slides section .fragment.faint { opacity: 0.25 !important; }`;
 
-// the objects that Faint acts on: the figure of a picture selected inside it, a block, a line
+// the objects that Faint acts on: the figure of a picture selected inside it, a text element, a line
 const faintEls = (app: App): Element[] => movedEls(app).filter((el) => el.localName !== 'section' && !!app.pairing?.elements.get(el)?.open);
 const isFaint = (app: App): boolean => {
   const els = faintEls(app);
@@ -32,7 +32,7 @@ const isFaint = (app: App): boolean => {
 const PAUSE = 1000;
 
 // whether the focus is on the canvas itself, i.e. on nothing, on a figure, or on the handle of a
-// block, and not on a button of the chrome
+// text element, and not on a button of the chrome
 function onCanvas(): boolean {
   const a = document.activeElement;
   return !a || a === document.body || a.classList.contains('beeson-handle') || (!!a.closest('.reveal .slides') && !a.closest(HOST));
@@ -145,7 +145,7 @@ export function commands(): Command[] {
       id: 'selection.all',
       label: 'Select All',
       keys: { mac: ['Mod+A'], other: ['Mod+A'] },
-      // in a text, the first one selects the text of the block and the next one every element
+      // in a text, the first one selects the text of the text element and the next one every element
       in: ['canvas', 'text'],
       menu: { bar: 'Edit', group: 'select', order: 31 },
       context: ['canvas'],
@@ -182,7 +182,7 @@ export function commands(): Command[] {
     },
     {
       // ⇧⌘A of Deselect in a text, as the item of the menu, which leaves the text with nothing
-      // selected. Esc in a text is Select Block
+      // selected. Esc in a text is Select Text element
       id: 'selection.clearText',
       label: 'Deselect',
       keys: { mac: ['Mod+Shift+A'], other: ['Mod+Shift+A'] },
@@ -209,7 +209,7 @@ export function commands(): Command[] {
     },
     {
       id: 'selection.leaveText',
-      label: 'Select Block',
+      label: 'Select Text Element',
       keys: { mac: ['Escape'], other: ['Escape'] },
       in: ['text'],
       enabled: (app) => !!app.hostOf(document.activeElement),
@@ -220,8 +220,8 @@ export function commands(): Command[] {
       },
     },
     {
-      // Return puts the caret at the end of the text of a block. the command is enabled only on an
-      // element that holds a block, since Keynote offers Edit Text only on an element with text
+      // Return puts the caret at the end of the text of a text element. the command is enabled only on an
+      // element that holds a text element, since Keynote offers Edit Text only on an element with text
       id: 'selection.editText',
       label: 'Edit Text',
       keys: { mac: ['Enter'], other: ['Enter'] },

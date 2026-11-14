@@ -152,7 +152,7 @@ export function install(app: App): void {
 
   // the dialog shown until a file is chosen on file:, where the page cannot read itself. the file of
   // this page opened last is offered first when the browser keeps it for Open Recent
-  const card = new Dialog({
+  const fileDialog = new Dialog({
     title: 'Choose the file of this deck',
     text: '',
     buttons: [{ label: `Choose ${fileName()}…`, value: 'choose', primary: true }],
@@ -163,10 +163,10 @@ export function install(app: App): void {
       return value === 'recent' && last ? openRecent(last) : openFile();
     }),
   });
-  let cardRecent: Recent | null = null;
+  let fileDialogRecent: Recent | null = null;
 
   // the dialog that asks before File > Revert to Saved, as macOS asks in its apps
-  const revertCard = new Dialog({
+  const revertDialog = new Dialog({
     title: 'Do you want to revert to the most recently saved version?',
     text: 'Your current changes will be lost.',
     buttons: [
@@ -184,7 +184,7 @@ export function install(app: App): void {
   const pptxCommand = make('code');
   const pptxBody = make('p');
   pptxBody.append(pptxCommand);
-  const pptxCard = new Dialog({
+  const pptxDialog = new Dialog({
     title: 'Export to PowerPoint',
     text: '',
     body: pptxBody,
@@ -196,7 +196,7 @@ export function install(app: App): void {
     stay: ['copy'],
     onButton: (value) => {
       if (value !== 'copy') return;
-      const button = pptxCard.buttons.get('copy');
+      const button = pptxDialog.buttons.get('copy');
       void navigator.clipboard.writeText(pptxCommand.textContent ?? '').then(
         () => button && (button.textContent = 'Copied'),
         () => {
@@ -209,7 +209,7 @@ export function install(app: App): void {
 
   // the dialog that lists the texts that cannot be edited, opened with Which? after the state
   const problemsList = make('ul');
-  const problemsCard = new Dialog({
+  const problemsDialog = new Dialog({
     title: 'Texts that cannot be edited',
     body: problemsList,
     buttons: [{ label: 'Close', value: 'close', primary: true }],
@@ -240,12 +240,12 @@ export function install(app: App): void {
 
   function showProblems(): void {
     problemsList.replaceChildren(...(app.pairing?.problems ?? []).map((p) => make('li', '', problemText(p))));
-    void problemsCard.open('close');
+    void problemsDialog.open('close');
   }
 
   // the focus goes back to Which? in the menu bar
   function closeProblems(): void {
-    problemsCard.close(null);
+    problemsDialog.close(null);
     const which = document.querySelector<HTMLButtonElement>('.beeson-edit-header button.which');
     if (which && !which.hidden) which.focus();
   }
@@ -255,7 +255,7 @@ export function install(app: App): void {
     if (app.state === 'waiting') return plain('Choose the file of this deck to start editing');
     const pairing = app.pairing;
     if (!pairing) return plain(app.note?.text ?? 'Loading', app.note?.warn ?? false);
-    if (!pairing.blocks.length) return plain('This file is not the deck on the page', true);
+    if (!pairing.texts.length) return plain('This file is not the deck on the page', true);
     const problems = pairing.problems;
     const parts = [app.dirty ? 'Unsaved changes' : app.note?.text ?? 'No unsaved changes'];
     // a warning, e.g. an error of a save or of a draft, is shown with unsaved changes too
@@ -270,8 +270,8 @@ export function install(app: App): void {
     return { text: parts.join('. '), warn: (app.note?.warn ?? false) || problems.length > 0 || app.overflow > 0, title: problems.map(problemText).join('\n') };
   }
 
-  // pairs the text of the file with the page and makes the paired blocks editable. the state
-  // reports the blocks that could not be paired. a fresh file starts the history anew and is
+  // pairs the text of the file with the page and makes the paired text elements editable. the state
+  // reports the text elements that could not be paired. a fresh file starts the history anew and is
   // checked against the edits kept in the storage, and the text of a save is paired again in place
   function open(text: string, fresh = true): void {
     app.tagEdits.clear();
@@ -285,7 +285,7 @@ export function install(app: App): void {
       app.pairing = pair(app.source, app.slides(), mathLookup());
       app.state = 'loaded';
       app.dirty = false;
-      if (!app.pairing.blocks.length) app.pairing.problems.push({ slide: null, tag: 'slides', reason: 'nothing on the page was found in the file' });
+      if (!app.pairing.texts.length) app.pairing.problems.push({ slide: null, tag: 'slides', reason: 'nothing on the page was found in the file' });
     } catch (error) {
       app.source = null;
       app.saved = null;
@@ -347,7 +347,7 @@ export function install(app: App): void {
     app.handle = handle;
     open(text);
     app.follow.read(text);
-    if (app.pairing?.blocks.length) keep(handle);
+    if (app.pairing?.texts.length) keep(handle);
   }
 
   async function openFile(): Promise<void> {
@@ -406,7 +406,7 @@ export function install(app: App): void {
   // the edits that were not saved is not offered after the reload
   async function revert(): Promise<void> {
     if (!app.dirty) return;
-    if ((await revertCard.open('cancel')) !== 'revert') return;
+    if ((await revertDialog.open('cancel')) !== 'revert') return;
     window.clearTimeout(autosaveTimer);
     app.drafts.drop();
     app.dirty = false;
@@ -462,10 +462,10 @@ export function install(app: App): void {
     const name = app.handle?.name ?? fileName();
     const where = location.protocol === 'file:' && name === fileName() ? `, i.e. ${folder()}` : '';
     pptxCommand.textContent = name === 'index.html' ? 'npm run pptx' : `npm run pptx -- ${name}`;
-    pptxCard.text.textContent = `The PowerPoint file is written from the saved ${name} by this command, run in the folder of the deck${where}. It writes slides.pptx, with one click per step.`;
-    const copy = pptxCard.buttons.get('copy');
+    pptxDialog.text.textContent = `The PowerPoint file is written from the saved ${name} by this command, run in the folder of the deck${where}. It writes slides.pptx, with one click per step.`;
+    const copy = pptxDialog.buttons.get('copy');
     if (copy) copy.textContent = 'Copy Command';
-    await pptxCard.open('copy');
+    await pptxDialog.open('copy');
   }
 
   // a copy of the deck with the edits, written into a file chosen with the picker or put into the
@@ -638,7 +638,7 @@ export function install(app: App): void {
     line,
     showProblems,
     closeProblems,
-    problemsShown: () => !problemsCard.el.hidden,
+    problemsShown: () => !problemsDialog.el.hidden,
     askShown: () => !ask.el.hidden,
     cancelAsk: () => ask.close(null),
   };
@@ -648,27 +648,27 @@ export function install(app: App): void {
 
   app.listen('report', () => {
     if (app.state !== 'waiting') {
-      card.close(null);
+      fileDialog.close(null);
       return;
     }
     const where = `${fileName()} in ${folder()}, i.e. the file that is open here`;
     const last = canPick() ? recentsOfPage()[0] ?? null : null;
     const when = last ? new Date(last.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
     const again = last ? ` Open ${last.name}, the file of this deck that you chose on ${when}, or choose it again.` : '';
-    card.text.textContent = canWrite()
+    fileDialog.text.textContent = canWrite()
       ? `A browser writes only to a file that you have chosen. Choose ${where}, and your edits are saved into it.${again}`
       : `This browser does not write to a file by itself. Choose ${where}. A save is then a download of a copy with your edits. Set the browser to ask where to save each download, and you choose ${fileName()} in its folder and replace it.`;
-    if (last !== cardRecent) {
-      cardRecent = last;
-      card.setButtons(last
+    if (last !== fileDialogRecent) {
+      fileDialogRecent = last;
+      fileDialog.setButtons(last
         ? [
           { label: `Open ${last.name}`, title: `Open the file of this deck that you chose on ${when}`, value: 'recent', primary: true },
           { label: `Choose ${fileName()}…`, value: 'choose' },
         ]
         : [{ label: `Choose ${fileName()}…`, value: 'choose', primary: true }]);
-      if (card.shown) card.buttons.get(last ? 'recent' : 'choose')?.focus({ preventScroll: true });
+      if (fileDialog.shown) fileDialog.buttons.get(last ? 'recent' : 'choose')?.focus({ preventScroll: true });
     }
-    if (!card.shown) void card.open(last ? 'recent' : 'choose');
+    if (!fileDialog.shown) void fileDialog.open(last ? 'recent' : 'choose');
   });
   // the list is read after the start, and the dialog is updated with it
   void loadRecents().then(() => app.report()).catch(() => {});

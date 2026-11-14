@@ -26,8 +26,8 @@ export function titled(label: string): string {
 
 const SPELLING_KEY = 'beeson-spelling';
 
-// the switch of the spelling of the browser, which underlines a misspelled word in a block. it is
-// set as spellcheck="false" on the html element of the page, which every block inherits, and the
+// the switch of the spelling of the browser, which underlines a misspelled word in a text element. it is
+// set as spellcheck="false" on the html element of the page, which every text element inherits, and the
 // file is not changed. a field of the editor that asks for spelling itself is switched when it is
 // focused
 function installSpelling(app: App): void {

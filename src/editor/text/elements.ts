@@ -1,10 +1,10 @@
 // the structure of the text of a slide, as in PowerPoint and Keynote: Return splits a paragraph or
-// a list item at the caret, Backspace at the start of a block joins it to the block before, and
-// Delete at its end joins the block after to it. Tab and Shift+Tab change the level of a list item,
+// a list item at the caret, Backspace at the start of a text element joins it to the text element before, and
+// Delete at its end joins the text element after to it. Tab and Shift+Tab change the level of a list item,
 // i.e. move it into a list in the item before or out of its list, and a list is switched between
-// the dash of ul, the numbers of ol, and paragraphs. a block of the file, e.g. an li of a ul, is
+// the dash of ul, the numbers of ol, and paragraphs. a text element of the file, e.g. an li of a ul, is
 // split, joined, and retagged through app.doc, and a nested item, which is part of the content of
-// the block around it, is changed as that content. each command is one entry of the history.
+// the text element around it, is changed as that content. each command is one entry of the history.
 //
 // a place in a text is given as a visible offset, i.e. the characters of the text nodes before it,
 // with a formula, a br, and an img counted as one, since a formula is typeset again from its TeX
@@ -12,7 +12,7 @@
 
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
-import { fileIndexes } from '../layers.ts';
+import { fileIndexes } from '../shown-steps.ts';
 import { tokenize } from '../tokens.ts';
 import { isRuntimeClass } from '../render.ts';
 import { renderTag, stateOf, translateIn, type TagEdit } from '../tags.ts';
@@ -79,7 +79,7 @@ export function pointAt(root: Node, n: number): [Node, number] {
   return [root, root.childNodes.length];
 }
 
-// selects the visible offsets start to end of root, whose block is focused first
+// selects the visible offsets start to end of root, whose text element is focused first
 export function selectIn(root: Element, start: number, end = start): void {
   const host = root.closest('[contenteditable="true"]') as HTMLElement | null;
   host?.focus({ preventScroll: true });
@@ -91,12 +91,12 @@ export function selectIn(root: Element, start: number, end = start): void {
   sel?.addRange(range);
 }
 
-// a range in a block, which a text command works on
+// a range in a text element, which a text command works on
 export type Target = { host: Element; range: Range };
 
-// the blocks of the selected elements: a selected block, each item of a selected list, and the words
+// the text elements of the selected elements: a selected text element, each item of a selected list, and the words
 // of a selected shape, as on a text box or a shape selected as an object in Keynote
-export function selectedBlocks(app: App): Element[] {
+export function selectedTextElements(app: App): Element[] {
   const pairing = app.pairing;
   if (!pairing) return [];
   return app.selection.elements().flatMap((el) => {
@@ -108,7 +108,7 @@ export function selectedBlocks(app: App): Element[] {
 
 let last: Target | null = null;
 
-// the range of the window in a block, or the one last seen in the block of app.selection, e.g.
+// the range of the window in a text element, or the one last seen in the text element of app.selection, e.g.
 // while a menu has the focus
 export function textTarget(app: App): Target | null {
   const sel = window.getSelection();
@@ -122,7 +122,7 @@ export function textTarget(app: App): Target | null {
 }
 
 // the content of the part of root in range as HTML, with each formula as its TeX between its
-// delimiters, as contentWithTex of math.ts gives a whole block
+// delimiters, as contentWithTex of math.ts gives a whole text element
 export function rangeTex(root: Element, range: Range): string {
   const div = document.createElement('div');
   div.append(range.cloneContents());
@@ -203,7 +203,7 @@ function itemAt(app: App): Item | null {
   return { host: t.host, item, nested: item !== t.host, range: t.range };
 }
 
-// a block of the file that is split and joined: a body paragraph, a subheading, or a list item,
+// a text element of the file that is split and joined: a body paragraph, a subheading, or a list item,
 // whose parent takes elements
 function structural(app: App, el: Element | null): boolean {
   const pairing = app.pairing;
@@ -235,7 +235,7 @@ function placeOf(app: App, el: Element): [string, string][] {
   return start?.type === 'start' ? Object.entries(stateOf(start.attrs).style).filter(([n]) => PLACE.includes(n)) : [];
 }
 
-// the start tag of a list of kind made of the block el, with the place of el, and the start tag of
+// the start tag of a list of kind made of the text element el, with the place of el, and the start tag of
 // its item
 function placedList(app: App, el: Element, kind: ListKind): { open: string; li: string } {
   const style = placeOf(app, el).map(([n, v]) => `${n}: ${v}`).join('; ').replace(/"/g, '&quot;');
@@ -270,21 +270,21 @@ function nextOf(app: App, el: Element): Element | null {
 
 const sameKind = (a: Element, b: Element) => (a.localName === 'li') === (b.localName === 'li');
 
-function prevBlock(app: App, el: Element): Element | null {
+function previousElement(app: App, el: Element): Element | null {
   const p = el.previousElementSibling;
   return p && structural(app, p) && sameKind(p, el) ? p : null;
 }
 
-function nextBlock(app: App, el: Element): Element | null {
+function nextElement(app: App, el: Element): Element | null {
   const n = el.nextElementSibling;
   return n && structural(app, n) && sameKind(n, el) ? n : null;
 }
 
-// the block before or after el in one text with it, as text/flow.ts reads it: an item of the same
-// list, or a paragraph of the same column. a block with a translate other than that of the block
+// the text element before or after el in one text with it, as text/flow.ts reads it: an item of the same
+// list, or a paragraph of the same column. a text element with a translate other than that of the text element
 // beside it is a box apart, and the paragraphs made of the items of a moved list are one text
-export function besideBlock(app: App, el: Element, ahead: boolean): Element | null {
-  const n = structural(app, el) ? (ahead ? nextBlock : prevBlock)(app, el) : null;
+export function besideTextElement(app: App, el: Element, ahead: boolean): Element | null {
+  const n = structural(app, el) ? (ahead ? nextElement : previousElement)(app, el) : null;
   return n && (n as HTMLElement).style.translate === (el as HTMLElement).style.translate ? n : null;
 }
 
@@ -328,7 +328,7 @@ function goesOn(list: Element, second: Element | undefined, k: number): void {
   if (list instanceof HTMLOListElement && second && (k > 0 || cutOff.has(list))) cutOff.add(second);
 }
 
-// a list of the file at the level of the blocks, e.g. the ul of a slide or of its div.col
+// a list of the file at the level of the text elements, e.g. the ul of a slide or of its div.col
 const fileList = (app: App, el: Element | null): el is Element => !!el?.matches(LIST) && !!app.pairing?.elements.has(el) && !app.pairing.byLive.has(el);
 
 // the attributes of the start tag of list in the file, apart from start
@@ -382,7 +382,7 @@ async function relist(app: App, el: Element, kind: ListKind): Promise<Element> {
   return el;
 }
 
-// list, an element of a copy of a block, made of kind in place, with its other attributes kept
+// list, an element of a copy of a text element, made of kind in place, with its other attributes kept
 function markList(list: Element, kind: ListKind): void {
   let out = list;
   if (list.localName !== tagOf(kind)) {
@@ -398,8 +398,8 @@ function markList(list: Element, kind: ListKind): void {
 
 // the numbered list of the caret, or the one numbered list selected as an object
 export function startList(app: App): HTMLOListElement | null {
-  const blocks = listBlocks(app);
-  const el = blocks ? (blocks.length === 1 ? blocks[0] : null) : itemAt(app)?.item.parentElement ?? null;
+  const textEls = wholeListTargets(app);
+  const el = textEls ? (textEls.length === 1 ? textEls[0] : null) : itemAt(app)?.item.parentElement ?? null;
   return el instanceof HTMLOListElement && !!app.pairing?.elements.has(el) && !app.pairing.byLive.has(el) ? el : null;
 }
 
@@ -528,7 +528,7 @@ export async function split(app: App): Promise<void> {
   kept();
 }
 
-// the item into which the text of a joined block goes: the last item of the nested lists at the
+// the item into which the text of a joined text element goes: the last item of the nested lists at the
 // end of el, or el
 function joinTarget(el: Element): Element {
   let t = el;
@@ -585,7 +585,7 @@ function joinBack(app: App): Join {
   if (!blank(rangeOf(at.item, null, [at.range.startContainer, at.range.startOffset]))) return null;
   if (at.nested) return { kind: 'outdent' };
   if (!structural(app, at.item)) return null;
-  const before = prevBlock(app, at.item);
+  const before = previousElement(app, at.item);
   if (before) return { kind: 'join', before, after: at.item };
   // a paragraph after a list is taken off, with its text joined onto the last item, as in Keynote.
   // a locked list is left alone, and so is the paragraph after it
@@ -622,7 +622,7 @@ function joinAhead(app: App): Join {
   const at = itemAt(app);
   if (!at || !at.range.collapsed || at.nested || !structural(app, at.item)) return null;
   if (!blank(rangeOf(at.item, [at.range.startContainer, at.range.startOffset], null))) return null;
-  const after = nextBlock(app, at.item);
+  const after = nextElement(app, at.item);
   if (after) return { kind: 'join', before: at.item, after };
   // an empty paragraph before a list is taken off, with the caret at the start of the list, unless
   // the list is locked
@@ -652,7 +652,7 @@ async function drop(app: App, item: Element, to: Element, end: boolean): Promise
 export const canJoinBack = (app: App): boolean => joinBack(app) !== null;
 export const canJoinAhead = (app: App): boolean => joinAhead(app) !== null;
 
-// Backspace at the start of a block joins it to the block before, at the start of a nested item it
+// Backspace at the start of a text element joins it to the text element before, at the start of a nested item it
 // takes the item out of its list, as Shift+Tab does, and at the start of a first item of a list it
 // takes the dash off the item
 export async function joinBackward(app: App): Promise<void> {
@@ -663,7 +663,7 @@ export async function joinBackward(app: App): Promise<void> {
   else if (j?.kind === 'drop') await drop(app, j.item, j.to, j.end);
 }
 
-// Delete at the end of a block joins the block after it to it, and in an empty paragraph before a
+// Delete at the end of a text element joins the text element after it to it, and in an empty paragraph before a
 // list takes the paragraph off
 export async function joinForward(app: App): Promise<void> {
   const j = joinAhead(app);
@@ -807,9 +807,9 @@ export function kindOf(list: Element): ListKind {
   return MARKS.find((m) => list.classList.contains(m)) ?? 'ul';
 }
 
-// the kind of list of a block selected as an element: a body paragraph, or a list of the file that
-// is not inside a block, e.g. the ul of a slide or of its div.col
-function blockList(app: App, el: Element): ListKind | null {
+// the kind of list of a text element selected as an element: a body paragraph, or a list of the file that
+// is not inside a text element, e.g. the ul of a slide or of its div.col
+function wholeListKind(app: App, el: Element): ListKind | null {
   if (el.localName === 'p') return structural(app, el) ? 'none' : null;
   const pairing = app.pairing;
   const parent = el.parentElement;
@@ -817,21 +817,21 @@ function blockList(app: App, el: Element): ListKind | null {
   return kindOf(el);
 }
 
-// the blocks selected as elements, each of which a list is set on as a whole, as on a text box
+// the text elements selected as elements, each of which a list is set on as a whole, as on a text box
 // selected as an object in Keynote, with the words of a selected shape, or null when a selected
-// element is not such a block
-function listBlocks(app: App): Element[] | null {
+// element is not such a text element
+function wholeListTargets(app: App): Element[] | null {
   if (app.selection.kind !== 'elements') return null;
-  const els = app.selection.elements().flatMap((el) => (el.matches('div.shape') ? [...el.children].filter((c) => blockList(app, c) !== null) : [el]));
-  return els.length && els.every((el) => blockList(app, el) !== null) ? els : null;
+  const els = app.selection.elements().flatMap((el) => (el.matches('div.shape') ? [...el.children].filter((c) => wholeListKind(app, c) !== null) : [el]));
+  return els.length && els.every((el) => wholeListKind(app, el) !== null) ? els : null;
 }
 
-// the kind of list at the caret or of the selected blocks, or null where a list is not set, e.g. in
-// a heading, or where the selected blocks differ
+// the kind of list at the caret or of the selected text elements, or null where a list is not set, e.g. in
+// a heading, or where the selected text elements differ
 export function listKind(app: App): ListKind | null {
-  const blocks = listBlocks(app);
-  if (blocks) {
-    const kinds = new Set(blocks.map((el) => blockList(app, el)));
+  const textEls = wholeListTargets(app);
+  if (textEls) {
+    const kinds = new Set(textEls.map((el) => wholeListKind(app, el)));
     return kinds.size === 1 ? [...kinds][0] : null;
   }
   const at = itemAt(app);
@@ -842,8 +842,8 @@ export function listKind(app: App): ListKind | null {
 
 export function canSetList(app: App, kind: ListKind): boolean {
   // a list with a nested list is not made paragraphs, since the nested items would be lost
-  const blocks = listBlocks(app);
-  if (blocks) return kind !== 'none' || blocks.every((el) => !el.querySelector('li :is(ul, ol)'));
+  const textEls = wholeListTargets(app);
+  if (textEls) return kind !== 'none' || textEls.every((el) => !el.querySelector('li :is(ul, ol)'));
   const at = itemAt(app);
   const now = listKind(app);
   if (!at || now === null) return false;
@@ -851,28 +851,28 @@ export function canSetList(app: App, kind: ListKind): boolean {
   return !at.nested && !at.item.querySelector(LIST);
 }
 
-// why a list is not set on the selection, or null without a block
+// why a list is not set on the selection, or null without a text element
 export function listWhy(app: App, label: string): string | null {
   const el = textTarget(app)?.host ?? app.selection.elements()[0];
   if (!el) return null;
   if (el.matches('h1, h2, h3, h4')) return `${label} is not available on a heading, since only a paragraph or a list item is set as a list`;
   if (el.matches('td, th')) return `${label} is not available in a table, since a cell of the theme does not hold a list`;
   if (el.querySelector('li :is(ul, ol)') || itemAt(app)?.item.querySelector(LIST)) return `${label} is not available, since the nested items of the list would be lost`;
-  return `${label} is not available on this block, since only a paragraph or a list item is set as a list`;
+  return `${label} is not available on this text element, since only a paragraph or a list item is set as a list`;
 }
 
 // the list at the caret given the tag of kind. a paragraph becomes a list of one item, and an item
 // of the first level becomes a paragraph, which cuts its list in two
 export async function setList(app: App, kind: ListKind): Promise<void> {
-  const blocks = listBlocks(app);
-  if (blocks) return setBlockList(app, blocks, kind);
+  const textEls = wholeListTargets(app);
+  if (textEls) return setWholeList(app, textEls, kind);
   if (flow.active() && (await setSpanList(app, kind))) return;
   const at = itemAt(app);
   const now = listKind(app);
   if (!at || now === null || now === kind || !canSetList(app, kind)) return;
   const { host, item } = at;
   const offset = offsetIn(item, at.range.startContainer, at.range.startOffset);
-  // the selected text is selected again in the block made
+  // the selected text is selected again in the text element made
   const stop = item.contains(at.range.endContainer) ? offsetIn(item, at.range.endContainer, at.range.endOffset) : offset;
   if (at.nested) {
     const k = itemsOf(host).indexOf(item);
@@ -966,20 +966,20 @@ async function spanParagraphs(app: App, run: Element[], p: [flow.Place, flow.Pla
   return true;
 }
 
-// each selected block given the list of kind as a whole: a paragraph becomes a list of one item, a
+// each selected text element given the list of kind as a whole: a paragraph becomes a list of one item, a
 // list is retagged, and each item of a list becomes a paragraph with the attributes of the item.
-// the blocks made are selected, and the blocks before them again after an undo
-function setBlockList(app: App, blocks: Element[], kind: ListKind): Promise<void> {
+// the text elements made are selected, and the text elements before them again after an undo
+function setWholeList(app: App, textEls: Element[], kind: ListKind): Promise<void> {
   if (!canSetList(app, kind)) return Promise.resolve();
-  return app.history.selecting('List', () => listBlocksAs(app, blocks, kind));
+  return app.history.selecting('List', () => listAsWhole(app, textEls, kind));
 }
 
-async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promise<void> {
+async function listAsWhole(app: App, textEls: Element[], kind: ListKind): Promise<void> {
   // a selected shape stays selected, with its words set as a list
   const shapes = app.selection.elements().filter((el) => el.matches('div.shape'));
   const made: Element[] = [];
-  for (const el of blocks) {
-    const now = blockList(app, el);
+  for (const el of textEls) {
+    const now = wholeListKind(app, el);
     if (now === kind) made.push(el);
     else if (now === 'none') {
       const { base, step, eol } = indentOf(app, el);
@@ -998,10 +998,10 @@ async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promis
   app.selection.set('elements', [...shapes, ...made.filter((el) => !shapes.some((s) => s.contains(el)))]);
 }
 
-// the nested ul lists of the list block made of kind, as a text box of PowerPoint takes a bullet at
+// the nested ul lists of the list made of kind, as a text box of PowerPoint takes a bullet at
 // every level. a nested ol is kept
-async function markNested(app: App, block: Element, kind: ListKind): Promise<void> {
-  for (const li of block.querySelectorAll(':scope > li')) {
+async function markNested(app: App, textEl: Element, kind: ListKind): Promise<void> {
+  for (const li of textEl.querySelectorAll(':scope > li')) {
     if ([...li.querySelectorAll('ul')].every((ul) => kindOf(ul) === kind)) continue;
     const copy = texCopy(li);
     for (const ul of copy.querySelectorAll('ul')) markList(ul, kind);
@@ -1010,7 +1010,7 @@ async function markNested(app: App, block: Element, kind: ListKind): Promise<voi
 }
 
 export function install(app: App): void {
-  injectStyle('blocks', CSS);
+  injectStyle('text-elements', CSS);
   app.history.onSettle(() => keepCounts(app));
   document.addEventListener('selectionchange', () => {
     const sel = window.getSelection();
@@ -1021,7 +1021,7 @@ export function install(app: App): void {
   });
 }
 
-// the paragraph styles of a block of the file: a body paragraph, a small paragraph, a subheading,
+// the paragraph styles of a text element of the file: a body paragraph, a small paragraph, a subheading,
 // a caption, and a footnote, which the theme places at the lower left. Bigger and Smaller step
 // along the sizes of the theme, from a footnote of 28 px to a subheading, and a caption is as
 // large as a small paragraph
@@ -1032,7 +1032,7 @@ const STYLE_CLASSES = { small: 'small', caption: 'caption', footnote: 'foot' } a
 const LADDER: ParagraphStyle[] = ['footnote', 'small', 'body', 'subheading'];
 const rank = (s: ParagraphStyle) => (s === 'caption' ? 1 : LADDER.indexOf(s));
 
-// the style of a block whose classes are those of a style and of the steps, or null
+// the style of a text element whose classes are those of a style and of the steps, or null
 export function styleOf(app: App, el: Element): ParagraphStyle | null {
   const pairing = app.pairing;
   if (!pairing?.byLive.has(el) || el.matches('aside.notes')) return null;
@@ -1047,12 +1047,12 @@ export function styleOf(app: App, el: Element): ParagraphStyle | null {
   return one('p', null) || one('li', null) ? 'body' : null;
 }
 
-// the blocks that a style is set on: the blocks of a text selected over several of them, the block
-// of the text, or the selected blocks
+// the text elements that a style is set on: the text elements of a text selected over several of them, the text element
+// of the text, or the selected text elements
 function chosen(app: App): Element[] {
   const spanned = flow.spanTargets(app).map((t) => t.host);
   const t = spanned.length ? null : textTarget(app);
-  return spanned.length ? spanned : t ? [t.host] : selectedBlocks(app);
+  return spanned.length ? spanned : t ? [t.host] : selectedTextElements(app);
 }
 
 const styled = (app: App): Element[] => chosen(app).filter((el) => styleOf(app, el) !== null);
@@ -1061,8 +1061,8 @@ const styled = (app: App): Element[] => chosen(app).filter((el) => styleOf(app, 
 const ITEM_STYLES: ParagraphStyle[] = ['body', 'small'];
 export const fits = (el: Element, style: ParagraphStyle): boolean => el.localName !== 'li' || ITEM_STYLES.includes(style);
 
-// the style of every chosen block, or null when they differ, e.g. on a heading and a paragraph, as
-// the menu of Keynote does not check a style over blocks of different styles
+// the style of every chosen text element, or null when they differ, e.g. on a heading and a paragraph, as
+// the menu of Keynote does not check a style over text elements of different styles
 export function paragraphStyle(app: App): ParagraphStyle | null {
   const styles = new Set(chosen(app).map((el) => styleOf(app, el)));
   return styles.size === 1 ? [...styles][0] : null;
@@ -1082,16 +1082,16 @@ async function restyle(app: App, el: Element, style: ParagraphStyle, kept: [numb
   return node;
 }
 
-// the style set on the block of the text, whose selection is kept, or on the selected blocks, which
+// the style set on the text element of the text, whose selection is kept, or on the selected text elements, which
 // are selected again after a retag, and after an undo and a redo
 export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphStyle) => ParagraphStyle)): Promise<void> {
   const spanned = flow.active() ? flow.places(app) : null;
   const t = spanned ? null : textTarget(app);
   const kept: [number, number] | null = t && [offsetIn(t.host, t.range.startContainer, t.range.startOffset), offsetIn(t.host, t.range.endContainer, t.range.endOffset)];
-  const blocks = styled(app);
+  const textEls = styled(app);
   const each = async () => {
     const made: Element[] = [];
-    for (const el of blocks) {
+    for (const el of textEls) {
       const now = styleOf(app, el)!;
       const next = typeof style === 'function' ? style(now) : style;
       made.push(next !== now && fits(el, next) ? await restyle(app, el, next, kept) : el);
@@ -1099,9 +1099,9 @@ export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphS
     return made;
   };
   if (spanned) {
-    // a retag makes a new element of a block of the span, in which its place is kept
+    // a retag makes a new element of a text element of the span, in which its place is kept
     const made = await each();
-    const place = ([el, at]: [Element, number]): [Element, number] => [made[blocks.indexOf(el)] ?? el, at];
+    const place = ([el, at]: [Element, number]): [Element, number] => [made[textEls.indexOf(el)] ?? el, at];
     return flow.select(app, place(spanned[0]), place(spanned[1]));
   }
   if (t) return void (await each());
@@ -1111,17 +1111,17 @@ export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphS
   });
 }
 
-// why a style or a step of the size is not set on the blocks of the selection, by the scope rule,
-// or null without a block
+// why a style or a step of the size is not set on the text elements of the selection, by the scope rule,
+// or null without a text element
 export function styleWhy(app: App, label: string, up?: boolean): string | null {
   const t = textTarget(app);
-  const el = t?.host ?? selectedBlocks(app)[0] ?? app.selection.elements()[0];
+  const el = t?.host ?? selectedTextElements(app)[0] ?? app.selection.elements()[0];
   if (!el) return null;
   if (el.matches('h1, h2, h4')) return `${label} is not available on a heading, since the theme sets its size`;
   if (el.matches('td, th')) return `${label} is not available in a table, since the theme sets the size of its cells`;
   if (el.matches('aside.notes')) return `${label} is not available in the notes, which take only bold and italic`;
   const s = styleOf(app, el);
-  if (!s) return `${label} is not available on this block, since only a paragraph or a list item takes a style of the type scale`;
+  if (!s) return `${label} is not available on this text element, since only a paragraph or a list item takes a style of the type scale`;
   if (up === undefined) return null;
   if (el.localName === 'li') return `${label} is not available, since a list item takes only Body and Small`;
   return `${label} is not available, since ${up ? 'Subheading is the largest' : 'Footnote is the smallest'} style of the type scale`;
@@ -1148,7 +1148,7 @@ function ownNodes(el: Element): { own: Node[]; list: Element | null } {
   return { own, list };
 }
 
-// the own text of a block or of a list item, without its nested lists, as HTML with each formula as
+// the own text of a text element or of a list item, without its nested lists, as HTML with each formula as
 // its TeX between its delimiters
 export function ownTex(el: Element): string {
   const { list } = ownNodes(el);
@@ -1156,8 +1156,8 @@ export function ownTex(el: Element): string {
   return rangeTex(el, rangeOf(el, null, end)).trim();
 }
 
-// html written as the own text of el, a block or a list item inside one, with its nested lists kept,
-// through app.doc as the content of its block, as one entry of the history
+// html written as the own text of el, a text element or a list item inside one, with its nested lists kept,
+// through app.doc as the content of its text element, as one entry of the history
 export async function setOwnTex(app: App, el: Element, html: string, label = 'typing'): Promise<void> {
   const host = app.hostOf(el) ?? el;
   if (html === ownTex(el)) return;

@@ -22,7 +22,7 @@ import { groupOf } from './groups.ts';
 export type End = 'from' | 'to';
 // the elements of an object, i.e. an element or the members of a group, and the place of an end in
 // its box
-export type Glue = { els: Element[]; fx: number; fy: number };
+export type Attachment = { els: Element[]; fx: number; fy: number };
 
 // an end is put at the middle of an edge of the box within this distance of it, in slide px
 export const REACH = 16;
@@ -32,9 +32,9 @@ const TEXTS = 'h1, h2, h3, p, ul, ol, dl, pre, blockquote, .caption';
 const MIDDLES: [number, number][] = [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]];
 
 const STYLE = `
-.beeson-glue-target { position: fixed; z-index: 52; pointer-events: none; box-sizing: border-box; border: 2px solid var(--ed-select, #7048e8); border-radius: 2px; }
-.beeson-glue-target[hidden] { display: none; }
-.beeson-glue-target i { position: absolute; width: 7px; height: 7px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--ed-select, #7048e8); border: 1px solid #fff; }
+.beeson-attach-target { position: fixed; z-index: 52; pointer-events: none; box-sizing: border-box; border: 2px solid var(--ed-select, #7048e8); border-radius: 2px; }
+.beeson-attach-target[hidden] { display: none; }
+.beeson-attach-target i { position: absolute; width: 7px; height: 7px; margin: -4.5px 0 0 -4.5px; border-radius: 50%; background: var(--ed-select, #7048e8); border: 1px solid #fff; }
 `;
 
 const attrOf = (end: End) => (end === 'from' ? 'data-from' : 'data-to');
@@ -64,7 +64,7 @@ export const anchorsOf = (slide: Element | null, name: string): Element[] => sho
 
 // whether el takes an attachment: a shape, a picture or a figure, a table, a formula, a QR code, a video, and
 // a text moved as a box, and not a backdrop, a plate, the chrome, or a line
-export function takesGlue(el: Element): boolean {
+export function takesAttachment(el: Element): boolean {
   if (el.matches(`${LINE}, .backdrop, .plate, .foot`)) return false;
   return el.matches(TAKES) || (el.matches(TEXTS) && !!translateOf(el));
 }
@@ -97,7 +97,7 @@ function objectsOf(app: App, skip: Element[]): Element[][] {
   const near = (a: Element, b: Element) => a === b || a.contains(b) || b.contains(a);
   const out: Element[][] = [];
   const seen = new Set<string>();
-  for (const el of movablesOf(app).filter((el) => takesGlue(el) && !skip.some((s) => near(s, el))).reverse()) {
+  for (const el of movablesOf(app).filter((el) => takesAttachment(el) && !skip.some((s) => near(s, el))).reverse()) {
     const id = groupOf(el);
     const members = id ? [...(app.current()?.querySelectorAll(`[data-group~="${CSS.escape(id)}"]`) ?? [])] : [];
     if (id && seen.has(id)) continue;
@@ -112,7 +112,7 @@ function objectsOf(app: App, skip: Element[]): Element[][] {
 // the attachment of an end at p in slide px: the topmost object of the current slide that takes an attachment under
 // p, or else the object with the nearest middle of an edge within REACH, outside skip, with p at the
 // middle of its nearest edge within REACH, or at p. at is the point that the end is put at
-export function glueAt(app: App, p: Point, skip: Element[] = []): { glue: Glue; at: Point } | null {
+export function attachmentAt(app: App, p: Point, skip: Element[] = []): { attachment: Attachment; at: Point } | null {
   const f = frameOf(app);
   let best: { els: Element[]; box: Box; deg: number; q: Point; near: { fx: number; fy: number; d: number } } | null = null;
   for (const els of objectsOf(app, skip)) {
@@ -133,16 +133,16 @@ export function glueAt(app: App, p: Point, skip: Element[] = []): { glue: Glue; 
   const fx = near.d <= REACH ? near.fx : Math.min(1, Math.max(0, (q.x - box.left) / box.width));
   const fy = near.d <= REACH ? near.fy : Math.min(1, Math.max(0, (q.y - box.top) / box.height));
   const g = { els, fx: Number(num(fx)), fy: Number(num(fy)) };
-  return { glue: g, at: turn(box, deg, { x: box.left + g.fx * box.width, y: box.top + g.fy * box.height }) };
+  return { attachment: g, at: turn(box, deg, { x: box.left + g.fx * box.width, y: box.top + g.fy * box.height }) };
 }
 
 // the outline of the element that an end dragged over it is attached to, with the middles of its edges
 let outline: HTMLElement | null = null;
 export function showTarget(app: App, els: Element[] | null): void {
   if (!outline) {
-    injectStyle('glue', STYLE);
+    injectStyle('attach', STYLE);
     outline = document.createElement('div');
-    outline.className = 'beeson-glue-target';
+    outline.className = 'beeson-attach-target';
     outline.innerHTML = '<i></i><i></i><i></i><i></i>';
     document.body.append(outline);
   }
@@ -159,7 +159,7 @@ export function showTarget(app: App, els: Element[] | null): void {
 // or a Patch
 export type Writer = (el: Element, attrs: Record<string, string | null>, translate?: Translate | null) => void;
 
-export const recorded = (app: App): Writer => (el, attrs, translate) => app.doc.setTag(el, { attrs, ...(translate !== undefined ? { translate } : {}) }, 'glue');
+export const recorded = (app: App): Writer => (el, attrs, translate) => app.doc.setTag(el, { attrs, ...(translate !== undefined ? { translate } : {}) }, 'attach');
 
 // the edit written on the page and into the tag edits without an entry of the history, as
 // writePlace of canvas/drag.ts writes a place
@@ -214,11 +214,11 @@ export function writeStroke(write: Writer, svg: Element, s: Stroke): void {
   if (child) write(child, t.attrs);
 }
 
-const glued = (slide: Element | null): Element[] => [...(slide?.querySelectorAll(`${LINE}[data-from], ${LINE}[data-to]`) ?? [])];
+const linesOf = (slide: Element | null): Element[] => [...(slide?.querySelectorAll(`${LINE}[data-from], ${LINE}[data-to]`) ?? [])];
 
 // whether a line of slide names name
 const named = (slide: Element | null, name: string): boolean =>
-  glued(slide).some((svg) => (['from', 'to'] as End[]).some((e) => parseEnd(svg.getAttribute(attrOf(e)))?.name === name));
+  linesOf(slide).some((svg) => (['from', 'to'] as End[]).some((e) => parseEnd(svg.getAttribute(attrOf(e)))?.name === name));
 
 // the name of the object els, i.e. a name that only these elements have, or a new one unique on its
 // slide added to each, e.g. a1
@@ -243,7 +243,7 @@ function tidy(write: Writer, slide: Element | null, name: string): void {
 }
 
 // the end of svg attached to g, or let go with null
-export function setEnd(write: Writer, svg: Element, end: End, g: Glue | null): void {
+export function setEnd(write: Writer, svg: Element, end: End, g: Attachment | null): void {
   const was = parseEnd(svg.getAttribute(attrOf(end)));
   const value = g ? `${nameOf(write, g.els)} ${num(g.fx)} ${num(g.fy)}` : null;
   if (value === svg.getAttribute(attrOf(end))) return;
@@ -252,7 +252,7 @@ export function setEnd(write: Writer, svg: Element, end: End, g: Glue | null): v
 }
 
 // the elements of the object of the attachment of an end, none for an end without an attachment
-export function glueOf(svg: Element, end: End): Element[] {
+export function attachedTo(svg: Element, end: End): Element[] {
   const g = parseEnd(svg.getAttribute(attrOf(end)));
   return g ? anchorsOf(slideOf(svg), g.name) : [];
 }
@@ -262,7 +262,7 @@ export function glueOf(svg: Element, end: End): Element[] {
 // left as they are
 export function follow(app: App, write: Writer): void {
   const slide = app.current();
-  for (const svg of glued(slide)) {
+  for (const svg of linesOf(slide)) {
     if (!svg.isConnected || !app.pairing?.elements.get(svg)?.open) continue;
     const s = strokeAt(svg);
     if (!s || parseFloat((svg as HTMLElement).style.rotate)) continue;
@@ -290,7 +290,7 @@ function letGo(write: Writer, moved: Element[]): void {
   for (const svg of moved) {
     if (!svg.matches(LINE)) continue;
     for (const end of ['from', 'to'] as End[]) {
-      const els = glueOf(svg, end);
+      const els = attachedTo(svg, end);
       const along = els.length && els.every((el) => moved.some((m) => m === el || m.contains(el) || el.contains(m)));
       if (svg.hasAttribute(attrOf(end)) && !along) setEnd(write, svg, end, null);
     }
@@ -366,13 +366,13 @@ export function install(app: App): void {
   app.history.onSettle(() => {
     const p = new Patch(app);
     follow(app, p.write);
-    if (!p.empty) app.history.push({ label: 'glue', undo: () => p.undo(), redo: () => p.redo() });
+    if (!p.empty) app.history.push({ label: 'attach', undo: () => p.undo(), redo: () => p.redo() });
   });
   // an element pushed by typed words, e.g. a table in the flow under a paragraph that wraps, is
   // followed in the entry of the typing. a slide without an attached end is not measured
   const typed = new WeakMap<Entry, Patch>();
   app.history.onTyped((entry) => {
-    if (!glued(app.current()).length) return;
+    if (!linesOf(app.current()).length) return;
     let p = typed.get(entry);
     if (!p) {
       const patch = new Patch(app);

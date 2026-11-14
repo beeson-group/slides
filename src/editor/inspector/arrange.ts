@@ -3,12 +3,12 @@
 // with Flip Horizontal and Flip Vertical for an image, then the order of the elements, Group and
 // Ungroup, Lock and Unlock, and Faint. X and Y are the upper left corner of an element on the
 // slide, as in Keynote and in the readout of a move, and W and H its size, in slide pixels. W and H
-// are set on an image, a video, a QR code, and a tycho viewer, and W alone on a text block, whose
+// are set on an image, a video, a QR code, and a tycho viewer, and W alone on a text element, whose
 // height follows its wrapped text. the size of every other element is set by its layout
 
 import type { App } from '../app.ts';
 import { captionHeight, groupBoxOf, groupFrameOf, heightSet, positionOf, resizable, selectedTargets, sizeOf, sizedTarget, targetsOf } from '../commands/align.ts';
-import { angleOf, gluedLines, groupAngle } from '../commands/order.ts';
+import { angleOf, attachedLines, groupAngle } from '../commands/order.ts';
 import { imageOf, viewerOf } from '../commands/figure.ts';
 import { turnable } from '../canvas/hit.ts';
 import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
@@ -119,8 +119,8 @@ export function arrangePane(app: App, run: Run): Control[] {
           // the angle of a group is that of its first member, which a typed angle turns it to
           value: () => (group() ? groupAngle(app, live()) : shared(liveTurned().map(angleOf))),
           commit: (deg) => run('arrange.setRotation', { deg, els: group() ? live() : liveTurned() }),
-          enabled: () => (group() ? live() : liveTurned()).some(turnable) && !gluedLines(liveTurned()),
-          why: () => (gluedLines(liveTurned()) ? 'Detach the line to turn it' : ''),
+          enabled: () => (group() ? live() : liveTurned()).some(turnable) && !attachedLines(liveTurned()),
+          why: () => (attachedLines(liveTurned()) ? 'Detach the line to turn it' : ''),
         }),
       ]),
       row([button(app, run, { command: 'arrange.resetRotation', icon: 'reset', text: 'Reset Rotation' })]),

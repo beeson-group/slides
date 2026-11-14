@@ -1,5 +1,5 @@
 // the smart quotes, smart dashes, and smart links of the Substitutions of Keynote. a straight quote
-// typed into a block is turned into a curly one, two hyphens into an em dash, and a hyphen between
+// typed into a text element is turned into a curly one, two hyphens into an em dash, and a hyphen between
 // two spaces into an en dash. a web or email address is made a link at the space typed after it,
 // as an a with href. the typed character is one entry of the history and its substitution
 // another, hence an undo takes back only the substitution, as on a Mac. each switch is kept in the
@@ -41,7 +41,7 @@ export function substitution(before: string, typed: string, on: Record<'quotes' 
     return { remove: 1, insert: open ? '‘' : '’' };
   }
   if (on.dashes && typed === '-' && before.endsWith('-') && !before.endsWith('--')) return { remove: 2, insert: '—' };
-  // a space typed at the end of a block is a no-break space in Chrome, and it is kept as typed,
+  // a space typed at the end of a text element is a no-break space in Chrome, and it is kept as typed,
   // since a plain space there is dropped once the next character is typed
   if (on.dashes && (typed === ' ' || typed === '\u00a0') && /\S[ \u00a0]-$/u.test(before)) return { remove: 2, insert: `–${typed}` };
   return null;
@@ -141,7 +141,7 @@ export function install(app: App): void {
     if (out && ev.inputType === 'insertText' && ev.data && !ev.defaultPrevented && sel && out.el.isConnected && atEnd(out.el, sel)) {
       ev.preventDefault();
       app.history.beforeTyping(out.host);
-      // a space at the end of the block is typed as a no-break space, as Chrome types it, since a
+      // a space at the end of the text element is typed as a no-break space, as Chrome types it, since a
       // plain space there is not drawn and the caret after it is moved back into the element
       const text = document.createTextNode(out.el.nextSibling ? ev.data : ev.data.replace(/ $/, '\u00a0'));
       out.el.after(text);

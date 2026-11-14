@@ -230,9 +230,9 @@ test('an undo after a save puts a removed attribute, class, and declaration back
   const browser = await launch();
   t.after(() => browser.close());
   const { page, text } = await editorPage(browser);
-  const tag = '<div class="math fragment" data-fragment-index="2" data-surface-state="bowl" style="margin-top: 0">';
+  const tag = '<div class="math fragment" data-fragment-index="2" data-surface-state="centrifugal" style="margin-top: 0">';
   assert.equal(text.split(tag).length, 2);
-  const el = `[...document.querySelectorAll('.reveal div.math')].find((d) => d.dataset.surfaceState === 'bowl')`;
+  const el = `[...document.querySelectorAll('.reveal div.math')].find((d) => d.dataset.surfaceState === 'centrifugal')`;
   for (const edit of [{ classes: { math: false } }, { attrs: { 'data-fragment-index': null } }, { attrs: { 'data-surface-state': null } }, { style: { 'margin-top': null } }, { fragment: false, index: null }]) {
     await page.evaluate(`${E}.doc.setTag(${el}, ${JSON.stringify(edit)})`);
     const edited = await render(page);

@@ -180,15 +180,15 @@ async function show(t, text, n, query = '') {
 }
 
 // the shown element of selector whose text holds needle, as an expression
-const blockOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
+const textElementOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
 
 // erase() presses Backspace count times from the end of the block of selector whose text holds
 // needle, then Esc
 async function erase(page, selector, needle, count) {
-  const at = await page.evaluate(`(() => { const r = ${blockOf(selector, needle)}.getBoundingClientRect(); return { x: r.right - 4, y: r.bottom - 12 }; })()`);
+  const at = await page.evaluate(`(() => { const r = ${textElementOf(selector, needle)}.getBoundingClientRect(); return { x: r.right - 4, y: r.bottom - 12 }; })()`);
   await click(page, at);
   await frames(page);
-  await page.evaluate(`(() => { const el = ${blockOf(selector, needle)}; const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
+  await page.evaluate(`(() => { const el = ${textElementOf(selector, needle)}; const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
   for (let i = 0; i < count; i++) await press(page, 'Backspace');
   await press(page, 'Escape');
   await frames(page);

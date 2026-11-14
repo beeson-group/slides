@@ -1,10 +1,10 @@
-// find and replace over the text of the blocks of every slide and of the speaker notes, in one
+// find and replace over the text of the text elements of every slide and of the speaker notes, in one
 // floating panel modeled on the Find & Replace window of Keynote. the panel has a search field with
 // the count of the matches, the previous and next buttons, and a gear menu with the modes Find and
 // Find & Replace, the options Whole Words and Match Case, the scope, and the TeX of the formulas.
 // the scope is the slides and the notes, the notes only, or the alt texts of the images. every match
 // is marked with a highlight of CSS while the panel is open, and the current one more strongly. a
-// replacement writes the content of its block through app.doc.setContent
+// replacement writes the content of its text element through app.doc.setContent
 //
 // pattern(), spans(), and splice() are pure, hence tested under node
 
@@ -17,10 +17,10 @@ import type { MenuItem, MenuOptions, OpenMenu } from './ui/menu.ts';
 
 export type FindOptions = { matchCase: boolean; wholeWords: boolean; tex: boolean };
 
-// the texts searched: the blocks of the slides and of the notes, the notes only, or the alt texts
+// the texts searched: the text elements of the slides and of the notes, the notes only, or the alt texts
 export type Scope = 'all' | 'notes' | 'alt';
 
-// a match as the offsets of its first and its past-the-end character in the text of its block
+// a match as the offsets of its first and its past-the-end character in the text of its text element
 export type Span = { start: number; end: number };
 
 // the text of a formula is set off by this character, which a query does not contain, so that a
@@ -30,7 +30,7 @@ export const MARK = '￼';
 const WORD = '[\\p{L}\\p{N}_]';
 
 // the pattern of a query, or null for an empty query. a run of white space in the query matches
-// any run of white space, since the source of a block breaks its lines where the slide does not
+// any run of white space, since the source of a text element breaks its lines where the slide does not
 export function pattern(query: string, options: Pick<FindOptions, 'matchCase' | 'wholeWords'>): RegExp | null {
   if (!query) return null;
   const body = query
@@ -55,7 +55,7 @@ export function spans(text: string, re: RegExp | null): Span[] {
   return out;
 }
 
-// text is the piece of a block that starts at the offset from. each span of list, sorted and not
+// text is the piece of a text element that starts at the offset from. each span of list, sorted and not
 // overlapping, is cut from it, and replacement is put where a span starts inside the piece. a
 // span that starts in an earlier piece is only cut, since its replacement is in that piece
 export function splice(text: string, from: number, list: Span[], replacement: string): string {
@@ -72,21 +72,21 @@ export function splice(text: string, from: number, list: Span[], replacement: st
   return out + text.slice(at);
 }
 
-// a piece of the text of a block: a text node, a formula, or a line break
+// a piece of the text of a text element: a text node, a formula, or a line break
 type Piece =
   | { kind: 'text'; node: Text; from: number; to: number }
   | { kind: 'math'; el: Element; info: MathInfo | null; from: number; to: number }
   | { kind: 'other'; from: number; to: number };
 
-// the text of a block with its pieces, in the order of the page
-type Indexed = { block: Element; text: string; pieces: Piece[] };
+// the text of a text element with its pieces, in the order of the page
+type Indexed = { textEl: Element; text: string; pieces: Piece[] };
 
-export type Match = Span & { block: Element };
+export type Match = Span & { textEl: Element };
 
-// the elements of the editor that may sit inside a block, and the elements without text
+// the elements of the editor that may sit inside a text element, and the elements without text
 const SKIP = '[data-generated], script, style, template, .beeson-badge';
 
-function index(block: Element, lookup: MathLookup | null, tex: boolean): Indexed {
+function index(textEl: Element, lookup: MathLookup | null, tex: boolean): Indexed {
   const pieces: Piece[] = [];
   let text = '';
   const walk = (node: Node) => {
@@ -111,11 +111,11 @@ function index(block: Element, lookup: MathLookup | null, tex: boolean): Indexed
       }
     }
   };
-  walk(block);
-  return { block, text, pieces };
+  walk(textEl);
+  return { textEl, text, pieces };
 }
 
-// the nodes of a copy of a block in the order of the pieces of index(), with null for a line break
+// the nodes of a copy of a text element in the order of the pieces of index(), with null for a line break
 function piecesOf(root: Element): (Text | Element | null)[] {
   const out: (Text | Element | null)[] = [];
   const walk = (node: Node) => {
@@ -132,10 +132,10 @@ function piecesOf(root: Element): (Text | Element | null)[] {
   return out;
 }
 
-// the content of a block with each span of list replaced, in the form of contentWithTex of math.ts.
+// the content of a text element with each span of list replaced, in the form of contentWithTex of math.ts.
 // an inline element emptied by a replacement, e.g. an em around the matched word, is removed
 function replaced(idx: Indexed, list: Span[], replacement: string): string {
-  const copy = idx.block.cloneNode(true) as Element;
+  const copy = idx.textEl.cloneNode(true) as Element;
   const nodes = piecesOf(copy);
   const emptied: Node[] = [];
   idx.pieces.forEach((p, i) => {
@@ -418,41 +418,41 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     title.addEventListener('pointercancel', up);
   });
 
-  // the paired blocks on the page in the order of the page, hence the notes of a slide after its
-  // other blocks. in the scope of the alt texts, they are the images with an alt text in the file
-  function blocks(): Element[] {
+  // the paired text elements on the page in the order of the page, hence the notes of a slide after its
+  // other text elements. in the scope of the alt texts, they are the images with an alt text in the file
+  function textEls(): Element[] {
     if (scope === 'alt') return [...app.slides().querySelectorAll('section img[alt]')].filter((img) => img.getAttribute('alt') && !img.closest('aside.notes') && isPaired(img));
-    const list = (app.pairing?.blocks ?? []).map((b) => b.live).filter((el) => el.isConnected && app.slides().contains(el) && (scope !== 'notes' || !!el.closest('aside.notes')));
+    const list = (app.pairing?.texts ?? []).map((b) => b.live).filter((el) => el.isConnected && app.slides().contains(el) && (scope !== 'notes' || !!el.closest('aside.notes')));
     return list.sort((a, b) => (a === b ? 0 : before(a, b) ? -1 : 1));
   }
 
   const isPaired = (el: Element) => paired(app, el);
 
   // the alt text of an image is one piece without nodes, since it is not drawn on the slide
-  const altIndex = (img: Element): Indexed => ({ block: img, text: img.getAttribute('alt') ?? '', pieces: [] });
+  const altIndex = (img: Element): Indexed => ({ textEl: img, text: img.getAttribute('alt') ?? '', pieces: [] });
 
   function compute(): void {
     const re = pattern(search.input.value, options);
     const lookup = re && scope !== 'alt' ? mathLookup() : null;
-    indexed = re ? blocks().map((b) => (scope === 'alt' ? altIndex(b) : index(b, lookup, options.tex))) : [];
-    matches = indexed.flatMap((idx) => spans(idx.text, re).map((s) => ({ ...s, block: idx.block })));
+    indexed = re ? textEls().map((b) => (scope === 'alt' ? altIndex(b) : index(b, lookup, options.tex))) : [];
+    matches = indexed.flatMap((idx) => spans(idx.text, re).map((s) => ({ ...s, textEl: idx.textEl })));
   }
 
-  const indexedOf = (block: Element) => indexed.find((i) => i.block === block) ?? null;
+  const indexedOf = (textEl: Element) => indexed.find((i) => i.textEl === textEl) ?? null;
 
   // the first match at or after the start of the current slide, for a search as the query is typed
   function fromSlide(): number {
     const slide = app.current();
     if (!matches.length) return -1;
     if (!slide) return 0;
-    const at = matches.findIndex((m) => slide.contains(m.block) || before(slide, m.block));
+    const at = matches.findIndex((m) => slide.contains(m.textEl) || before(slide, m.textEl));
     return at < 0 ? 0 : at;
   }
 
-  // the first match at or after the offset start of block, once the matches are computed again
-  function nearest(block: Element, start: number): number {
+  // the first match at or after the offset start of text element, once the matches are computed again
+  function nearest(textEl: Element, start: number): number {
     if (!matches.length) return -1;
-    const at = matches.findIndex((m) => (m.block === block && m.start >= start) || (m.block !== block && before(block, m.block)));
+    const at = matches.findIndex((m) => (m.textEl === textEl && m.start >= start) || (m.textEl !== textEl && before(textEl, m.textEl)));
     return at < 0 ? 0 : at;
   }
 
@@ -468,7 +468,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     const all: Range[] = [];
     let mine: Range | null = null;
     matches.forEach((m, i) => {
-      const idx = indexedOf(m.block);
+      const idx = indexedOf(m.textEl);
       const r = idx && rangeOf(idx, m);
       if (!r) return;
       const math = r.startContainer.childNodes[r.startOffset];
@@ -501,32 +501,32 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
   }
 
   // the slide of the current match is shown, with the notes when the match is in them, and the
-  // notes are scrolled to it. with select, the match is selected in its block, which then takes
+  // notes are scrolled to it. with select, the match is selected in its text element, which then takes
   // the focus, and else the focus stays where it is
   function reveal(select: boolean): void {
     const m = matches[current];
     if (!m) return;
     const keep = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
-    app.showSlide(m.block);
-    if (m.block.closest('aside.notes') && !app.notes.shown()) app.notes.toggle();
+    app.showSlide(m.textEl);
+    if (m.textEl.closest('aside.notes') && !app.notes.shown()) app.notes.toggle();
     app.flush();
     // an image is selected on its slide, as its alt text is not drawn
-    if (m.block.matches('img')) {
-      if (m.block.getClientRects().length) app.selection.set('elements', [m.block]);
+    if (m.textEl.matches('img')) {
+      if (m.textEl.getClientRects().length) app.selection.set('elements', [m.textEl]);
       app.invalidate('layout');
       if (keep && keep.isConnected && document.activeElement !== keep) keep.focus({ preventScroll: true });
       return;
     }
-    const idx = indexedOf(m.block);
+    const idx = indexedOf(m.textEl);
     const r = idx && rangeOf(idx, m);
-    const scroller = m.block.closest('aside.notes');
+    const scroller = m.textEl.closest('aside.notes');
     if (r && scroller) {
       const box = r.getBoundingClientRect();
       const view = scroller.getBoundingClientRect();
       if (box.top < view.top || box.bottom > view.bottom) scroller.scrollTop += box.top - view.top - view.height / 3;
     }
     if (select && r) {
-      (app.hostOf(m.block) as HTMLElement | null)?.focus({ preventScroll: true });
+      (app.hostOf(m.textEl) as HTMLElement | null)?.focus({ preventScroll: true });
       const sel = getSelection();
       sel?.removeAllRanges();
       sel?.addRange(r);
@@ -549,7 +549,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     if (panel.hidden || !search.input.value) return;
     const was = matches[current];
     compute();
-    current = was ? nearest(was.block, was.start) : -1;
+    current = was ? nearest(was.textEl, was.start) : -1;
     sync();
   }
 
@@ -575,7 +575,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     mode = m;
     const wasHidden = panel.hidden;
     if (query === undefined && wasHidden) {
-      // a text selected in a block is taken as the query, as Use Selection for Find of Keynote
+      // a text selected in a text element is taken as the query, as Use Selection for Find of Keynote
       const sel = getSelection();
       const text = sel && !sel.isCollapsed && app.hostOf(sel.anchorNode?.parentElement ?? null) ? sel.toString() : '';
       if (text && text.length < 200 && !text.includes('\n')) query = text;
@@ -594,7 +594,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     target.select();
   }
 
-  // the current match is selected in its block once the panel is closed, so that it can be typed
+  // the current match is selected in its text element once the panel is closed, so that it can be typed
   // over, as in Keynote
   function hide(): void {
     if (panel.hidden) return;
@@ -606,7 +606,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     else if (had) (document.activeElement as HTMLElement | null)?.blur();
   }
 
-  // with select, as for Find Next with the panel closed, the match is selected in its block
+  // with select, as for Find Next with the panel closed, the match is selected in its text element
   function step(way: 1 | -1, select = false): void {
     compute();
     if (!matches.length) {
@@ -623,7 +623,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
   }
 
   // the focus put back on el of the panel after a replace, or on the panel once el is disabled, since
-  // the write put the caret into the replaced block. ⌘Z there is still the undo of the deck
+  // the write put the caret into the replaced text element. ⌘Z there is still the undo of the deck
   const refocus = (el: HTMLElement | null) => {
     if (!el?.matches(':disabled')) return el?.focus({ preventScroll: true });
     panel.tabIndex = -1;
@@ -631,15 +631,15 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     getSelection()?.removeAllRanges();
   };
 
-  async function write(block: Element, list: Span[], label: string): Promise<void> {
-    const idx = indexedOf(block);
+  async function write(textEl: Element, list: Span[], label: string): Promise<void> {
+    const idx = indexedOf(textEl);
     if (!idx || !list.length) return;
-    if (block.matches('img')) {
-      app.doc.setTag(block, { attrs: { alt: splice(idx.text, 0, list, replace.input.value) } }, label);
+    if (textEl.matches('img')) {
+      app.doc.setTag(textEl, { attrs: { alt: splice(idx.text, 0, list, replace.input.value) } }, label);
       app.invalidate('content');
       return;
     }
-    await app.doc.setContent(block, replaced(idx, list, replace.input.value), label);
+    await app.doc.setContent(textEl, replaced(idx, list, replace.input.value), label);
   }
 
   // the current match is replaced, and with find the next match is shown
@@ -647,27 +647,27 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     const m = matches[current];
     if (!m) return;
     const keep = panel.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
-    await write(m.block, [m], 'replace');
+    await write(m.textEl, [m], 'replace');
     note = null;
     compute();
-    current = nearest(m.block, m.start + replace.input.value.length);
+    current = nearest(m.textEl, m.start + replace.input.value.length);
     sync();
     if (find && current >= 0) reveal(false);
     refocus(keep);
   }
 
-  // every match is replaced with each block written once, and the count of replacements is shown
+  // every match is replaced with each text element written once, and the count of replacements is shown
   async function replaceAll(): Promise<number> {
     compute();
     const total = matches.length;
     if (!total) return 0;
     const keep = panel.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
-    // restoreHost of text/typing.ts shows the slide of each block written, hence the slide shown
+    // restoreHost of text/typing.ts shows the slide of each text element written, hence the slide shown
     // before is shown again
     const slide = app.current();
-    const byBlock = new Map<Element, Span[]>();
-    for (const m of matches) byBlock.set(m.block, [...(byBlock.get(m.block) ?? []), m]);
-    for (const [block, list] of byBlock) await write(block, list, 'replace all');
+    const byTextElement = new Map<Element, Span[]>();
+    for (const m of matches) byTextElement.set(m.textEl, [...(byTextElement.get(m.textEl) ?? []), m]);
+    for (const [textEl, list] of byTextElement) await write(textEl, list, 'replace all');
     if (slide?.isConnected) app.showSlide(slide);
     compute();
     current = -1;

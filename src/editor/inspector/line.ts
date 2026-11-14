@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import { HEADS, KINDS, LINE_TONES, WEIGHTS, selectedLines } from '../commands/line.ts';
-import { glueOf, type End } from '../model/glue.ts';
+import { attachedTo, type End } from '../model/attach.ts';
 import { describeObject } from '../navigator/objects.ts';
 import { make } from '../ui/dom.ts';
 import { button, checkbox, keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
@@ -69,13 +69,13 @@ export function swatches(app: App, run: Run, prefix = 'line.tone', label = 'Line
 // a row of an attached end of the one selected line, e.g. Start: Rounded Rectangle, with the name of its
 // element or group in the Object List and a button that takes its attachment off. it is hidden without
 // an attachment, as the section is without a row
-function glueRow(app: App, run: Run, end: End): Control {
+function attachRow(app: App, run: Run, end: End): Control {
   const label = make('span', 'ed-label');
-  const detach = button(app, run, { command: `line.unglue.${end === 'from' ? 'start' : 'end'}`, text: 'Detach' });
+  const detach = button(app, run, { command: `line.detach.${end === 'from' ? 'start' : 'end'}`, text: 'Detach' });
   const r = row([{ el: label, sync: () => {} }, detach]);
   const sync = () => {
     const lines = selectedLines(app);
-    const els = lines.length === 1 ? glueOf(lines[0], end) : [];
+    const els = lines.length === 1 ? attachedTo(lines[0], end) : [];
     r.el.style.display = els.length ? '' : 'none';
     label.textContent = els.length ? `${end === 'from' ? 'Start' : 'End'}: ${els.length > 1 ? 'Group' : describeObject(els[0]).name}` : '';
     detach.sync();
@@ -85,7 +85,7 @@ function glueRow(app: App, run: Run, end: End): Control {
 }
 
 function connections(app: App, run: Run): Control {
-  const rows = [glueRow(app, run, 'from'), glueRow(app, run, 'to')];
+  const rows = [attachRow(app, run, 'from'), attachRow(app, run, 'to')];
   const s = section('Connections', rows);
   const sync = () => {
     s.sync();

@@ -263,7 +263,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, { n: TITLE });
     await press(page, LIST_KEY[platform]);
     await frames(page);
-    const SUB = `${S} .block > p.sub`;
+    const SUB = `${S} .title-text > p.sub`;
     await pick(page, SUB, 'p');
     await press(page, KEYS[platform].back);
     await frames(page);

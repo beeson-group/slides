@@ -292,7 +292,7 @@ async function slideTo(page, fraction) {
   const r = await boxOf(page, SLIDER);
   await click(page, { x: r.left + 8 + (r.right - r.left - 16) * fraction, y: (r.top + r.bottom) / 2 });
 }
-const ASK = 'dialog.beeson-edit-card.beeson-poster-ask[open]';
+const ASK = 'dialog.beeson-edit-dialog.beeson-poster-ask[open]';
 
 for (const platform of PLATFORMS) {
   test(`the poster frame slider captures the frame at its time as the poster (${platform})`, async (t) => {

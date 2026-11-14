@@ -36,12 +36,12 @@ function lines(rows: [number, string][], style: TextStyle, base: string): string
 // a section of the layout, without the white space before it. base is the indentation of the
 // slides of the file, empty in the demo deck
 export function layoutText(layout: NewLayout, style: TextStyle, base = ''): string {
-  const block: [number, string][] = [[1, '<div class="block">'], [2, '<h1></h1>'], [2, '<p class="sub"></p>'], [2, '<p class="who"></p>'], [1, '</div>']];
+  const titleText: [number, string][] = [[1, '<div class="title-text">'], [2, '<h1></h1>'], [2, '<p class="sub"></p>'], [2, '<p class="who"></p>'], [1, '</div>']];
   switch (layout) {
     case 'title':
-      return lines([[0, '<section class="title">'], [1, '<div class="backdrop" data-trajectories="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128"></div>'], ...block, [0, '</section>']], style, base);
+      return lines([[0, '<section class="title">'], [1, '<div class="backdrop" data-trajectories="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128"></div>'], ...titleText, [0, '</section>']], style, base);
     case 'closing':
-      return lines([[0, '<section class="closing">'], [1, '<div class="backdrop" data-backdrop="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>'], ...block, [0, '</section>']], style, base);
+      return lines([[0, '<section class="closing">'], [1, '<div class="backdrop" data-backdrop="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>'], ...titleText, [0, '</section>']], style, base);
     case 'section':
       return lines(
         [[0, '<section class="section">'], [1, '<div class="sec">'], [2, '<h2></h2>'], [2, '<ul class="outline" data-auto></ul>'], [1, '</div>'], [1, '<div class="backdrop" data-backdrop="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3"></div>'], [0, '</section>']],

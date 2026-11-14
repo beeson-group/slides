@@ -97,7 +97,7 @@ const TABLE = `(() => {
     table: !!table,
     object: sel.length === 1 && sel[0] === table,
     none: sel.length === 0 && !document.activeElement?.closest('td, th'),
-    block: shown(outline) && outline.classList.contains('block'),
+    block: shown(outline) && outline.classList.contains('range'),
     caret: !!document.activeElement?.closest('td, th'),
     frame: frame ? box(frame) : null,
     grips,

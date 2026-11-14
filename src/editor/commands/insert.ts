@@ -1,6 +1,6 @@
 // the commands of the Insert menu and of the Insert group of the toolbar: a text box, a formula, a
 // code box, a QR code, and a footnote. each element is put at its place in the layout of the
-// current slide, i.e. after the last block of the text column, into an empty figure box, or on the foot
+// current slide, i.e. after the last text element of the text column, into an empty figure box, or on the foot
 // line, and it is selected, with the caret in it for a text. a text box, a code box, and a
 // footnote are put on the page first as an element of the editor only, marked data-generated, which
 // the save and the pairing pass over, with a prompt drawn by the stylesheet below. the empty box is
@@ -28,9 +28,9 @@ html.beeson-editor .reveal .slides .beeson-pending:not(.foot):not(.figure-box > 
 html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-width: 8em; }
 /* a new text box is put at the gap of the theme between two paragraphs, not at the 14 px of a list item */
 html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child):not(.caption) { margin-top: 24px; }
-/* the block of a title or a closing slide is anchored at its bottom and grows upward, hence a box
+/* the title text of a title or a closing slide is anchored at its bottom and grows upward, hence a box
    there takes the margin of the theme, and the texts above it keep their places at the first key */
-html.beeson-editor .reveal .slides section:is(.title, .closing) .block > p.beeson-pending { margin-top: 0; }
+html.beeson-editor .reveal .slides section:is(.title, .closing) .title-text > p.beeson-pending { margin-top: 0; }
 html.beeson-editor .reveal .slides .foot.beeson-pending { min-width: 13em; }
 html.beeson-editor .reveal .slides .beeson-pending[data-prompt][contenteditable]:empty::before { content: attr(data-prompt); position: absolute; left: 0; top: 0; color: var(--muted, #888); white-space: nowrap; pointer-events: none; }
 html.beeson-editor .reveal .slides pre.beeson-pending { box-sizing: border-box; min-height: calc(1.25em + 48px); padding: 24px; font-size: 22px; line-height: 1.25; }
@@ -61,19 +61,19 @@ const PENDING: Record<Kind, { label: string; prompt: string; make(parent: Elemen
 };
 
 const escape = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-// a line of a text box or a footnote is a br, as a line typed into a block
+// a line of a text box or a footnote is a br, as a line typed into a text element
 const lines = (t: string) => escape(t).replace(/\r?\n/g, '<br>');
 
-// the blocks and figures of a text column, after the last of which a new element is put
-const BLOCK = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, .col, .qr';
+// the text elements and figures of a text column, after the last of which a new element is put
+const COLUMN_PARTS = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, .col, .qr';
 
 // the parent and the node before which a new element of the text column of slide is put: after its
-// last block, and else at the start of the column. the plate of a figure slide is in the flow and
+// last text element, and else at the start of the column. the plate of a figure slide is in the flow and
 // as large as the slide, hence a new element is put after it, where it does not push the plate down
 export function columnPlace(app: App, slide: Element): { parent: Element; before: Node | null } {
   const parent = columnOf(slide);
-  const blocks = [...parent.children].filter((el) => (el.matches(BLOCK) || el.matches('.plate')) && !el.matches('.caption, .foot') && !!app.pairing?.elements.has(el));
-  const last = blocks.at(-1);
+  const parts = [...parent.children].filter((el) => (el.matches(COLUMN_PARTS) || el.matches('.plate')) && !el.matches('.caption, .foot') && !!app.pairing?.elements.has(el));
+  const last = parts.at(-1);
   if (last) {
     let n = last.nextSibling;
     while (n instanceof Element && n.hasAttribute('data-generated')) n = n.nextSibling;
@@ -97,7 +97,7 @@ export function slideBox(app: App, el: Element): { left: number; top: number; ri
 export type Box = { left: number; top: number; right: number; bottom: number };
 export const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
-// the box of the text of a block, which may be narrower than the block, or null when it is empty
+// the box of the text of a text element, which may be narrower than the text element, or null when it is empty
 export function inkBox(app: App, el: Element): Box | null {
   const range = document.createRange();
   range.selectNodeContents(el);
@@ -109,11 +109,11 @@ export function inkBox(app: App, el: Element): Box | null {
   return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
 }
 
-// the blocks of a text column, whose box is the box of their text
+// the text elements of a text column, whose box is the box of their text
 const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
 
-// the box of the prompt of an empty block that shows its placeholder, i.e. of the text of its
-// ::before as it is drawn, or null for a block without a prompt
+// the box of the prompt of an empty text element that shows its placeholder, i.e. of the text of its
+// ::before as it is drawn, or null for a text element without a prompt
 export function promptBox(app: App, el: Element): Box | null {
   const before = getComputedStyle(el, '::before');
   if (['none', 'normal'].includes(before.content)) return null;
@@ -132,7 +132,7 @@ export function promptBox(app: App, el: Element): Box | null {
 }
 
 // the space that el takes on its slide in slide px, the one rule of every insert: the box of the
-// text of a block that is not moved, the box of the prompt of an empty block that shows its
+// text of a text element that is not moved, the box of the prompt of an empty text element that shows its
 // placeholder, e.g. Text on a new slide, and else the box of the element with its translate
 export function takenBox(app: App, el: Element): Box | null {
   if (!el.getClientRects().length) return null;
@@ -153,7 +153,7 @@ export function freeFigureBox(app: App, slide: Element, el: Element): Box | null
   const figureBox = slideBox(app, probe);
   probe.remove();
   if (figureBox.right - figureBox.left < 1 || figureBox.bottom - figureBox.top < 1) return null;
-  const columns = '.col, .text-column, .block';
+  const columns = '.col, .text-column, .title-text';
   for (const other of slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *')) {
     if (other === el || other.contains(el) || other.matches('aside.notes, .foot, .run, [data-generated]')) continue;
     const box = other.matches(columns) && !(other instanceof HTMLElement && other.style.translate) ? inkBox(app, other) : takenBox(app, other);
@@ -162,7 +162,7 @@ export function freeFigureBox(app: App, slide: Element, el: Element): Box | null
   return figureBox;
 }
 
-// a new figure that does not fit under the last block of the text column, i.e. over floor, is moved
+// a new figure that does not fit under the last text element of the text column, i.e. over floor, is moved
 // to the center of the free area where the layout puts a figure box, and else to the center of the slide,
 // where Keynote puts a new object, with a translate in slide px
 function centerIfOut(app: App, el: Element, floor = FLOOR): void {
@@ -182,7 +182,7 @@ function centerIfOut(app: App, el: Element, floor = FLOOR): void {
   placeNew(app, el, narrow);
 }
 
-// the offset in slide px of a new text box el in the text column, under the blocks before it as
+// the offset in slide px of a new text box el in the text column, under the text elements before it as
 // they are drawn: moved down as far as the lowest of them is drawn under its place in the layout,
 // e.g. a list moved down with a translate
 function textOffset(app: App, el: HTMLElement): number {
@@ -201,7 +201,7 @@ const TYPED = ['insertText', 'insertReplacementText', 'deleteContentBackward', '
 // the bottom margin of a slide in slide px, where the theme ends the foot line
 const MARGIN = 50;
 
-// the offset in slide px of a new text box el that does not fit under the blocks of the text
+// the offset in slide px of a new text box el that does not fit under the text elements of the text
 // column, i.e. that would meet a footnote or reach under the bottom margin of the slide, or null
 // when it fits. the box is then put at the center of the visible part of the slide, where Keynote
 // puts a new object when it finds no free space, moved up off a footnote under it and into the
@@ -334,9 +334,9 @@ export function install(app: App): void {
     onTop = true;
   };
 
-  // the input taken while the box is written is typed after it, in order, as typing of the block.
+  // the input taken while the box is written is typed after it, in order, as typing of the text element.
   // a new line in a text box is a new paragraph, as Enter in a paragraph, and a line break else.
-  // the input that comes meanwhile is taken too, at the block of the caret
+  // the input that comes meanwhile is taken too, at the text element of the caret
   const caretHost = () => {
     const n = window.getSelection()?.anchorNode;
     return app.hostOf(n instanceof Element ? n : n?.parentElement ?? null);
@@ -356,7 +356,7 @@ export function install(app: App): void {
 
   // the first text typed into the element of the editor writes it into the file in its place. every
   // input into the box or into the element written for it is taken until the write ends, since the
-  // element is not yet a block of the pairing that the typing of text/typing.ts records
+  // element is not yet a text element of the pairing that the typing of text/typing.ts records
   // with empty, a box left without text is written in place of the entry of its insert, without the
   // caret, which has left it
   const write = async (text: string, label = 'typing', empty = false) => {
@@ -523,7 +523,7 @@ export function install(app: App): void {
   };
 
   // the input into the element of the editor is taken before the typing of text/typing.ts, which
-  // records the blocks of the file
+  // records the text elements of the file
   window.addEventListener('beforeinput', (ev) => {
     // a key typed into a new box within the pause of the typing of history.ts after a typed first
     // input is a part of the entry of that input, as a word typed into a new box is one entry in
@@ -622,7 +622,7 @@ export function install(app: App): void {
 
   onCaptionBox({ begin: (host) => begin('caption', host, null), drop });
 
-  // the block of a title or closing slide is held at its foot, hence a text box in it would move
+  // the title text of a title or closing slide is held at its foot, hence a text box in it would move
   // its words up. a text box of these slides is a child of the section, as a new table is
   const pendingText = (kind: Kind) => (a: App) => {
     const slide = a.current()!;

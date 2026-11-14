@@ -103,7 +103,7 @@ test('a modal dialog dims the window behind it in both modes', async (t) => {
     await frames(page);
     await new Promise((done) => setTimeout(done, 400));
     const after = decodePng(await page.screenshot());
-    const card = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-card[open]').getBoundingClientRect(); return { x: r.left + 12, y: r.top + 6 }; })()`);
+    const card = await page.evaluate(`(() => { const r = document.querySelector('dialog.beeson-edit-dialog[open]').getBoundingClientRect(); return { x: r.left + 12, y: r.top + 6 }; })()`);
     const was = gray(before, spot);
     const dimmed = gray(after, spot);
     assert.ok(dimmed <= 0.7 * was, `${mode}: the toolbar is ${dimmed.toFixed(0)} under the scrim and ${was.toFixed(0)} without it`);

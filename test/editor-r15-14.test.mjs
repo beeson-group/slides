@@ -99,10 +99,10 @@ for (const platform of PLATFORMS) {
     // figure box of Content and the backdrop of Content, Narrow, whose square left corners are drawn
     // by a second rect with rx 0
     const blocks = () => page.evaluate(`(() => {
-      const svg = document.querySelector('.beeson-edit-inspector .ed-card .thumb svg');
+      const svg = document.querySelector('.beeson-edit-inspector .ed-chooser .thumb svg');
       return svg ? [...svg.querySelectorAll('rect')].filter((r) => r.getAttribute('fill') === 'var(--ed-faint)' && Number(r.getAttribute('height')) >= 24 && r.getAttribute('rx') !== '0').length : null;
     })()`);
-    const name = () => page.evaluate(`document.querySelector('.beeson-edit-inspector .ed-card .what span:last-child')?.textContent ?? null`);
+    const name = () => page.evaluate(`document.querySelector('.beeson-edit-inspector .ed-chooser .what span:last-child')?.textContent ?? null`);
     for (const [layout, label, n] of [['content', 'Content', 1], ['narrow', 'Content, Narrow', 1], ['wide', 'Content, Wide', 0]]) {
       await page.evaluate(`Reveal.slide(${SLIDES[layout]})`);
       await frames(page);

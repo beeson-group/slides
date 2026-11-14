@@ -246,7 +246,7 @@ for (const platform of PLATFORMS) {
   // stacking context, hence the QR code passes all of its texts at once
   test(`${platform}: the QR code stays selected over the undo and the redo of Bring to Front, and Send to Back then moves it (C4)`, async (t) => {
     const page = await load(t, platform, OVERLAPS, CLOSING);
-    const pair = { h1: `${S} .block > h1`, qr: `${S} > .qr` };
+    const pair = { h1: `${S} .title-text > h1`, qr: `${S} > .qr` };
     const at = await overlap(page, pair.h1, pair.qr);
     assert.ok(at, 'the QR code is not over the heading');
     assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);

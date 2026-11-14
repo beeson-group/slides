@@ -36,7 +36,7 @@ const TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; 
 
 // the panes of today read the tokens of the deck, which are given the values of the chrome inside
 // them
-const CHROME = 'html.beeson-editor .beeson-edit-header, html.beeson-editor .beeson-edit-inspector, html.beeson-editor .beeson-edit-bottom, html.beeson-editor .beeson-edit-pane, html.beeson-editor dialog.beeson-edit-card, html.beeson-editor .beeson-edit-menus';
+const CHROME = 'html.beeson-editor .beeson-edit-header, html.beeson-editor .beeson-edit-inspector, html.beeson-editor .beeson-edit-bottom, html.beeson-editor .beeson-edit-pane, html.beeson-editor dialog.beeson-edit-dialog, html.beeson-editor .beeson-edit-menus';
 
 const CSS = `
 html.beeson-editor { ${TOKENS_LIGHT} --ed-nav-col: 0px; --ed-insp-col: 0px; --ed-notes-row: 0px; --ed-font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
@@ -339,12 +339,12 @@ export function install(app: App): void {
     const tile = target.closest('.beeson-edit-sorter .tile');
     if (tile) return { kind: 'slide', target: tileSlide.get(tile) ?? null };
     if (target.closest('.beeson-edit-canvas')) return { kind: 'canvas', target: app.current() };
-    // the handle of a block, outside the slide, stands for its block, and a grip or the rotate
+    // the handle of a text element, outside the slide, stands for its text element, and a grip or the rotate
     // handle for the selected object
     const handle = target.closest('.beeson-handle') ? overlay().current() : target.closest('.beeson-grip, .beeson-rotor') ? (app.selection.elements()[0] ?? null) : null;
     if (!handle && !target.closest('.reveal:not(.beeson-peek)')) return null;
     const el = handle ?? app.move.movableOf(target);
-    // a text whose block is selected as an object, alone, with others, or in its group, gets the
+    // a text whose text element is selected as an object, alone, with others, or in its group, gets the
     // menu of the object
     const host = app.hostOf(target);
     if (host && !(el && app.selection.kind === 'elements' && app.selection.has(el))) return { kind: 'text', target: host };

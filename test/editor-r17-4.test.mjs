@@ -151,7 +151,7 @@ async function copyBody(page) {
   await wait(page);
   await click(page, await at(page, 2, 1), { modifiers: 'Shift' });
   await wait(page);
-  assert.ok(await page.evaluate(`(() => { const o = document.querySelector('.beeson-table-bars .cell.block'); return !!o && !o.hidden; })()`), 'the range is not selected');
+  assert.ok(await page.evaluate(`(() => { const o = document.querySelector('.beeson-table-bars .cell.range'); return !!o && !o.hidden; })()`), 'the range is not selected');
   await page.evaluate(`(() => { window.__w = []; const o = DataTransfer.prototype.setData; DataTransfer.prototype.setData = function (t, v) { window.__w.push([t, v]); return o.call(this, t, v); }; })()`);
   const base = { key: 'c', code: 'KeyC', windowsVirtualKeyCode: 67, modifiers: MOD[page.platform] };
   await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base, commands: ['copy'] });

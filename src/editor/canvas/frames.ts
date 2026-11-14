@@ -1,5 +1,5 @@
 // the hover and selection frames, the eight resize handles, the rotate handle, the handle of a
-// block, the readout at the pointer, the guides and the marks of equal gaps and sizes, and the
+// text element, the readout at the pointer, the guides and the marks of equal gaps and sizes, and the
 // marquee, in one layer over the canvas
 // clipped to the canvas cell of the stage, so that a handle at the edge of the slide is drawn on
 // the pasteboard and none is drawn over the bars at a zoom. the frames are drawn in screen pixels
@@ -80,7 +80,7 @@ html.beeson-band, html.beeson-band .reveal * { cursor: move; }
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .figure-box, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr, html.beeson-editing .reveal .slides section .shape { cursor: move; }
 html.beeson-editing .reveal .slides section .shape { pointer-events: auto; }
 html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .figure-box, .plate, .qr, .shape), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
-html.beeson-playing :is(.beeson-overlay, .beeson-line-layer, .beeson-table-bars, .beeson-guides, .beeson-backdrop-cuts, .beeson-glue-target) { visibility: hidden !important; }
+html.beeson-playing :is(.beeson-overlay, .beeson-line-layer, .beeson-table-bars, .beeson-guides, .beeson-backdrop-cuts, .beeson-attach-target) { visibility: hidden !important; }
 html.beeson-playing .reveal .slides, html.beeson-playing .reveal .slides * { caret-color: transparent !important; }
 html.beeson-playing .reveal .beeson-movable:focus-visible { outline: none; }
 `;
@@ -130,7 +130,7 @@ export function groupReach(els: Element[]): Box {
   return { left, top, width: Math.max(...seen.map((b) => b.left + b.width)) - left, height: Math.max(...seen.map((b) => b.top + b.height)) - top };
 }
 
-// a figure with a caption is framed INSET px outside, clear of the text of its caption, as a block
+// a figure with a caption is framed INSET px outside, clear of the text of its caption, as a text element
 // of text is framed outside its text and the frame of a text box in Keynote stands off its text
 // (K58). the fields, the snap, and the gestures keep the box of the figure
 const INSET = 8;
@@ -187,26 +187,26 @@ export function groupFrame(els: Element[], deg: number): Box {
 
 // the distance of the center of the rotate handle above the top edge of a frame, and its radius,
 // in screen px, about those of the rotate handle of PowerPoint. where the handle would cover the
-// text of a block above, e.g. a heading over a paragraph, its stem is cut down to SHORT
+// text of a text element above, e.g. a heading over a paragraph, its stem is cut down to SHORT
 const ROTOR = 18;
 const SHORT = 11;
 const KNOB = 7;
-// the text of the blocks whose lines a rotate handle is kept off where it can be
+// the text of the text elements whose lines a rotate handle is kept off where it can be
 const WORDS = 'h1, h2, h3, p, li, dt, dd, div.math, .caption, figcaption, td, th, pre, blockquote';
-// the handle of a block is drawn this far left of the frame, clear of its grips, in screen px
+// the handle of a text element is drawn this far left of the frame, clear of its grips, in screen px
 const HANDLE = 22;
 const HANDLE_GAP = 10;
 // the bar of the row numbers of a table with its gap, in commands/table.ts, which the handle of a
 // table is drawn left of
 const ROW_BAR = 24;
 
-// the overlay of the editor. the handle of a block and the resize handles are its only parts that
+// the overlay of the editor. the handle of a text element and the resize handles are its only parts that
 // take the pointer
 export class Frames {
   readonly layer: HTMLDivElement;
   // the dashed frame of the element under the pointer or being edited
   readonly hoverFrame: HTMLDivElement;
-  // the handle of the block under the pointer, being edited, or selected, by which it is dragged
+  // the handle of the text element under the pointer, being edited, or selected, by which it is dragged
   readonly handle: HTMLDivElement;
   // the grips of the first selected element, and a set more for each other selected element
   readonly grips: Record<Handle, HTMLDivElement>;
@@ -260,7 +260,7 @@ export class Frames {
     this.handle.title = 'Drag to move, double-click to put back, arrow keys nudge';
     this.handle.tabIndex = 0;
     this.handle.setAttribute('role', 'button');
-    this.handle.setAttribute('aria-label', 'Move the block: the arrow keys nudge it, Enter puts it back');
+    this.handle.setAttribute('aria-label', 'Move the text element: the arrow keys nudge it, Enter puts it back');
     this.readout = div('beeson-offset', this.layer);
   }
 
@@ -297,7 +297,7 @@ export class Frames {
     return this.members[Number((grip as HTMLElement).dataset.member)] ?? null;
   }
 
-  // the element that the handle of a block is shown at: the one dragged, under the pointer, or
+  // the element that the handle of a text element is shown at: the one dragged, under the pointer, or
   // being edited, else the one selected
   current(): Element | null {
     const active = document.activeElement instanceof Element ? document.activeElement : null;
@@ -307,17 +307,17 @@ export class Frames {
 
   // the resize handles of a selected element, drawn on each element of a multiple selection as in
   // Keynote and PowerPoint: live on an image, a video, a QR code, a viewer, a figure that holds one
-  // of them, and a text block, whose grips set its width, none on another figure, and crosses on a
+  // of them, and a text element, whose grips set its width, none on another figure, and crosses on a
   // locked element
   gripsOf(el: Element | null): 'live' | 'locked' | null {
-    if (!el || !(this.app.selection.elements().includes(el) || el === this.caretBlock())) return null;
+    if (!el || !(this.app.selection.elements().includes(el) || el === this.caretElement())) return null;
     if (el.hasAttribute('data-locked')) return 'locked';
     return sizedOf(el).length || el.matches('.backdrop') ? 'live' : null;
   }
 
-  // the block of the caret while nothing is selected as an object, framed with its grips as a text
+  // the text element of the caret while nothing is selected as an object, framed with its grips as a text
   // box being typed into is in Keynote and PowerPoint
-  caretBlock(): Element | null {
+  caretElement(): Element | null {
     if (this.app.selection.elements().length) return null;
     const active = document.activeElement instanceof Element ? document.activeElement : null;
     const el = movableOf(this.app, active?.closest(HOST) ?? null);
@@ -333,10 +333,10 @@ export class Frames {
     // a shape keeps its frame while the caret is in its words, as in Keynote
     const words = document.activeElement?.closest('.reveal .slides section .shape [contenteditable="true"]')?.closest('.shape');
     if (!selected.length && words) selected.push(words);
-    const caret = selected.length ? null : this.caretBlock();
+    const caret = selected.length ? null : this.caretElement();
     if (caret) selected.push(caret);
     const scale = frameOf(app).scale;
-    // a figure and a backdrop are framed at their edges, where their handles are, and a block 6 px
+    // a figure and a backdrop are framed at their edges, where their handles are, and a text element 6 px
     // outside its text
     const orients = selected.map((el) => {
       const o = orientOf(el, scale);
@@ -425,7 +425,7 @@ export class Frames {
     this.groups = this.gripSets.map((_, n) => gripped[n]?.group ?? null);
     this.gripSets.forEach((set, n) => {
       const m = gripped[n];
-      // a viewer keeps the height of its layout, and a text block the height of its wrapped text
+      // a viewer keeps the height of its layout, and a text element the height of its wrapped text
       const level = !!m && !m.group && (m.el.matches('tycho-viewer') || isTextSized(m.el));
       for (const h of HANDLES) {
         const g = set[h];
@@ -459,7 +459,7 @@ export class Frames {
       const b = turnGroup ? (this.group as Box) : first.box, deg = turnGroup ? this.groupDeg : first.deg;
       const cx = b.left + b.width / 2;
       // above the middle of the top edge of the frame, as in PowerPoint, on a stem cut short where
-      // the full stem would put the handle over the text of another block. the handle is drawn over
+      // the full stem would put the handle over the text of another text element. the handle is drawn over
       // the slide, hence it is pressed also where it covers a text
       const knobAt = (d: number) => turned(b, deg, cx, b.top - d);
       if (!rotating) {
@@ -492,7 +492,7 @@ export class Frames {
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
     if (hot && !framed && !view.moving) place(this.hoverFrame, grow(frameRect(hot), 6));
     // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, and a text
-    // block, whose text a press edits, by its handle. a locked element does not have a handle
+    // text element, whose text a press edits, by its handle. a locked element does not have a handle
     this.handle.hidden = !hot || hot.hasAttribute('data-locked') || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
     if (!this.handle.hidden && hot) {
       // left of the frame, 6 px outside the text, at its top edge, clear of the grips at its corners
@@ -524,15 +524,15 @@ export class Frames {
     }
   }
 
-  // the boxes of the lines of text of the blocks of the current slide outside els, on the screen
+  // the boxes of the lines of text of the text elements of the current slide outside els, on the screen
   private linesBesides(els: Element[]): DOMRect[] {
     const slide = this.app.current();
     if (!slide) return [];
     const out: DOMRect[] = [];
     const range = document.createRange();
-    for (const block of slide.querySelectorAll(WORDS)) {
-      if (els.some((el) => el.contains(block) || block.contains(el)) || block.closest('aside.notes')) continue;
-      range.selectNodeContents(block);
+    for (const textEl of slide.querySelectorAll(WORDS)) {
+      if (els.some((el) => el.contains(textEl) || textEl.contains(el)) || textEl.closest('aside.notes')) continue;
+      range.selectNodeContents(textEl);
       for (const r of range.getClientRects()) if (r.width && r.height) out.push(r);
     }
     return out;

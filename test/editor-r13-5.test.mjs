@@ -59,7 +59,7 @@ async function range(page, a, b) {
   await settle(page);
   await click(page, await at(page, ...b), { modifiers: 'Shift' });
   await settle(page);
-  assert.ok(await page.evaluate(`(() => { const o = document.querySelector('.beeson-table-bars .cell.block'); return !!o && !o.hidden; })()`), 'the range is not selected');
+  assert.ok(await page.evaluate(`(() => { const o = document.querySelector('.beeson-table-bars .cell.range'); return !!o && !o.hidden; })()`), 'the range is not selected');
 }
 
 // a trusted Mod+X or Mod+C, which the browser turns into a cut or a copy event, and what it wrote

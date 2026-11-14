@@ -167,7 +167,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'surface.useView');
     const az = Math.round(v.azimuth), el = Math.round(v.elevation);
     const one = '<div class="surface" data-function="effective-potential" data-mu="0.05">';
-    const two = '<div class="surface" data-function="effective-potential" data-mu="0.05" data-surface-state="sum">';
+    const two = '<div class="surface" data-function="effective-potential" data-mu="0.05" data-surface-state="effective">';
     const edits = [[one, one.replace('>', ` data-azimuth="${az}" data-elevation="${el}">`)], [two, two.replace('>', ` data-azimuth="${az}" data-elevation="${el}">`)]];
     await roundTrip(page, edits, 'Use Current View');
     // the surface of the next slide is shown under the camera written

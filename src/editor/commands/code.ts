@@ -58,7 +58,7 @@ export function codeAt(app: App, arg?: unknown): Element | null {
   const el = given instanceof Element ? given : sel.only() ?? (sel.kind === 'text' ? sel.items[0] ?? null : null);
   const pre = el?.closest('pre');
   const code = pre?.querySelector(':scope > code') ?? null;
-  // the code is inside the block of its pre, hence it is paired among the elements inside blocks
+  // the code is inside the text element of its pre, hence it is paired among the elements inside text elements
   const src = code ? app.pairing?.elements.get(code) ?? app.pairing?.inner.get(code) : null;
   return code && src?.open && code.closest('section') ? code : null;
 }
