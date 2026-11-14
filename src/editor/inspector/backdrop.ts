@@ -1,11 +1,11 @@
 // the pane Backdrop of the inspector, for a selected backdrop: its drawing, chosen from a popup or
-// from the gallery of Choose…, the family and the colormap of a drawing of a file, its window, i.e.
-// its center and its half height, the labels of the points of a named scene, and its motion, with the
-// Lock button of the Arrange pane. each control runs a command of commands/backdrop.ts, whose writes
-// the theme draws again
+// from the gallery of Choose…, the family, the frame, and the branch of a Broucke drawing, the colormap
+// of a drawing of a file, its window, i.e. its center and its half height, the labels of the points of a
+// built-in backdrop, and its motion, with the Lock button of the Arrange pane. each control runs a
+// command of commands/backdrop.ts, whose writes the theme draws again
 
 import type { App } from '../app.ts';
-import { COLORMAPS, LABELS, colormapName, drawnBy, entryName, families, isBroucke, library, liveOf, probeLibrary, sameSelection, selectedBackdrop } from '../commands/backdrop.ts';
+import { BRANCHES, COLORMAPS, FAMILIES, FRAMES, LABELS, NAMES, brouckePick, colormapName, drawnBy, entryName, isBroucke, library, liveOf, probeLibrary, selectedBackdrop, type Pick } from '../commands/backdrop.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { make } from '../ui/dom.ts';
 import { button, checkbox, glyph, keepFocus, note, numberField, row, section, type Control, type Run } from './controls.ts';
@@ -43,7 +43,7 @@ function popup(app: App, label: string, current: () => string, list: () => MenuI
 }
 
 // parts in a box that is shown while shown() is true, so that the pane follows a change of the
-// drawing between a scene and a file without being built again
+// drawing between a built-in backdrop and a file without being built again
 function when(shown: () => boolean, parts: Control[]): Control {
   const box = make('div');
   box.append(...parts.map((p) => p.el));
@@ -60,7 +60,7 @@ export function backdropPane(app: App, run: Run): Control[] {
   const live = () => liveOf(el);
   const view = () => live()?.view ?? null;
   const on = () => !!el?.isConnected && !!live() && !el.hasAttribute('data-locked');
-  const file = () => !!el?.hasAttribute('data-strands');
+  const file = () => !!el?.hasAttribute('data-trajectories');
   const field = (label: string, key: 'cx' | 'cy' | 'half', id: string) => numberField(app, {
     label, unit: '', step: 0.01, min: key === 'half' ? 0.01 : -100, max: 100,
     value: () => view()?.[key] ?? null,
@@ -72,24 +72,31 @@ export function backdropPane(app: App, run: Run): Control[] {
     label: e.name,
     checked: !!el && drawnBy(e, el),
     disabled: !!e.missing,
-    run: () => run('backdrop.scene', { value: e.key, el }),
+    run: () => run('backdrop.builtIn', { value: e.key, el }),
   })), on, () => probeLibrary(app));
+  // a popup of a Broucke drawing, which shows Custom for a selection that is not a pick. Frame and
+  // Branch are picked only from a pick
+  const brouckePopup = (label: string, key: keyof Pick, values: string[]) => popup(app, label, () => brouckePick(el)?.[key] ?? NAMES.custom, () => values.map((v) => ({
+    label: v,
+    checked: brouckePick(el)?.[key] === v,
+    run: () => run(`backdrop.${key}`, { value: v, el }),
+  })), () => on() && (key === 'family' || !!brouckePick(el)));
   const parts: Control[] = [
     section('Drawing', [
       drawing,
       row([button(app, run, { command: 'backdrop.choose', text: 'Choose…' })]),
       when(file, [
-        when(() => isBroucke(el), [popup(app, 'Family', () => (el && isBroucke(el) ? families(app, el).find((f) => sameSelection(f.spec, el.getAttribute('data-strands-select'), el))?.name ?? '' : ''), () => (el ? families(app, el) : []).map((f) => ({
-          label: f.name,
-          checked: sameSelection(el?.getAttribute('data-strands-select') ?? null, f.spec, el),
-          run: () => run('backdrop.family', { value: f.spec, el }),
-        })), on)]),
-        popup(app, 'Colormap', () => colormapName(el?.getAttribute('data-strands-colormap') ?? null), () => [null, ...COLORMAPS].map((c) => ({
+        when(() => isBroucke(el), [
+          brouckePopup('Family', 'family', FAMILIES),
+          brouckePopup('Frame', 'frame', FRAMES),
+          when(() => brouckePick(el)?.family === '7', [brouckePopup('Branch', 'branch', BRANCHES)]),
+        ]),
+        popup(app, 'Colormap', () => colormapName(el?.getAttribute('data-trajectories-colormap') ?? null), () => [null, ...COLORMAPS].map((c) => ({
           label: colormapName(c),
-          checked: (el?.getAttribute('data-strands-colormap') ?? null) === c,
+          checked: (el?.getAttribute('data-trajectories-colormap') ?? null) === c,
           run: () => run('backdrop.colormap', { value: c, el }),
         })), on),
-        note(() => 'The strands are chosen and colored by the data-strands attributes of the file, as REFERENCE.md describes.'),
+        note(() => 'The trajectories are chosen and colored by the data-trajectories attributes of the file, as REFERENCE.md describes.'),
       ]),
     ]),
     section('Window', [
@@ -124,7 +131,7 @@ export function backdropPane(app: App, run: Run): Control[] {
 
 // a checkbox of the label of a point, checked while the backdrop has it
 function labelBox(app: App, run: Run, el: HTMLElement | null, at: string, name: string): Control {
-  const c = checkbox(app, run, 'backdrop.label', name, () => !!el && [...el.querySelectorAll(':scope > .lab')].some((l) => l.getAttribute('data-at') === at));
+  const c = checkbox(app, run, 'backdrop.label', name, () => !!el && [...el.querySelectorAll(':scope > .label')].some((l) => l.getAttribute('data-at') === at));
   // the command is run with the point, which checkbox() does not pass
   c.el.addEventListener('click', (ev) => {
     ev.stopImmediatePropagation();

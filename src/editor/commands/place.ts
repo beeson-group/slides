@@ -16,7 +16,7 @@ import { keepPlaces } from '../canvas/drag.ts';
 
 // what a new element may lie over when nothing else is free: a figure or a drawing, but not a text
 const FIGURE = `${CONTAINER}, img, video, .qr, .tikz, .surface, .plot, tycho-viewer, svg.line`;
-const SKIP = 'aside.notes, script, style, .backdrop, .col, .panel, .block, [data-generated]:not(.run)';
+const SKIP = 'aside.notes, script, style, .backdrop, .col, .text-column, .title-text, [data-generated]:not(.run)';
 // the room around a new element, and the step of the grid on which a free place is looked for, in
 // slide px
 const ROOM = 24;
@@ -34,7 +34,7 @@ const steps = (from: number, to: number, edges: number[]) => {
 // the texts whose words a new table is kept off
 const WORDS = 'h1, h2, h3, h4, p, ul, ol, dl, blockquote, div.math';
 
-// the space that el takes by its words: the box of the text of a block, also of one moved by a
+// the space that el takes by its words: the box of the text of a text element, also of one moved by a
 // translate, whose box is as wide as its column, or the box of its prompt, and else takenBox
 export const wordBox = (app: App, el: Element): Box | null =>
   !el.getClientRects().length ? null : el.matches(WORDS) ? inkBox(app, el) ?? promptBox(app, el) : takenBox(app, el);
@@ -84,7 +84,7 @@ export function drawnCells(app: App, backdrop: Element): Box[] {
 }
 
 // whether el is a new text box of a title or closing slide, a child of the section outside the
-// block, whose words grow into its frame, hence it takes the space of its frame and not of its words
+// text element, whose words grow into its frame, hence it takes the space of its frame and not of its words
 export const framed = (el: Element) => el.matches(WORDS) && el.getClientRects().length > 0 && !!el.parentElement?.matches('section.title, section.closing');
 
 // the box of el, by its words with words
@@ -106,7 +106,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
   // sooner than over another figure
   const others: { box: Box; text: boolean; ground: boolean }[] = [];
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *'), ...(num ? [num] : [])]) {
+  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .title-text > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = boxOf(app, o);
     if (box && box.right - box.left > 1 && box.bottom - box.top > 1) {
@@ -166,7 +166,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
 // what a new table is not put over while another place exists: the figures, the videos,
 // the plots, the QR codes, and the tables, with what is drawn in a plate as large as the slide in
 // place of the plate, and the chrome
-const SOLID = 'figure, .zone, .plate, img, video, .qr, .tikz, .surface, .plot, tycho-viewer, table, .run, .foot';
+const SOLID = 'figure, .figure-box, .plate, img, video, .qr, .tikz, .surface, .plot, tycho-viewer, table, .run, .foot';
 
 type Pieces = { solids: Box[]; texts: Box[]; heads?: Box[]; chrome?: Box[] };
 
@@ -184,7 +184,7 @@ export function piecesOf(app: App, el: Element): Pieces {
     if (o.matches('.run, .foot, .slide-number')) out.chrome.push(box);
   };
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
+  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .title-text > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = framed(o) ? slideBox(app, o) : boxOf(app, o, true);
     const all = o.matches('.plate') && o.getClientRects().length ? slideBox(app, o) : null;
@@ -258,7 +258,7 @@ export function placeNew(app: App, el: Element, picture?: HTMLElement): void {
 // the plate of a figure slide is in the flow and as large as the slide, hence an element with an
 // offset that is written beside it moves when the plate is taken off the slide. keepBeside measures
 // these elements before the removal of outer, and through move, the function that it returns gives
-// each of them the offset that keeps its drawn place. on another slide, a plate is a block of the
+// each of them the offset that keeps its drawn place. on another slide, a plate is an element of the
 // text column, and the elements after it move up with the column
 export function keepBeside(app: App, outer: Element[]): (move: (el: Element, translate: { x: number; y: number }) => void) => void {
   return keepPlaces(app, outer.filter((el) => el.matches('section.figure .plate')), outer);
@@ -267,7 +267,7 @@ export function keepBeside(app: App, outer: Element[]): (move: (el: Element, tra
 // the offset in slide px of a new text box el of a title or closing slide, a child of the section
 // drawn at its top left, with the width in px that it is drawn at when it is drawn smaller. the
 // place is the free one inside the margins nearest to the center of the slide, off the words of
-// the block, the other elements, the chrome, and the lockup drawn by the theme, with room, and off
+// the text element, the other elements, the chrome, and the lockup drawn by the theme, with room, and off
 // the drawn cells of the backdrop while such a place exists, with room under it for three lines.
 // the box is drawn as small as 0.35 of its width before it lies over the drawing, and it is put at
 // the center when every place covers words
@@ -276,8 +276,8 @@ export function titlePlace(app: App, el: HTMLElement): { x: number; y: number; w
   const w = slide.offsetWidth || 1920, h = slide.offsetHeight || 1080;
   const others: Box[] = [];
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .block > *'), ...(num ? [num] : [])]) {
-    if (o === el || o.matches(`${SKIP}, .block`)) continue;
+  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .title-text > *'), ...(num ? [num] : [])]) {
+    if (o === el || o.matches(`${SKIP}, .title-text`)) continue;
     const b = framed(o) ? slideBox(app, o) : boxOf(app, o, true);
     if (b && b.right - b.left > 1 && b.bottom - b.top > 1) others.push(b);
   }

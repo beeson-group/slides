@@ -14,7 +14,7 @@ Run `npm run pdf`, and read the last page of each slide in `slides.pdf`. If you 
 List what you find, slide by slide, before you change anything. Look for these problems.
 
 - Text that is cut off, or too close to a figure, the footnote, or the running head.
-- A figure that is invisible or boxed in white in one mode. Fix it with `for-dark` and `for-light`, `paper`, or `invert`.
+- A figure that is invisible or boxed in white in one mode. Fix it with `for-dark` and `for-light`, `white-figure`, or `invert`.
 - A figure without a caption.
 - Equations shown in red, which is a MathJax error and is not reported in the console.
 - A repeated heading, or a topic in place of a finding. Write a finding only if it is shown on the slide, and otherwise a more specific topic.

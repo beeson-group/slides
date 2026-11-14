@@ -49,7 +49,7 @@ export type Line = { text: string; warn: boolean; title: string };
 
 export type Event = 'report' | 'history' | 'dirty' | 'slide' | 'resize';
 
-// a block of text paired with the file is editable in place
+// a text element paired with the file is editable in place
 export const HOST = '[contenteditable="true"]';
 
 // the services of the modules, each set by the module named in its comment
@@ -64,7 +64,7 @@ export interface Files {
   present(hash?: string, tab?: boolean): Promise<{ win: Window | null } | null>;
   toggleAutosave(): void;
   line(): Line;
-  // the card of the texts that cannot be edited, and the card that asks before Open or Present
+  // the dialog of the texts that cannot be edited, and the dialog that asks before Open or Present
   showProblems(): void;
   closeProblems(): void;
   problemsShown(): boolean;
@@ -121,7 +121,7 @@ export interface MathPop {
 }
 
 export interface Typing {
-  // text/typing.ts: the editable blocks, and a block put back by the history
+  // text/typing.ts: the editable text elements, and a text element put back by the history
   attach(): void;
   markMath(root: Element): void;
   restoreHost(host: Element, content: string): Promise<void>;
@@ -146,8 +146,8 @@ export interface Pane {
   refresh(): void;
 }
 
-export interface LayerSwitch {
-  // layers.ts: the layer of the slide that is shown
+export interface ShownStepsSwitch {
+  // shown-steps.ts: the steps of the slide that are shown
   refresh(): void;
   reveal(el: Element): void;
 }
@@ -202,7 +202,7 @@ export class App {
   math!: MathPop;
   typing!: Typing;
   move!: Selector;
-  layers!: LayerSwitch;
+  shownSteps!: ShownStepsSwitch;
   selection!: Selection;
   doc!: Doc;
   nav!: Pane;
@@ -244,7 +244,7 @@ export class App {
     return this.deck()?.getCurrentSlide() ?? null;
   }
 
-  // the slide of el is shown in the layer in which el is seen, e.g. for an undo of a change on
+  // the slide of el is shown at the steps at which el is seen, e.g. for an undo of a change on
   // another slide
   showSlide(el: Element): void {
     if (this.history.quiet) return;
@@ -265,7 +265,7 @@ export class App {
         this.invalidate();
       }
     }
-    this.layers?.reveal(el);
+    this.shownSteps?.reveal(el);
   }
 
   slideNumber(slide: Element | null): number | null {
@@ -297,7 +297,7 @@ export class App {
     this.selection.set('elements', els);
   }
 
-  // the editable block around target, on a slide
+  // the editable text element around target, on a slide
   hostOf(target: EventTarget | null): Element | null {
     const host = target instanceof Element ? target.closest(HOST) : null;
     return host && this.slides().contains(host) ? host : null;
@@ -368,14 +368,14 @@ export class App {
     const active = document.activeElement;
     if (!(active instanceof Element) || active === document.body) return 'canvas';
     // a popover, e.g. the grid of Insert Table, leaves the toolbar and the commands enabled
-    if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]:not([data-popover])')) return 'dialog';
+    if (active.closest('.beeson-math, .beeson-edit-dialog:not([hidden]), dialog[open]:not([data-popover])')) return 'dialog';
     // a slider, a checkbox, a button, or a list does not have an undo of its own, hence its region
     // is that of the pane around it
     if (active.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
     // a formula, or a text without a caret, focused in an object that is framed takes the keys of the
     // slide, e.g. a new display after its TeX field is closed. a caret in a text keeps the keys of the
-    // text, also where an undo framed its block
+    // text, also where an undo framed its text element
     if (this.caretHost() || (this.hostOf(active) && !(this.selection.kind === 'elements' && this.selection.items.some((el) => el.contains(active))))) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
     // the object list of navigator/objects.ts takes its own keys, as a pane of controls

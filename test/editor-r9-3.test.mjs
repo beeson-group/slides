@@ -16,7 +16,9 @@ const PLATFORMS = ['mac', 'other'];
 let browser;
 let server;
 before(async () => {
-  browser = await launch({ offline: false });
+  // the test of every slide changed to each layout is one read of 48 s on a runner, and of over the
+  // 120 s in which Chrome must answer by default on two cores, hence the limit of an answer is 8 min
+  browser = await launch({ offline: false, timeout: 480000 });
   server = await serve('.');
 });
 after(async () => {
@@ -39,13 +41,13 @@ async function load(t, platform, { n = 0, mode = 'light' } = {}) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
-  const url = `${server.origin}/index.html?edit&still&theme=${mode}&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=${mode}&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
@@ -125,46 +127,46 @@ for (const platform of PLATFORMS) {
     await row(page, 6);
     await row(page, 8, 'Shift');
     await key(page, 'Mod+D');
-    await agree(page, 'after Duplicate', { n: 18, current: 11, selected: [7, 9, 11] });
+    await agree(page, 'after Duplicate', { n: 16, current: 11, selected: [7, 9, 11] });
     await key(page, UNDO);
-    await agree(page, 'after the undo of Duplicate', { n: 15, current: 8, selected: [6, 7, 8] });
+    await agree(page, 'after the undo of Duplicate', { n: 13, current: 8, selected: [6, 7, 8] });
     await key(page, REDO(platform));
-    await agree(page, 'after the redo of Duplicate', { n: 18, current: 11, selected: [7, 9, 11] });
+    await agree(page, 'after the redo of Duplicate', { n: 16, current: 11, selected: [7, 9, 11] });
     await key(page, UNDO);
     await byteExact(page);
 
     await row(page, 6);
     await row(page, 8, 'Shift');
     await key(page, 'Delete');
-    await agree(page, 'after Delete', { n: 12, current: 6, selected: [6] });
+    await agree(page, 'after Delete', { n: 10, current: 6, selected: [6] });
     await key(page, UNDO);
-    await agree(page, 'after the undo of Delete', { n: 15, current: 8, selected: [6, 7, 8] });
+    await agree(page, 'after the undo of Delete', { n: 13, current: 8, selected: [6, 7, 8] });
     await key(page, REDO(platform));
-    await agree(page, 'after the redo of Delete', { n: 12, current: 6, selected: [6] });
+    await agree(page, 'after the redo of Delete', { n: 10, current: 6, selected: [6] });
     await key(page, UNDO);
     await byteExact(page);
 
     await row(page, 5);
     await key(page, 'Enter');
-    await agree(page, 'after New Slide', { n: 16, current: 6, selected: [6], focus: false, card: false });
+    await agree(page, 'after New Slide', { n: 14, current: 6, selected: [6], focus: false, card: false });
     await key(page, UNDO);
-    await agree(page, 'after the undo of New Slide', { n: 15, current: 5, selected: [5] });
+    await agree(page, 'after the undo of New Slide', { n: 13, current: 5, selected: [5] });
     await byteExact(page);
 
     await row(page, 5);
     await exec(page, 'slide.layout.split');
-    await agree(page, 'after the change to Split', { n: 15, current: 5, selected: [5], focus: false });
+    await agree(page, 'after the change to Split', { n: 13, current: 5, selected: [5], focus: false });
     await key(page, UNDO);
-    await agree(page, 'after the undo of the change to Split', { n: 15, current: 5, selected: [5], focus: false });
+    await agree(page, 'after the undo of the change to Split', { n: 13, current: 5, selected: [5], focus: false });
     await byteExact(page);
 
     await row(page, 5);
     await key(page, 'Alt+ArrowDown');
-    await agree(page, 'after Move Slide Down', { n: 15, current: 6, selected: [6] });
+    await agree(page, 'after Move Slide Down', { n: 13, current: 6, selected: [6] });
     await key(page, UNDO);
-    await agree(page, 'after the undo of Move Slide Down', { n: 15, current: 5, selected: [5] });
+    await agree(page, 'after the undo of Move Slide Down', { n: 13, current: 5, selected: [5] });
     await key(page, REDO(platform));
-    await agree(page, 'after the redo of Move Slide Down', { n: 15, current: 6, selected: [6] });
+    await agree(page, 'after the redo of Move Slide Down', { n: 13, current: 6, selected: [6] });
     await key(page, UNDO);
     await byteExact(page);
     assert.deepEqual(errors(page), []);
@@ -261,7 +263,7 @@ for (const platform of PLATFORMS) {
 
 // finding 11 (check 7 of the laptop tests of round 4): a change of layout forth and back gives the
 // file byte for byte, for every slide of the demo deck, each of which has a footnote, a backdrop,
-// a zone, or notes
+// a figure box, or notes
 const LAYOUTS = ['title', 'section', 'content', 'narrow', 'wide', 'figure', 'split', 'closing'];
 for (const platform of PLATFORMS) {
   test(`every slide of the demo deck changed to each layout and back gives the file byte for byte (${platform})`, async (t) => {
@@ -401,7 +403,7 @@ for (const platform of PLATFORMS) {
     await row(page, 4);
     await key(page, 'Mod+A');
     const v = await page.evaluate(VIEWS);
-    assert.deepEqual(v.selected, Array.from({ length: 15 }, (_, i) => i + 1));
+    assert.deepEqual(v.selected, Array.from({ length: 13 }, (_, i) => i + 1));
     assert.equal(v.focus, 4);
   });
 }
@@ -421,7 +423,7 @@ for (const platform of PLATFORMS) {
     await row(page, 4);
     assert.equal((await state(page, 'slide.moveUp')).enabled, true);
     await key(page, 'Alt+ArrowUp');
-    await agree(page, 'after Alt+ArrowUp in the navigator', { n: 15, current: 3, selected: [3] });
+    await agree(page, 'after Alt+ArrowUp in the navigator', { n: 13, current: 3, selected: [3] });
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Move Slide Up');
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
@@ -475,7 +477,7 @@ for (const platform of PLATFORMS) {
     assert.equal(items[items.indexOf('slide.new') + 1], 'slide.newSection', `the menu of a thumbnail lists ${items.join(', ')}`);
     await pick(page, 'slide.newSection');
     assert.equal(await page.evaluate(LAYOUT_AT(3)), 'section', 'the new section slide is not after slide 3');
-    await agree(page, 'after New Section on slide 3', { n: 16, current: 4, selected: [4], focus: false, card: false });
+    await agree(page, 'after New Section on slide 3', { n: 14, current: 4, selected: [4], focus: false, card: false });
     assert.equal((await state(page, 'edit.undo')).label, 'Undo New Section');
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
@@ -485,7 +487,7 @@ for (const platform of PLATFORMS) {
     const empty = await page.evaluate(MENU);
     assert.equal(empty[empty.indexOf('slide.new') + 1], 'slide.newSection', `the menu of the navigator lists ${empty.join(', ')}`);
     await pick(page, 'slide.newSection');
-    assert.equal(await page.evaluate(LAYOUT_AT(15)), 'section', 'the new section slide is not at the end');
+    assert.equal(await page.evaluate(LAYOUT_AT(13)), 'section', 'the new section slide is not at the end');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo New Section');
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
@@ -500,17 +502,17 @@ for (const platform of PLATFORMS) {
   test(`the status bar counts the slides in show order, and names a hidden slide (${platform})`, async (t) => {
     const page = await load(t, platform);
     await row(page, 5);
-    assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 5 of 15', struck: null, name: null });
+    assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 5 of 13', struck: null, name: null });
     await row(page, 4);
     await exec(page, 'slide.hide');
     await frames(page);
-    assert.deepEqual(await page.evaluate(COUNT), { text: 'Hidden slide, after slide 3 of 14', struck: null, name: null });
+    assert.deepEqual(await page.evaluate(COUNT), { text: 'Hidden slide, after slide 3 of 12', struck: null, name: null });
     await row(page, 5);
-    assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 4 of 14', struck: null, name: null });
+    assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 4 of 12', struck: null, name: null });
     await page.evaluate('window.BeesonEditor.undo()');
     await frames(page);
     await byteExact(page);
     await row(page, 5);
-    assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 5 of 15', struck: null, name: null });
+    assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 5 of 13', struck: null, name: null });
   });
 }

@@ -13,7 +13,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, type } from './helpers/editor.mjs';
 
-const SOURCE = readFileSync('index.html', 'utf8');
+const SOURCE = readFileSync('test-deck.html', 'utf8');
 const DECK = 'test/pages/editor-r20-11.html';
 const DECK_SOURCE = readFileSync(DECK, 'utf8');
 const slideOf = (text, has) => [...text.matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => has(m[0]));
@@ -67,7 +67,7 @@ async function load(t, platform, text, n, file = null, theme = '') {
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/theme/beeson.css`);
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/${file ?? (text === DECK_SOURCE ? DECK : 'index.html')}?edit&still${theme}&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/${file ?? (text === DECK_SOURCE ? DECK : 'test-deck.html')}?edit&still${theme}&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   page.source = text;
@@ -124,7 +124,7 @@ const drawnAtCenter = (page, selector) => page.evaluate(`(() => {
   document.head.append(style);
   const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
   style.remove();
-  return hit?.closest('.shape') ? 'shape' : hit?.closest('.math, .zone, p') ? 'new' : hit?.localName ?? 'nothing';
+  return hit?.closest('.shape') ? 'shape' : hit?.closest('.math, .figure-box, p') ? 'new' : hit?.localName ?? 'nothing';
 })()`);
 
 // a drag of the element of selector onto the center of the shape of the slide, by the move handle
@@ -149,7 +149,7 @@ async function undoAll(page) {
 // the closing slide of source, and its index
 function manyChildren(n, m, source = SOURCE, title = 'Many children') {
   const ps = Array.from({ length: n }, (_, i) => `  <p style="font-size: 22px; margin: 0">Paragraph number ${i} of a long slide.</p>`).join('\n');
-  const figs = Array.from({ length: m }, (_, i) => `  <div class="zone" style="translate: ${-900 + i * 40}px ${-300 + i * 30}px"><img src="demo/figure-dark.png" alt="f${i}"></div>`).join('\n');
+  const figs = Array.from({ length: m }, (_, i) => `  <div class="figure-box" style="translate: ${-900 + i * 40}px ${-300 + i * 30}px"><img src="demo/figure-dark.png" alt="f${i}"></div>`).join('\n');
   const slide = `<section>\n  <h2>${title}</h2>\n${ps}\n${figs}\n  <div class="foot">A foot.</div>\n</section>\n\n`;
   const text = source.replace('<section class="closing">', `${slide}<section class="closing">`);
   return { text, n: slideOf(text, (s) => s.includes(title)) };
@@ -210,8 +210,10 @@ async function layerTimes(page, platform, n) {
 // each time on a slide with 47 rows is bounded by RATIO times the same time on a slide with 9 rows,
 // and SLACK ms for the pauses of a machine that other tests load at once. the bound thus scales
 // with a slower machine. before the fix of F1, the menu took about 970 ms, a command 700 ms, a
-// Shift-click 5 to 12 s, and Bring to Front of 5 about 45 s on the slide with 47 rows
-const RATIO = 4;
+// Shift-click 5 to 12 s, and Bring to Front of 5 about 45 s on the slide with 47 rows, i.e. over
+// 100 times its time with 9 rows. the rows are 5.2 times as many, and on the runners of GitHub
+// Bring to Front took 2 to 5.8 times as long, hence a bound of 4 times failed there
+const RATIO = 8;
 const SLACK = 150;
 
 for (const platform of PLATFORMS) {
@@ -229,8 +231,16 @@ for (const platform of PLATFORMS) {
     await layerTimes(page, platform, few.n);
     const small = await layerTimes(page, platform, few.n);
     const large = await layerTimes(page, platform, n);
+    // a time over its bound is measured again, twice at most, and the lowest one counts, since one
+    // time on a machine that runs other tests at once holds the pauses of the machine too
+    const TIMES = ['menu', 'command', 'shift', 'front'];
+    const over = () => TIMES.filter((k) => large[k] >= RATIO * small[k] + SLACK);
+    for (let again = 0; again < 2 && over().length; again++) {
+      const next = await layerTimes(page, platform, n);
+      for (const k of TIMES) large[k] = Math.min(large[k], next[k]);
+    }
     t.diagnostic(`with ${small.rows} rows ${js(small)}, with ${large.rows} rows ${js(large)}`);
-    for (const k of ['menu', 'command', 'shift', 'front']) {
+    for (const k of TIMES) {
       assert.ok(large[k] < RATIO * small[k] + SLACK, `${k} took ${large[k]} ms with ${large.rows} rows, and ${small[k]} ms with ${small.rows} rows`);
     }
     assert.deepEqual(errors(page), []);
@@ -308,7 +318,7 @@ for (const platform of PLATFORMS) {
     await page.send('DOM.setFileInputFiles', { files: [resolve('demo/figure-light.png')], objectId: result.objectId });
     await page.waitFor('window.__done', 20000);
     await sleep(300);
-    const img = `${S} > .zone img`;
+    const img = `${S} > .figure-box img`;
     assert.ok(await page.evaluate(`!!document.querySelector(${js(img)})`), 'no figure was inserted');
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Insert Image');
     await dragOntoShape(page, img);
@@ -480,10 +490,10 @@ for (const platform of PLATFORMS) {
       results.push(await render(page));
       assert.deepEqual(errors(page), []);
       // a page left open keeps its draft 1 s after its last edit, and on a slow machine this draft
-      // was kept after the next page emptied the storage, whose card then took the click on IMG
+      // was kept after the next page emptied the storage, whose dialog then took the click on IMG
       await page.close();
     }
-    assert.match(results[0], /<figure class="zone" style="translate: [^"]+">/);
+    assert.match(results[0], /<figure class="figure-box" style="translate: [^"]+">/);
     assert.equal(results[1], results[0]);
   });
 

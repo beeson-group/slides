@@ -39,7 +39,7 @@ const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
 // the editor on a deck served over HTTP, with the Format tab shown, in a window of size
-async function open(platform, { deck = 'index.html', size } = {}) {
+async function open(platform, { deck = 'test-deck.html', size } = {}) {
   const page = await browser.newPage(size);
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -120,7 +120,7 @@ for (const platform of ['mac', 'other']) {
     const table = await boxOf(page, '.reveal section.present table');
     const ink = await inkOf(page, li);
     const cols = await boxOf(page, '.beeson-table-bars .bar.cols');
-    const figure = await boxOf(page, '.reveal section.present figure.zone');
+    const figure = await boxOf(page, '.reveal section.present figure.figure-box');
     assert.ok(cols.top >= ink.bottom - 0.5, `the bar of the columns at ${cols.top} covers the list, whose text ends at ${ink.bottom}`);
     assert.ok(!meets(table, figure), 'the table covers the figure');
     inside(table, slide, 'the table');
@@ -231,7 +231,7 @@ const menuItems = (page) => page.evaluate(`[...document.querySelectorAll('.beeso
 
 // the commands that change a figure, which a lock turns off
 const CHANGES = [
-  'media.replace', 'figure.alt', 'figure.decorative', 'figure.paper', 'figure.invert', 'figure.mode.dark', 'image.editMask', 'image.crop',
+  'media.replace', 'figure.alt', 'figure.decorative', 'figure.whiteFigure', 'figure.invert', 'figure.mode.dark', 'image.editMask', 'image.crop',
   'edit.cut', 'element.delete', 'selection.editText', 'arrange.align.left', 'arrange.order.back', 'arrange.flipHorizontal', 'arrange.nudge.left',
   'arrange.group', 'steps.add',
 ];
@@ -246,13 +246,13 @@ for (const platform of ['mac', 'other']) {
     const page = await open(platform, { size: SIZES[platform] });
     t.after(() => page.close?.());
     await show(page, FIGURES);
-    const figure = '.reveal section.present figure.zone img';
+    const figure = '.reveal section.present figure.figure-box img';
     await selectFigure(page, figure);
     await settle(page);
     assert.equal((await state(page, 'media.replace')).enabled, true);
     await press(page, 'Mod+L');
     await settle(page);
-    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.zone').hasAttribute('data-locked')`), true);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.figure-box').hasAttribute('data-locked')`), true);
     assert.equal((await state(page, 'arrange.unlock')).enabled, true);
     assert.equal((await state(page, 'edit.copy')).enabled, true);
     for (const id of CHANGES) assert.equal((await state(page, id)).enabled, false, `${id} is enabled on a locked figure`);
@@ -269,15 +269,15 @@ for (const platform of ['mac', 'other']) {
     assert.deepEqual(on.filter((text) => !KEPT.some((k) => text.startsWith(k))), [], 'the context menu has enabled items that change the figure');
     await press(page, 'Escape');
     const edited = await roundTrip(page);
-    assert.match(edited, /<figure class="zone" data-locked>/);
+    assert.match(edited, /<figure class="figure-box" data-locked>/);
     // Unlock gives the controls back, on the figure selected again after the open of the save
     await click(page, figure);
     await settle(page);
     assert.equal((await state(page, 'media.replace')).enabled, false);
     await press(page, platform === 'mac' ? 'Mod+Alt+L' : 'Mod+Shift+L');
     await settle(page);
-    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.zone').hasAttribute('data-locked')`), false);
-    for (const id of ['media.replace', 'figure.paper', 'arrange.align.left', 'edit.cut']) assert.equal((await state(page, id)).enabled, true, `${id} is off after Unlock`);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.figure-box').hasAttribute('data-locked')`), false);
+    for (const id of ['media.replace', 'figure.whiteFigure', 'arrange.align.left', 'edit.cut']) assert.equal((await state(page, id)).enabled, true, `${id} is off after Unlock`);
     assert.ok((await controls(page)).filter((c) => c.on).length > 10, 'the Arrange pane is still off after Unlock');
   });
 }
@@ -339,7 +339,7 @@ async function choose(page, path) {
   await page.send('DOM.setFileInputFiles', { files: [path], objectId: result.objectId });
 }
 
-const ASK = 'dialog.beeson-edit-card.beeson-poster-ask[open]';
+const ASK = 'dialog.beeson-edit-dialog.beeson-poster-ask[open]';
 
 // state video-capture-poster of round 2: in a deck opened from a file, the page has an origin of
 // its own, which the video of the folder does not share, hence the browser kept the frames of the

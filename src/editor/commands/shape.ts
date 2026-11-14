@@ -28,7 +28,7 @@ export const SHAPE_KINDS: [string, string][] = [
 ];
 // the class of each kind, none for a rectangle
 const KIND_CLASSES = SHAPE_KINDS.map(([k]) => k).filter((k) => k !== 'rectangle');
-export const FILLS: [string, string, string | null][] = [['tint', 'Tint', null], ['none', 'None', 'fill-none'], ['ground', 'Background', 'fill-ground'], ['veil', 'Veil', 'veil']];
+export const FILLS: [string, string, string | null][] = [['tint', 'Tint', null], ['none', 'None', 'fill-none'], ['ground', 'Background', 'fill-ground'], ['translucent', 'Translucent', 'fill-translucent']];
 export const WEIGHTS: [string, string, string | null][] = [['none', 'None', 'no-outline'], ['3', '3 px', null], ['6', '6 px', 'weight-6'], ['8', '8 px', 'weight-8']];
 export const CORNERS: [string, string, string | null][] = [['small', 'Small', 'round-s'], ['medium', 'Medium', null], ['large', 'Large', 'round-l']];
 
@@ -373,10 +373,10 @@ export function install(app: App): void {
     });
   family('tone', LINE_TONES.map(([t, label]) => [t, label, t === 'text' ? null : `tone-${t}`]), 'Shape Color', 'shape-tone', 80);
   family('fill', FILLS, 'Shape Fill', 'shape-fill', 90);
-  // a veil is drawn without an outline unless it has weight-6 or weight-8, hence 3 px, which does not
-  // have a class, is not offered on a veil, and the outline of a veil without a class reads as None
-  const veil = (el: Element) => el.classList.contains('veil');
-  family('weight', WEIGHTS, 'Outline', 'shape-weight', 100, (el, id) => id !== '3' || !veil(el), (el) => (veil(el) && choiceOf(el, WEIGHTS) === '3' ? 'none' : choiceOf(el, WEIGHTS)));
+  // a translucent shape is drawn without an outline unless it has weight-6 or weight-8, hence 3 px, which does not
+  // have a class, is not offered on a translucent shape, and the outline of a translucent shape without a class reads as None
+  const translucent = (el: Element) => el.classList.contains('fill-translucent');
+  family('weight', WEIGHTS, 'Outline', 'shape-weight', 100, (el, id) => id !== '3' || !translucent(el), (el) => (translucent(el) && choiceOf(el, WEIGHTS) === '3' ? 'none' : choiceOf(el, WEIGHTS)));
   family('corner', CORNERS, 'Corners', 'shape-corner', 110, (el) => el.classList.contains('rounded'));
   SHAPE_KINDS.forEach(([kind, label], i) => {
     c.define({

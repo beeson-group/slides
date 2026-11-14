@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>First and last rows</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<style>
+  .bar { position: absolute; left: 0; width: 1920px; height: 1px; }
+  .bar.first { top: 0; background: #ff0000; }
+  .bar.last { top: 1079px; background: #00ff00; }
+</style>
+</head>
+<body>
+<!-- three slides of one step each, with a red bar of 1 px on the first row of each slide and a
+     green one on its last row, hence a picture cut a row short or shifted by a row differs -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <div class="bar first"></div>
+      <h2>First slide</h2>
+      <div class="bar last"></div>
+    </section>
+    <section>
+      <div class="bar first"></div>
+      <h2>Second slide</h2>
+      <div class="bar last"></div>
+    </section>
+    <section>
+      <div class="bar first"></div>
+      <h2>Third slide</h2>
+      <div class="bar last"></div>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

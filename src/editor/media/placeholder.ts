@@ -1,6 +1,6 @@
-// the placeholder of an empty zone or plate, as the content placeholder of PowerPoint: a dashed
+// the placeholder of an empty figure box or plate, as the content placeholder of PowerPoint: a dashed
 // edge with buttons for an image, a video, a table, and a QR code at its center, of which a click
-// inserts into the zone. it is an element of the editor only, marked data-generated, which the save
+// inserts into the figure box. it is an element of the editor only, marked data-generated, which the save
 // and the pairing pass over, and it is drawn again after each change of the slides. it does not
 // have text, since a slot with text is not empty, hence its hint is drawn by the stylesheet
 
@@ -33,12 +33,12 @@ const BUTTONS: { kind: Kind; label: string }[] = [
   { kind: 'qr', label: 'Insert QR Code' },
 ];
 
-const SLOTS = '.reveal .slides section > .zone, .reveal .slides section > .plate';
+const SLOTS = '.reveal .slides section > .figure-box, .reveal .slides section > .plate';
 
 function placeholder(): HTMLElement {
   const box = make('div', 'beeson-placeholder');
   box.setAttribute('data-generated', '');
-  box.setAttribute('aria-label', 'Empty zone');
+  box.setAttribute('aria-label', 'Empty figure box');
   // hidden outside the stylesheet of the editor, e.g. in a thumbnail of the navigator, whose clone
   // of the slide is drawn without the hidden attribute
   box.style.display = 'none';
@@ -68,14 +68,14 @@ export function syncPlaceholders(app: App): void {
   }
 }
 
-async function insertInto(app: App, zone: Element, kind: Kind, anchor: DOMRect): Promise<void> {
-  if (kind === 'table') return pickTableInto(app, zone, anchor);
+async function insertInto(app: App, figureBox: Element, kind: Kind, anchor: DOMRect): Promise<void> {
+  if (kind === 'table') return pickTableInto(app, figureBox, anchor);
   if (kind === 'qr') {
-    if (app.current() === zone.closest('section')) await app.commands.run('insert.qr', zone);
+    if (app.current() === figureBox.closest('section')) await app.commands.run('insert.qr', figureBox);
     return;
   }
   const files = await chooseFiles(ACCEPT[kind]);
-  if (files.length && zone.isConnected && isEmptySlot(app, zone)) await insertFiles(app, files, zone);
+  if (files.length && figureBox.isConnected && isEmptySlot(app, figureBox)) await insertFiles(app, files, figureBox);
 }
 
 export function install(app: App): void {
@@ -91,10 +91,10 @@ export function install(app: App): void {
   }, true);
   window.addEventListener('click', (ev) => {
     const b = ev.target instanceof Element ? ev.target.closest<HTMLElement>('.beeson-placeholder button') : null;
-    const zone = b?.closest('.zone, .plate');
-    if (!b || !zone) return;
+    const figureBox = b?.closest('.figure-box, .plate');
+    if (!b || !figureBox) return;
     ev.preventDefault();
     ev.stopPropagation();
-    void insertInto(app, zone, b.dataset.insert as Kind, b.getBoundingClientRect()).catch((e) => app.fail(e));
+    void insertInto(app, figureBox, b.dataset.insert as Kind, b.getBoundingClientRect()).catch((e) => app.fail(e));
   }, true);
 }

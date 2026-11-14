@@ -1,5 +1,5 @@
-// tests of R36.3 on both platforms, a turn of a line with a glued end. as a connection line of
-// Keynote, a line glued at one end or at both is not turned: while every selected element is such a
+// tests of R36.3 on both platforms, a turn of a line with an attached end. as a connection line of
+// Keynote, a line attached at one end or at both is not turned: while every selected element is such a
 // line, the field Angle of the Arrange pane, the quarter turns, and Reset Rotation are dimmed and do
 // nothing, and the field reads "Detach the line to turn it". once each end is detached in the
 // section Connections of the Line pane, the line is turned by the field, and a selection with
@@ -13,7 +13,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-// slide 0 holds a curved arrow glued from a1 to a2, i.e. the two rounded rectangles, and a loose
+// slide 0 holds a curved arrow attached from a1 to a2, i.e. the two rounded rectangles, and a loose
 // line under them, and slide 1 the same arrow turned by 20 degrees in the file
 const DECK = 'test/pages/editor-r36-3.html';
 const SOURCE = readFileSync(DECK, 'utf8');
@@ -69,14 +69,14 @@ function screenOf(p) {
   return { x: r.left + p.x * k, y: r.top + p.y * k };
 }
 const screen = (page, x, y) => call(page, screenOf, { x, y });
-// points in slide px on the glued arrow at its middle and at a quarter of its length, away from the
+// points in slide px on the attached arrow at its middle and at a quarter of its length, away from the
 // grip of its bend, on the loose line, and on the box a1
 const ON_ARROW = [853, 454];
 const ON_QUARTER = [686, 475];
 const ON_LOOSE = [900, 950];
 const ON_BOX = [399, 500];
 
-// the glue and the angle of each line of the slide
+// the attachment and the angle of each line of the slide
 const lines = (page) => page.evaluate(`[...document.querySelector(${js(SLIDE)}).querySelectorAll('svg.line')].map((svg) => ({ from: svg.getAttribute('data-from'), to: svg.getAttribute('data-to'), rotate: svg.style.rotate }))`);
 
 // a click on the first point and a click with Shift on each other point
@@ -122,7 +122,7 @@ async function menuTurns(page, x, y) {
   return Object.fromEntries(items.filter(([label]) => /^Rotate (Left|Right) 90°$/.test(label)));
 }
 
-// every turn of the selected glued line refused: the commands, the field with its reason, and the
+// every turn of the selected attached line refused: the commands, the field with its reason, and the
 // items of the menu of the line at the point at dimmed, no handle of a turn shown, and the file
 // untouched after each command and after a typed angle, without an entry of the history. the Tab
 // after the typed angle reaches the canvas, which selects the next object
@@ -146,7 +146,7 @@ async function refused(page, at = ON_QUARTER) {
   assert.equal((await state(page, 'edit.undo')).enabled, undoable, 'a refused turn made an entry of the history');
 }
 
-// items 1, 2, and 4. a line glued at both ends, also turned in the file, and a line glued at one end
+// items 1, 2, and 4. a line attached at both ends, also turned in the file, and a line attached at one end
 for (const platform of PLATFORMS) {
   test(`item 2: the turns of a line glued at both ends are dimmed and leave the file untouched (${platform})`, async (t) => {
     const page = await load(t, platform);
@@ -180,7 +180,7 @@ for (const platform of PLATFORMS) {
   test(`item 2: the turns of a line glued at one end are dimmed, and the line is turned after Detach (${platform})`, async (t) => {
     const page = await load(t, platform);
     await select(page, ON_ARROW);
-    await exec(page, 'line.unglue.end');
+    await exec(page, 'line.detach.end');
     await sleep(100);
     assert.deepEqual((await lines(page))[0], { from: 'a1 1 0.5', to: null, rotate: '' });
     await arrangeTab(page);
@@ -188,7 +188,7 @@ for (const platform of PLATFORMS) {
     // Detach of the start leaves a loose line, which the field turns in one entry
     await select(page, ON_ARROW);
     await arrangeTab(page);
-    await exec(page, 'line.unglue.start');
+    await exec(page, 'line.detach.start');
     await sleep(100);
     const loose = await render(page);
     assert.deepEqual((await lines(page))[0], { from: null, to: null, rotate: '' });
@@ -212,7 +212,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// items 2 and 4. a glued line selected with a box or with a loose line is turned by the field as
+// items 2 and 4. an attached line selected with a box or with a loose line is turned by the field as
 // it was without this rule
 for (const platform of PLATFORMS) {
   for (const [name, other] of [['a box', ON_BOX], ['a loose line', ON_LOOSE]]) {
@@ -237,7 +237,7 @@ for (const platform of PLATFORMS) {
   }
 }
 
-// item 3. a drag of the whole glued line still takes the glue of both ends off, after which the
+// item 3. a drag of the whole attached line still takes the attachment of both ends off, after which the
 // field turns the line
 for (const platform of PLATFORMS) {
   test(`item 3: a glued line dragged whole is let go and turned by the field (${platform})`, async (t) => {

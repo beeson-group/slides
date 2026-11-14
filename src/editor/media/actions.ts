@@ -2,7 +2,7 @@
 // figure replaced, and the poster of a video captured from its first frame. each is one entry of
 // the history made through app.doc, and the new files are kept in the store of store.ts until a
 // save. a file is put where Keynote puts a file dropped onto a media placeholder: into an empty
-// zone or plate of the slide, and else into a new zone of its own, i.e. the figure.zone of the
+// figure box or plate of the slide, and else into a new figure box of its own, i.e. the figure.figure-box of the
 // template of model/templates.ts
 
 import type { App } from '../app.ts';
@@ -22,9 +22,9 @@ export const ACCEPT: Record<Kind | 'any', string> = {
   any: 'image/*,video/*,.mp4,.m4v,.webm,.mov',
 };
 
-// a box of the layout that takes a figure, i.e. a zone, a plate, or a figure, other than a plot,
+// a box of the layout that takes a figure, i.e. a figure box, a plate, or a figure, other than a plot,
 // a TikZ figure, a viewer of tycho, a surface, or a backdrop, which are drawn by the theme
-const SLOT = 'figure, .zone, .plate';
+const SLOT = 'figure, .figure-box, .plate';
 const DRAWN = '[data-plot], .tikz, tycho-viewer, .surface, .backdrop';
 
 // the attributes and the declarations of an image or a video that the element of the other kind
@@ -45,7 +45,7 @@ export const isEmptySlot = (app: App, el: Element): boolean =>
   isSlot(app, el) && ![...el.children].some((c) => !c.hasAttribute('data-generated')) && !el.textContent?.trim();
 
 export const emptySlot = (app: App, slide: Element): Element | null =>
-  [...slide.querySelectorAll(':scope > .zone, :scope > .plate, :scope > figure')].find((el) => isEmptySlot(app, el)) ?? null;
+  [...slide.querySelectorAll(':scope > .figure-box, :scope > .plate, :scope > figure')].find((el) => isEmptySlot(app, el)) ?? null;
 
 // the image or the video that el is, or the one shown in the slot el, e.g. of a pair for the two
 // modes the one of the mode of the slide
@@ -155,22 +155,22 @@ async function fill(app: App, slot: Element, r: Ready, label: string): Promise<E
   return slot;
 }
 
-// a new zone with the element of r, before the footnote and the notes of the slide
-async function addZone(app: App, slide: Element, r: Ready): Promise<Element> {
+// a new figure box with the element of r, before the footnote and the notes of the slide
+async function addFigureBox(app: App, slide: Element, r: Ready): Promise<Element> {
   const before = slide.querySelector(':scope > .foot, :scope > aside.notes');
   const pending = app.doc.insertElement(r.kind, slide, before, r.kind === 'image' ? { src: r.file.path, alt: '' } : { src: r.file.path, poster: r.poster?.path ?? '' });
   media.resolve(slide);
-  const [zone] = await pending;
-  const el = zone.querySelector('img, video');
+  const [figureBox] = await pending;
+  const el = figureBox.querySelector('img, video');
   // the template writes an empty alt, i.e. a decorative image, and a poster named after the video
   if (el?.localName === 'img') app.doc.setTag(el, { attrs: { alt: null } }, 'alt');
   else if (el && !r.poster) app.doc.setTag(el, { attrs: { poster: null } }, 'poster');
-  media.resolve(zone);
-  watch(app, zone);
-  // the new zone is put in free space once the size of its picture is known
+  media.resolve(figureBox);
+  watch(app, figureBox);
+  // the new figure box is put in free space once the size of its picture is known
   if (el) await sized(el);
-  if (el instanceof HTMLElement) placeNew(app, zone, el);
-  return zone;
+  if (el instanceof HTMLElement) placeNew(app, figureBox, el);
+  return figureBox;
 }
 
 // resolves once the size of the picture of el is known, or after 3 s
@@ -199,7 +199,7 @@ export async function insertFiles(app: App, files: File[], into: Element | null 
   await app.history.selecting(`Insert ${label}`, async () => {
     for (const [i, r] of ready.entries()) {
       const slot = i === 0 && into && slide.contains(into) && isEmptySlot(app, into) ? into : emptySlot(app, slide);
-      nodes.push(slot ? await fill(app, slot, r, label) : await addZone(app, slide, r));
+      nodes.push(slot ? await fill(app, slot, r, label) : await addFigureBox(app, slide, r));
     }
     for (const node of nodes) await overShapes(app, node);
     for (const node of nodes) checkOverlaps(app, slide, node);
@@ -251,9 +251,9 @@ export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElem
     }
     const parent = el.parentElement;
     if (!parent) throw new Error('the figure is not on the page');
-    // the mode, the step, and the ghost of el, its id, its group, its lock, and its place, in their order
+    // the mode, the step, and the class faint of el, its id, its group, its lock, and its place, in their order
     const own = app.doc.tagState(el);
-    const classes = own.classes.filter((c) => c === 'for-dark' || c === 'for-light' || c === 'ghost' || REVEAL_CLASSES.includes(c));
+    const classes = own.classes.filter((c) => c === 'for-dark' || c === 'for-light' || c === 'faint' || REVEAL_CLASSES.includes(c));
     const kept = Object.fromEntries(Object.entries(own.attrs).filter(([k]) => KEPT.includes(k)));
     const place = Object.entries(own.style).filter(([k]) => PLACE.includes(k)).map(([k, v]) => `${k}: ${v}`).join('; ');
     if (place) kept.style = place;

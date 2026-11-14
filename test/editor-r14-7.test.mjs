@@ -36,13 +36,13 @@ let saves = 0;
 async function load(t, platform, n = 4) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   page.platform = platform;
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
@@ -110,7 +110,7 @@ const caretIn = (page) => page.evaluate(`(() => {
 // the part of the file from the h2 of slide 5 to its figure
 const listPart = (text) => {
   const at = text.indexOf('<h2>Figures are first');
-  return text.slice(at, text.indexOf('<figure class="zone">', at));
+  return text.slice(at, text.indexOf('<figure class="figure-box">', at));
 };
 
 // the kinds of the blocks of the text column of slide 5, as parent>tag:start
@@ -119,7 +119,7 @@ const kinds = (page) => page.evaluate(`[...document.querySelectorAll('.reveal se
 for (const platform of PLATFORMS) {
   // D16: Numbers and Dashes after Paragraphs on a span of items reached only the last paragraph
   for (const [id, tag] of [['text.list.ol', 'ol'], ['text.list.ul', 'ul']]) {
-    test(`${tag === 'ol' ? 'Numbers' : 'Dashes'} after Paragraphs on a span of items acts on every paragraph of the span (${platform})`, async (t) => {
+    test(`${tag === 'ol' ? 'Numbers' : 'Arrows'} after Paragraphs on a span of items acts on every paragraph of the span (${platform})`, async (t) => {
       const page = await load(t, platform);
       await click(page, await pointOf(page, ITEM, 'toggle', 2));
       await press(page, 'Mod+A');

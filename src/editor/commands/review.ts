@@ -3,8 +3,8 @@
 // Play menu holds Present and Present from Start, moved from the File menu, the presenter view,
 // Customize Presenter Display…, the rehearsal of timings, Use Rehearsed Timings, and Clear
 // Timings. the Slide menu holds the transition of a slide, Magic Move, and Preview Transition, and
-// the View menu the Chapters Table. Present keeps the keys of PowerPoint, since F5 reloads the
-// page, and the presenter view takes Alt+Enter, the key of PowerPoint on a Mac. the Chapters Table
+// the View menu the Slide Sorter. Present keeps the keys of PowerPoint, since F5 reloads the
+// page, and the presenter view takes Alt+Enter, the key of PowerPoint on a Mac. the Slide Sorter
 // is not given a key, since Chrome takes Mod+1 to Mod+9 for its tabs
 
 import type { App } from '../app.ts';
@@ -151,7 +151,7 @@ export function install(app: App): void {
 
   c.define({
     id: 'view.lightTable',
-    label: 'Chapters Table',
+    label: 'Slide Sorter',
     menu: { bar: 'View', group: 'panes', order: 10.3 },
     enabled: (a) => ready(a),
     checked: () => sorter.shown,

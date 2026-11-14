@@ -7,7 +7,7 @@
 
 import type { App } from '../app.ts';
 import { twinOf } from '../canvas/hit.ts';
-import { moveTo, oneByOne, placedIndex, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
+import { moveTo, oneByOne, placedIndex, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../shown-steps.ts';
 import type { TagEdit } from '../tags.ts';
 import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, PLAYED, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type Model, type StartKind, type Steps } from '../steps.ts';
 
@@ -69,7 +69,7 @@ function msOf(seconds: number): number {
 }
 
 // the list of the argument or of the selection, i.e. the selected list, an item of it, or the
-// block of a text in it
+// list of a text in it
 function listAt(app: App, arg: unknown): Element | null {
   const given = (arg as Arg | undefined)?.el;
   const sel = app.selection;
@@ -107,7 +107,7 @@ const num = (v: string | null | undefined): number | null => (v != null && /^\s*
 // the index of a fragment in the file. a fragment that is not paired with a tag, e.g. a span in a
 // paragraph, is not edited, and its index is placed among those of the paired fragments whose
 // index was not edited, by the order of the page, which reveal.js numbers from 0. a fragment put
-// into a block from a text keeps the index of the text
+// into a text element from a text keeps the index of the text
 function indexOf(app: App, el: Element): string | null {
   const paired = (f: Element) => !!app.pairing?.elements.get(f)?.open;
   if (paired(el)) return app.doc.tagState(el).attrs['data-fragment-index'] ?? null;
@@ -134,7 +134,7 @@ function indexOf(app: App, el: Element): string | null {
 
 // the effect Play of a video or a tycho viewer set or taken off, as Start on a click of the Video
 // pane. a video that is not a step is made the last step of its slide with the effect Play, and a
-// video taken off Play stays a step with the effect Fade In. a video in a zone or a plate is not an
+// video taken off Play stays a step with the effect Fade In. a video in a figure box or a plate is not an
 // item of the steps until it is a step, hence it is given to the model. Play is taken off the step
 // of the style play that the video is or is in
 export function startOnClick(app: App, video: Element, on: boolean): void {
@@ -283,7 +283,7 @@ export function install(app: App): void {
           continue;
         }
         if (g <= 0 && Math.min(...(plan.groups[g] ?? [i])) === i) throw new Error('the first step of a slide is shown at a click, and it cannot start after a step before it');
-        if (!afterable(m, i)) throw new Error('the step before is set in the text of a block, and a delay cannot be written on it');
+        if (!afterable(m, i)) throw new Error('the step before is set in a text element, and a delay cannot be written on it');
         delays.set(i, delay === undefined ? (startAt(a, m, i, delays).delay ?? AFTER_DEFAULT) : msOf(delay));
         plan = setStart(plan, i, 'click');
       }

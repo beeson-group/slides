@@ -206,7 +206,7 @@ export function install(app: App): void {
   const nameOf = (item: Item): string => (item.el ? describeObject(item.el).name : 'Group');
   const membersOf = (item: Item): Element[] => (item.el ? [item.el] : item.members);
 
-  // the selected object of each element of the selection, and the block of a text with its caret
+  // the selected object of each element of the selection, and the text element of a text with its caret
   const selectedObjects = (): Set<Element> => {
     const sel = app.selection;
     if (sel.kind === 'text') return new Set(objects().filter((o) => sel.items.some((h) => o.contains(h))));

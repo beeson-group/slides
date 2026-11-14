@@ -15,7 +15,7 @@ test('every block of the deck with every layout is paired, and the deck is writt
   t.after(() => browser.close());
   const page = await editorPage(browser, { deck: LAYOUTS });
   const status = await page.evaluate('window.BeesonEditor.status()');
-  assert.ok(status.blocks > 40, `${status.blocks} blocks`);
+  assert.ok(status.texts > 40, `${status.texts} texts`);
   assert.equal(status.sections, (page.source.match(/<section/g) ?? []).length);
   await byteExact(page);
   assert.deepEqual(page.errors, []);

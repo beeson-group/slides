@@ -319,7 +319,7 @@ const INSERTS = [
 for (const platform of PLATFORMS) {
   for (const layout of ['content', 'split', 'figure']) {
     test(`every insert on a new ${layout} slide keeps its element off the two placeholders (${platform})`, async (t) => {
-      const page = await load(t, platform, 0, 'index.html');
+      const page = await load(t, platform, 0, 'test-deck.html');
       for (const [what, run, selector] of INSERTS) {
         await exec(page, `slide.new.${layout}`);
         await frames(page);

@@ -203,7 +203,7 @@ function decodePng(png) {
 }
 
 // true when two captures of a tile are drawn alike. Chrome may raster an anti-aliased edge of a new
-// tile one level apart, e.g. the corner of the zone of Split at a half pixel, and it may keep that
+// tile one level apart, e.g. the corner of the figure box of Split at a half pixel, and it may keep that
 // raster for some frames under load, hence each channel may differ by two levels
 function alike(a, b) {
   const [x, y] = [decodePng(a), decodePng(b)];

@@ -133,7 +133,7 @@ test('a page opened with motion is shown without reduced motion', { timeout: 600
 });
 
 // within 1 s of its last change, the editor keeps the unsaved edits of a page in the storage of the
-// browser under a key that starts with beeson-draft:, and offers them on a card over the slide of
+// browser under a key that starts with beeson-draft:, and offers them on a dialog over the slide of
 // the next page of the deck. on a slow runner, the next page of a test file was offered the edits
 // of the page before
 test('a page does not keep the unsaved edits of the editor in the storage, unless it is opened with drafts', { timeout: 60000 }, async (t) => {
@@ -187,6 +187,67 @@ test('a page that is refused a file with net::ERR_NO_BUFFER_SPACE is loaded agai
   await page.goto(`${server.origin}/page.html?other`);
   assert.equal(await page.evaluate(`localStorage.getItem('loads')`), '3');
   assert.deepEqual(page.errors, ['console.error: another error']);
+});
+
+// the network service of the Chrome started by this process, found by its parent, since Chromes of
+// other test files run at the same time
+function networkService() {
+  const rows = spawnSync('ps', ['-A', '-o', 'pid=,ppid=,command='], { encoding: 'utf8' }).stdout.split('\n');
+  const procs = rows.map((row) => row.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/)).filter(Boolean).map(([, pid, ppid, command]) => ({ pid: Number(pid), ppid: Number(ppid), command }));
+  const browsers = new Set(procs.filter((p) => p.ppid === process.pid).map((p) => p.pid));
+  return procs.find((p) => browsers.has(p.ppid) && p.command.includes('network.mojom.NetworkService'))?.pid;
+}
+
+// on a Windows runner of GitHub, the network service of Chrome crashes at times, and Chrome starts
+// it again. the load in flight is then lost, and it is made again
+test('a load in flight when the network service of Chrome crashes is made again', { skip: process.platform === 'win32', timeout: 60000 }, async (t) => {
+  const { createServer } = await import('node:http');
+  const server = createServer((request, response) => setTimeout(() => response.end('<!doctype html><link rel="icon" href="data:,"><p>loaded</p>'), 1000)).listen(0, '127.0.0.1');
+  await new Promise((done) => server.once('listening', done));
+  const browser = await launch({ offline: false, timeout: 20000 });
+  t.after(async () => {
+    await browser.close();
+    server.close();
+  });
+  const page = await browser.newPage();
+  const loading = page.goto(`http://127.0.0.1:${server.address().port}/`);
+  let pid;
+  for (let n = 0; n < 100 && !pid; n++) {
+    pid = networkService();
+    if (!pid) await sleep(20);
+  }
+  assert.ok(pid, 'the network service of Chrome is not found');
+  process.kill(pid, 'SIGKILL');
+  await loading;
+  assert.equal(await page.evaluate('document.body.textContent'), 'loaded');
+});
+
+// without theme/mathjax-config.js, MathJax is started with its default font, which it asks its CDN
+// for. the page of this test reports such an error after the refused file, at its first load only
+test('the errors of a load that is refused a file are dropped with the load', { timeout: 60000 }, async (t) => {
+  const { serve } = await import('../scripts/webdriver.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'slides-refused-'));
+  writeFileSync(join(root, 'page.html'), `<!doctype html><link rel="icon" href="data:,"><script>
+    const loads = Number(localStorage.getItem('loads') ?? 0) + 1;
+    localStorage.setItem('loads', loads);
+    if (new URLSearchParams(location.search).has('before')) console.error('an error of the page before');
+    else if (loads === 2) {
+      console.error('Failed to load resource: net::ERR_NO_BUFFER_SPACE ' + location.origin + '/theme/mathjax-config.js');
+      console.error('Failed to load resource: net::ERR_NAME_NOT_RESOLVED https://cdn.jsdelivr.net/npm/@mathjax/mathjax-newcm-font/svg.js');
+    }
+  </script>`);
+  const browser = await launch({ offline: false });
+  const server = await serve(root);
+  t.after(async () => {
+    await browser.close();
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  const page = await browser.newPage();
+  await page.goto(`${server.origin}/page.html?before`);
+  await page.goto(`${server.origin}/page.html`);
+  assert.equal(await page.evaluate(`localStorage.getItem('loads')`), '3', 'the page is not loaded again');
+  assert.deepEqual(page.errors, ['console.error: an error of the page before']);
 });
 
 // in R7.1, the process of a test file of the editor stayed alive for 20 s to 50 s after its last test,

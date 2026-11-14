@@ -12,12 +12,12 @@ import { click, drag, saveAndReopen } from './helpers/editor.mjs';
 import { declarationProblem } from '../src/editor/model/scope.ts';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // a table with a cell of two lines, and a table with a row drawn higher than its words
 const ROWS = 'test/pages/editor-r26-6.html';
 const HEIGHTS = 'test/pages/editor-r26-6-heights.html';
 const PANEL = '#beeson-edit-panel-format';
-// slide 5 of index.html, with a figure in its zone and without a free place for a table of 3 by 3
+// slide 5 of index.html, with a figure in its figure box and without a free place for a table of 3 by 3
 const FIGURES = 4;
 // the margin of the layouts at the left and the right of a slide, and the room of the bars of a
 // table at every size of the window, in slide px
@@ -86,7 +86,7 @@ for (const platform of PLATFORMS) {
   test(`a new table on a slide without a free place is put at the middle of the slide inside the margins, and a second table beside the first (${platform})`, async (t) => {
     const page = await load(t, platform, DECK, FIGURES);
     const base = await render(page);
-    const [figure] = await boxes(page, ':scope > figure.zone');
+    const [figure] = await boxes(page, ':scope > figure.figure-box');
     assert.ok(figure, 'slide 5 does not have a figure in its zone');
     await exec(page, 'insert.table', { rows: 3, columns: 3 });
     await sleep(300);

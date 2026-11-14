@@ -33,7 +33,7 @@ const middle = (r) => ({ x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 })
 let saves = 0;
 
 // the editor on a deck served over HTTP in a window of 1600 by 1000 px, on the slide n
-async function load(t, platform, { deck = 'index.html', n = 0, mode = 'light' } = {}) {
+async function load(t, platform, { deck = 'test-deck.html', n = 0, mode = 'light' } = {}) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
@@ -97,7 +97,7 @@ const TABLE = `(() => {
     table: !!table,
     object: sel.length === 1 && sel[0] === table,
     none: sel.length === 0 && !document.activeElement?.closest('td, th'),
-    block: shown(outline) && outline.classList.contains('block'),
+    block: shown(outline) && outline.classList.contains('range'),
     caret: !!document.activeElement?.closest('td, th'),
     frame: frame ? box(frame) : null,
     grips,

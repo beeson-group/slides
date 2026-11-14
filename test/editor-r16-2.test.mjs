@@ -13,7 +13,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const slideOf = (text, has) => [...text.matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => has(m[0]));
 const SOURCE = readFileSync(DECK, 'utf8');
 const STEPS = slideOf(SOURCE, (s) => s.includes('Show your steps one at a time'));
@@ -37,7 +37,7 @@ const OVERLAPS = SOURCE.replace(FOOT, '<div class="foot" style="translate: 0px -
 
 const STEP_EL = { h2: `${S} > h2`, p: `${S} > p`, ul: `${S} > ul`, foot: `${S} > .foot` };
 const STEP_ROWS = { h2: 'Text: Show your steps', p: 'Text: Design the complete', ul: 'Text: Each step is', foot: 'Text: Slides can have' };
-const CLOSE_EL = { h1: `${S} .block > h1`, sub: `${S} .block > .sub`, who: `${S} .block > .who`, qr: `${S} > .qr` };
+const CLOSE_EL = { h1: `${S} .title-text > h1`, sub: `${S} .title-text > .sub`, who: `${S} .title-text > .who`, qr: `${S} > .qr` };
 const CLOSE_ROWS = { h1: 'Text: Thank you', sub: 'Text: Questions', who: 'Text: github.com', qr: 'QR Code' };
 
 let browser;

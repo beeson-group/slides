@@ -1,5 +1,5 @@
 // the list of backdrops of Media > Backdrop…, on both platforms: the names of the owner for the
-// named scenes, the entry Beeson Logo with the backdrop of the title slide of the demo deck, the
+// built-in backdrops, the entry Beeson Logo with the backdrop of the title slide of the demo deck, the
 // entry Broucke Families with the look of the demo deck and its families, the names of the drawings
 // of a deck, an entry whose file is not next to the deck, and the list in one screen at 1280 by 720
 // px
@@ -11,7 +11,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DEMO = 'index.html';
+const DEMO = 'test-deck.html';
 const DECK = 'test/pages/editor-r22-5.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
@@ -19,14 +19,13 @@ const TILES = '.beeson-backdrop-gallery [data-tile]';
 // the names of the list on the demo deck, whose Broucke drawing is one of the entry Broucke Families
 const LIST = [
   'Beeson Logo',
-  'Lyapunov Families',
   'Cislunar Manifolds',
   'Earth Manifolds',
   'Broucke Families',
 ];
-const LOGO = '<div class="backdrop" data-strands="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128">';
-const BROUCKE = '<div class="backdrop" data-strands="demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-ramp="e" data-strands-colormap="viridis" data-duration="3" data-stagger="0.6">';
-const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const LOGO = '<div class="backdrop" data-trajectories="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128">';
+const BROUCKE = '<div class="backdrop" data-trajectories="demo/broucke-sample.js" data-trajectories-select="frame=pulsating" data-trajectories-color="family" data-trajectories-ramp="e" data-trajectories-colormap="viridis" data-duration="3" data-stagger="0.6">';
+const TUBES = '<div class="backdrop" data-backdrop="tubes" data-cx="0.97" data-cy="0" data-half="0.5">';
 
 let browser;
 let server;
@@ -47,13 +46,13 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const undo = (page) => page.evaluate('window.BeesonEditor.undo()');
 const redo = (page) => page.evaluate('window.BeesonEditor.redo()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
-// the number of strands drawn by the backdrop of the current slide, once its file is read
-const strands = (page) => page.evaluate(`(async () => {
+// the number of trajectories drawn by the backdrop of the current slide, once its file is read
+const trajectories = (page) => page.evaluate(`(async () => {
   const el = document.querySelector('section.present .backdrop');
   const o = el && Beeson.backdrops.find((b) => b.el === el);
   if (!o) return -1;
   await o.ready;
-  return o.strands.length;
+  return o.trajectories.length;
 })()`);
 
 // the editor on deck at slide n, in a window of size
@@ -108,8 +107,8 @@ async function paneName(page) {
   return page.evaluate(`document.querySelector('${PANEL} [aria-label="Drawing"]').textContent`);
 }
 
-// the name on the Family popup of the pane Backdrop, once paneName has selected the backdrop
-const familyName = (page) => page.evaluate(`document.querySelector('${PANEL} [aria-label="Family"]').textContent`);
+// the names on the Family and Frame popups of the pane Backdrop, once paneName has selected the backdrop
+const familyName = (page) => page.evaluate(`['Family', 'Frame'].map((l) => document.querySelector('${PANEL} [aria-label="' + l + '"]').textContent).join(' ')`);
 
 // the start tag of the first backdrop after the text heading in text
 const tagOf = (text, heading) => text.match(new RegExp(`${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?(<div class="backdrop"[^>]*>)`))[1];
@@ -119,22 +118,22 @@ for (const platform of PLATFORMS) {
     const page = await deckPage(platform, DEMO, 1);
     const list = await openList(page, LIST.length);
     assert.deepEqual(list.map((e) => e[1]), LIST);
-    for (const key of ['logo', 'nest', 'tubes', 'wideRibbon', 'broucke']) assert.ok(list.some((e) => e[0] === key), `the list does not have ${key}`);
+    for (const key of ['logo', 'tubes', 'wideRibbon', 'broucke']) assert.ok(list.some((e) => e[0] === key), `the list does not have ${key}`);
     assert.ok(list.every((e) => !e[2]), 'an entry of the demo deck is dimmed');
     assert.ok(list.every((e) => !/broucke-sample|transfer|Nest|Tubes|Ribbon/.test(e[1] + e[3])), 'an entry is named after its file or by its old name');
     // each entry is drawn with its small picture
     await page.waitFor(`[...document.querySelectorAll('${TILES}')].every((b) => b.querySelector('.tile canvas'))`);
     await press(page, 'Escape');
-    assert.deepEqual(await rowNames(page, [0, 1, 2, 6, 14]), [
+    assert.deepEqual(await rowNames(page, [0, 1, 2, 6, 12]), [
       'Backdrop: Beeson Logo',
-      'Backdrop: Broucke Families 7 and 11',
-      'Backdrop: Lyapunov Families',
+      'Backdrop: Broucke 7/11 (Rotating)',
+      'Backdrop: Cislunar Manifolds',
       'Backdrop: Earth Manifolds',
       'Backdrop: Cislunar Manifolds',
     ]);
     await page.evaluate('Reveal.slide(2)');
-    assert.equal(await paneName(page), 'Lyapunov Families');
-    // the values of data-scene stay
+    assert.equal(await paneName(page), 'Cislunar Manifolds');
+    // the values of data-backdrop stay
     assert.equal(await render(page), page.source);
   });
 
@@ -150,47 +149,47 @@ for (const platform of PLATFORMS) {
     // the slide is written back as it is in the demo deck
     assert.equal(await render(page), page.source);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Add Backdrop');
-    assert.ok((await strands(page)) > 100, 'the logo is not drawn');
+    assert.ok((await trajectories(page)) > 100, 'the logo is not drawn');
     await undo(page);
     assert.equal(await render(page), bare);
     await redo(page);
     assert.equal(await render(page), page.source);
   });
 
-  test(`a Broucke entry puts the selection of its family with the frame, the colors, and the window of the demo deck (${platform})`, async () => {
+  test(`a Broucke entry puts 7P with the frame, the colors, and the window of the demo deck (${platform})`, async () => {
     const page = await deckPage(platform, DEMO, 1);
     assert.equal(await paneName(page), 'Broucke Families');
-    assert.equal(await familyName(page), 'Families 7 and 11');
+    assert.equal(await familyName(page), '7/11 Rotating');
     assert.equal(tagOf(page.source, '<section class="section">'), BROUCKE);
     await openList(page, LIST.length);
     await pick(page, 'broucke', page.source);
-    assert.equal(tagOf(await render(page), '<section class="section">'), BROUCKE.replace('frame=pulsating', 'frame=pulsating,family=7'));
-    assert.equal(await strands(page), 8);
+    assert.equal(tagOf(await render(page), '<section class="section">'), BROUCKE.replace('frame=pulsating', 'family=7,branch=periapsis,frame=pulsating'));
+    assert.equal(await trajectories(page), 8);
     assert.equal(await paneName(page), 'Broucke Families');
-    assert.equal(await familyName(page), 'Family 7');
+    assert.equal(await familyName(page), '7 Rotating');
     await undo(page);
     assert.equal(await render(page), page.source);
-    // a family in the inertial frame is chosen in the Family popup of the pane
-    await exec(page, 'backdrop.family', { value: 'frame=inertial,family=11' });
+    // the inertial frame is chosen in the Frame popup of the pane
+    await exec(page, 'backdrop.frame', { value: 'Inertial' });
     await page.waitFor(`window.BeesonEditor.render() !== ${JSON.stringify(page.source)}`);
-    assert.equal(tagOf(await render(page), '<section class="section">'), BROUCKE.replace('frame=pulsating', 'frame=inertial,family=11'));
-    assert.equal(await strands(page), 8);
+    assert.equal(tagOf(await render(page), '<section class="section">'), BROUCKE.replace('frame=pulsating', 'frame=inertial'));
+    assert.equal(await trajectories(page), 16);
     assert.equal(await paneName(page), 'Broucke Families');
-    assert.equal(await familyName(page), 'Family 11 (Inertial)');
+    assert.equal(await familyName(page), '7/11 Inertial');
     await undo(page);
-    // in place of a named scene with a window of its own, the drawing is fitted to its box as in the
-    // demo deck, and the labels of the scene are taken off
+    // in place of a built-in backdrop with a window of its own, the drawing is fitted to its box as in the
+    // demo deck, and the labels of the built-in backdrop are taken off
     await page.evaluate('Reveal.slide(2)');
     await frames(page);
     const before = await render(page);
     assert.equal(before, page.source);
-    assert.equal(tagOf(before, '<h2>Show your steps one at a time'), NEST);
+    assert.equal(tagOf(before, '<h2>Show your steps one at a time'), TUBES);
     await openList(page, LIST.length);
     await pick(page, 'broucke', before);
     const text = await render(page);
-    assert.equal(tagOf(text, '<h2>Show your steps one at a time'), '<div class="backdrop" data-strands="demo/broucke-sample.js" data-strands-select="frame=pulsating,family=7" data-strands-color="family" data-strands-ramp="e" data-strands-colormap="viridis" data-duration="3" data-stagger="0.6">');
+    assert.equal(tagOf(text, '<h2>Show your steps one at a time'), '<div class="backdrop" data-trajectories="demo/broucke-sample.js" data-trajectories-select="family=7,branch=periapsis,frame=pulsating" data-trajectories-color="family" data-trajectories-ramp="e" data-trajectories-colormap="viridis" data-duration="3" data-stagger="0.6">');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Replace Backdrop');
-    assert.equal(await strands(page), 8);
+    assert.equal(await trajectories(page), 8);
     await undo(page);
     assert.equal(await render(page), before);
     await redo(page);
@@ -198,13 +197,13 @@ for (const platform of PLATFORMS) {
     assert.equal((await saveAndReopen(page)).text, text);
   });
 
-  test(`a drawing of a deck is named by its scene, its file, and the families it selects (${platform})`, async () => {
+  test(`a drawing of a deck is named by its scene, its file, and the pick of its selection (${platform})`, async () => {
     const page = await deckPage(platform, DECK, 0);
     assert.deepEqual(await rowNames(page, [0, 1, 2, 3, 4, 5]), [
       'Backdrop: Cislunar Manifolds',
-      'Backdrop: Broucke Families 7 and 11',
-      'Backdrop: Broucke Family 11 (Inertial)',
-      'Backdrop: Broucke Family 7',
+      'Backdrop: Broucke 7/11 (Rotating)',
+      'Backdrop: Broucke 11 (Inertial)',
+      'Backdrop: Broucke 7 (Rotating, Periapsis)',
       'Backdrop: Beeson Logo',
       'Backdrop: missing',
     ]);
@@ -212,16 +211,15 @@ for (const platform of PLATFORMS) {
 
   test(`an entry whose file is not next to the deck is left out, and a drawing of the deck with a missing file is dimmed with the reason (${platform})`, async () => {
     const page = await deckPage(platform, DECK, 6);
-    const list = await openList(page, 6);
+    const list = await openList(page, 5);
     assert.deepEqual(list.map((e) => e[1]), [
-      'Lyapunov Families',
       'Cislunar Manifolds',
       'Earth Manifolds',
       'Broucke Families',
       'Beeson Logo',
       'missing',
     ]);
-    assert.deepEqual(list.map((e) => e[2]), [false, false, false, false, false, true]);
+    assert.deepEqual(list.map((e) => e[2]), [false, false, false, false, true]);
     assert.match(list.at(-1)[3], /missing\.js is not found next to the deck/);
     assert.match(list.at(-1)[4], /File not found/);
     // a click on the dimmed entry does not add a backdrop

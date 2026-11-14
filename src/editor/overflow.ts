@@ -122,7 +122,7 @@ export function install(app: App): void {
     let over = 0;
     const pairs: { text: Element; fig: Element }[] = [];
     if (slide && box.width > 0) {
-      const foot = slide.querySelector(':scope > .foot, :scope > .panel > .foot');
+      const foot = slide.querySelector(':scope > .foot, :scope > .text-column > .foot');
       const past = (r: DOMRect) => r.right > box.right + 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.top < box.top - 1;
       const meets = (r: DOMRect, b: DOMRect | undefined) => !!b && b.height > 0 && r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left + 1 && r.left < b.right - 1;
       const above = slide.matches('.figure') ? [...slide.querySelectorAll(':scope > h2, :scope > .run')].map((e) => e.getBoundingClientRect()) : [];
@@ -137,11 +137,11 @@ export function install(app: App): void {
       const lines = (el: Element) => {
         const range = document.createRange();
         range.selectNodeContents(el);
-        // a display formula is a block as wide as its column, hence it is measured by its glyphs
+        // a display formula is a text element as wide as its column, hence it is measured by its glyphs
         const shown = [...el.querySelectorAll('mjx-container[display="true"]')];
-        const blocks = shown.map((c) => c.getBoundingClientRect());
+        const textEls = shown.map((c) => c.getBoundingClientRect());
         const same = (a: DOMRect, b: DOMRect) => Math.abs(a.left - b.left) < 1 && Math.abs(a.top - b.top) < 1 && Math.abs(a.right - b.right) < 1 && Math.abs(a.bottom - b.bottom) < 1;
-        const rects = [...range.getClientRects()].filter((r) => !blocks.some((b) => same(r, b)));
+        const rects = [...range.getClientRects()].filter((r) => !textEls.some((b) => same(r, b)));
         rects.push(...shown.flatMap((c) => [...c.querySelectorAll(':scope > svg')].map((g) => g.getBoundingClientRect())));
         return rects.filter((r) => r.width > 1 && r.height > 1);
       };

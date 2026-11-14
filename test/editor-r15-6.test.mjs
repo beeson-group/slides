@@ -31,19 +31,19 @@ const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`
 let saves = 0;
 
 const SLIDE = '.reveal .slides section.present';
-const IMG = `${SLIDE} figure.zone img.for-dark`;
+const IMG = `${SLIDE} figure.figure-box img.for-dark`;
 const PARA = `${SLIDE} > p`;
 
 async function load(t, platform, slide) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   await page.evaluate(`Reveal.slide(${slide})`);
@@ -51,12 +51,12 @@ async function load(t, platform, slide) {
   return page;
 }
 
-// selected gives the selected elements as their tag, with .zone for a zone, and the tag of the
+// selected gives the selected elements as their tag, with .figure-box for a figure box, and the tag of the
 // block of the slide with the caret, or null
 const selected = (page) => page.evaluate(`(() => {
   const el = document.activeElement;
   const caret = el && el.closest('.reveal .slides') && el.isContentEditable ? el.localName : null;
-  return { els: window.BeesonEditor.selection().map((e) => e.localName + (e.classList.contains('zone') ? '.zone' : '')), caret };
+  return { els: window.BeesonEditor.selection().map((e) => e.localName + (e.classList.contains('figure-box') ? '.figure-box' : '')), caret };
 })()`);
 
 // caretOffset gives the offset of the caret in the text of the focused element, or null
@@ -109,13 +109,13 @@ for (const platform of PLATFORMS) {
       await press(page, 'Mod+Z');
       await wait(page);
       assert.equal(await render(page), start, 'the undo does not give back the file');
-      assert.deepEqual(await selected(page), { els: ['figure.zone'], caret: null }, 'the figure is not selected after the undo');
+      assert.deepEqual(await selected(page), { els: ['figure.figure-box'], caret: null }, 'the figure is not selected after the undo');
       await press(page, 'Escape');
       await wait(page);
       await press(page, 'Mod+Shift+Z');
       await wait(page);
       assert.equal(await render(page), changed, 'the redo does not give back the change');
-      assert.deepEqual(await selected(page), { els: ['figure.zone'], caret: null }, 'the figure is not selected after the redo');
+      assert.deepEqual(await selected(page), { els: ['figure.figure-box'], caret: null }, 'the figure is not selected after the redo');
       const { text } = await saveAndReopen(page, `r15-6-${++saves}.html`);
       assert.equal(text, changed);
       assert.deepEqual(errors(page), []);
@@ -130,10 +130,10 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+Z');
     await wait(page);
     await byteExact(page);
-    assert.deepEqual(await selected(page), { els: ['figure.zone'], caret: null });
+    assert.deepEqual(await selected(page), { els: ['figure.figure-box'], caret: null });
     await press(page, 'Mod+Shift+Z');
     await wait(page);
-    assert.deepEqual(await selected(page), { els: ['figure.zone'], caret: null });
+    assert.deepEqual(await selected(page), { els: ['figure.figure-box'], caret: null });
     assert.deepEqual(errors(page), []);
   });
 
@@ -195,7 +195,7 @@ for (const platform of PLATFORMS) {
     await wait(page);
     await click(page, await center(page, IMG));
     await wait(page);
-    assert.deepEqual(await selected(page), { els: ['figure.zone'], caret: null });
+    assert.deepEqual(await selected(page), { els: ['figure.figure-box'], caret: null });
     await press(page, 'Mod+Z');
     await wait(page);
     await byteExact(page);

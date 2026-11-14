@@ -37,13 +37,13 @@ async function load(t, platform, { n = 0, mode = 'light', width = 1600, height =
   const page = await browser.newPage({ width, height });
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
-  const url = `${server.origin}/index.html?edit&still&theme=${mode}&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=${mode}&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate(`localStorage.clear(); for (const [k, v] of Object.entries(${js(stored)})) localStorage.setItem(k, v); true`);
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (n) await page.evaluate(`Reveal.slide(${n})`);
@@ -79,7 +79,7 @@ const BAR = `(() => {
   return { over: t.scrollWidth - t.clientWidth, buttons: bs, off: bs.filter((b) => b.right > innerWidth).map((b) => b.id) };
 })()`;
 
-const TOOLBAR_KEY = 'beeson-edit-toolbar:/index.html';
+const TOOLBAR_KEY = 'beeson-edit-toolbar:/test-deck.html';
 
 // the labels of the items of the open menu
 const menuLabels = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
@@ -354,7 +354,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// dialogs-undo-a11y-10: on the Mac, Return on the card of Present with unsaved changes pressed
+// dialogs-undo-a11y-10: on the Mac, Return on the dialog of Present with unsaved changes pressed
 // Cancel, the focused button, though Save and Present is drawn as the default
 for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
   test(`Return on the card of Present with unsaved changes presses ${answer === 'save' ? 'the default button' : 'the focused button'} (${platform})`, async (t) => {
@@ -371,14 +371,16 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
     await type(page, 'x');
     await press(page, 'Escape');
     void run(page, 'file.present');
-    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card.ask[open]')`);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog.ask[open]')`);
     await enter(page);
-    await page.waitFor(`!document.querySelector('dialog.beeson-edit-card.ask[open]')`);
+    await page.waitFor(`!document.querySelector('dialog.beeson-edit-dialog.ask[open]')`);
     await sleep(300);
     // the show is played in place, in the frame of .beeson-edit-show over the editor
     const shown = () => page.evaluate(`!!document.querySelector('.beeson-edit-show')`);
     if (answer === 'save') {
       assert.equal(await shown(), true, 'the show is not opened');
+      // the save is written to the file asynchronously, and it may end after 300 ms on a slow runner
+      await page.waitFor('window.BeesonEditor.status().dirty === false').catch(() => {});
       assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false, 'the deck is not saved');
     } else assert.equal(await shown(), false);
     assert.deepEqual(errors(page), []);
@@ -398,7 +400,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform);
     await click(page, '.beeson-edit-bottom .percent');
     await clickItem(page, 'Zoom…');
-    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog[open] input[name="percent"]')`);
     assert.equal(await page.evaluate(`document.activeElement.name`), 'percent');
     await page.evaluate(`document.activeElement.select()`);
     await type(page, '140');
@@ -408,7 +410,7 @@ for (const platform of PLATFORMS) {
     // a percentage out of range is clamped to the range of the slider, 10 to 400 percent
     for (const [typed, shown] of [['1000', '400%'], ['5', '10%']]) {
       void run(page, 'zoom.custom');
-      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog[open] input[name="percent"]')`);
       await page.evaluate(`document.activeElement.select()`);
       await type(page, typed);
       await enter(page);
@@ -417,7 +419,7 @@ for (const platform of PLATFORMS) {
     }
     // Esc leaves the zoom as it is
     void run(page, 'zoom.custom');
-    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog[open] input[name="percent"]')`);
     assert.equal(await page.evaluate(`document.activeElement.value`), '10');
     await type(page, '7');
     await press(page, 'Escape');
@@ -475,7 +477,7 @@ for (const platform of PLATFORMS) {
 
 // shell-10: the View menu and the View popup listed the views in two orders, and the status bar
 // called the navigator Slides. the View button of the toolbar is a split button since R22.1
-const VIEWS = ['Navigator', 'Slide Only', 'Chapters Table', 'Format', 'Steps', 'Notes'];
+const VIEWS = ['Navigator', 'Slide Only', 'Slide Sorter', 'Format', 'Steps', 'Notes'];
 for (const platform of PLATFORMS) {
   test(`the View menu lists the views in the order of Keynote, with one name each (${platform})`, async (t) => {
     const page = await load(t, platform);

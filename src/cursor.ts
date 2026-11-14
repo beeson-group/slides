@@ -1,4 +1,4 @@
-// two pointer effects: the strands near the pointer are tinted in the accent color, and a dot
+// two pointer effects: the trajectories near the pointer are tinted in the accent color, and a dot
 // at the pointer is toggled with the key p, for pointing during a talk
 
 import { Orbits } from './orbits.ts';

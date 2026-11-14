@@ -9,7 +9,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 const IMG = 'section.present figure img.for-light';

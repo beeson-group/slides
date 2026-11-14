@@ -9,7 +9,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { press } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const LAST = 14;
+const LAST = 12;
 
 let browser;
 let server;
@@ -33,13 +33,13 @@ const within = (page, expression, timeout) => page.waitFor(expression, timeout).
 async function load(t, platform, n = 0) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  const s = await page.evaluate(`window.BeesonEditor.open(${js(readFileSync('index.html', 'utf8'))})`);
+  const s = await page.evaluate(`window.BeesonEditor.open(${js(readFileSync('test-deck.html', 'utf8'))})`);
   assert.deepEqual(s.problems, []);
   if (n) await page.evaluate(`Reveal.slide(${n})`);
   await page.evaluate(`(() => { const real = window.open; window.__shows = []; window.open = function (...a) { const w = real.apply(window, a); window.__shows.push(w); return w; }; return true; })()`);
@@ -105,7 +105,7 @@ for (const platform of PLATFORMS) {
       await page.waitFor(`${DISPLAY} && ${ready(TAB)}`, 20000);
       await sleep(1200);
       assert.equal(await page.evaluate(toStepEnd(TAB, LAST - 1)), true);
-      await page.waitFor(`/Slide 14 of/.test(document.querySelector('dialog.beeson-edit-presenter').textContent)`, 5000);
+      await page.waitFor(`/Slide 12 of/.test(document.querySelector('dialog.beeson-edit-presenter').textContent)`, 5000);
       await sleep(1200);
       assert.equal(await page.evaluate('Reveal.getIndices().h'), LAST - 1);
       await page.evaluate(twice(TAB, how));
@@ -126,7 +126,7 @@ for (const platform of PLATFORMS) {
       // the speaker view sets the show to the state of its frame when it connects
       await openSpeaker(page, SHOW);
       assert.equal(await page.evaluate(toStepEnd(SHOW, LAST - 1)), true);
-      assert.ok(await within(page, `(() => { try { const R = ${CURRENT}.Reveal; return R.getIndices().h === ${LAST - 1} && !R.availableFragments().next; } catch { return false; } })()`, 3000), 'the speaker view is not at the last step of slide 14');
+      assert.ok(await within(page, `(() => { try { const R = ${CURRENT}.Reveal; return R.getIndices().h === ${LAST - 1} && !R.availableFragments().next; } catch { return false; } })()`, 3000), 'the speaker view is not at the last step of slide 12');
       await page.evaluate(twice(CURRENT, how));
       assert.ok(await within(page, stageGone, 5000), `two ${how}s in the speaker view do not end the show`);
       assert.equal(await page.evaluate('Reveal.getIndices().h'), LAST, `two quick ${how}s leave the editor on another slide than the last`);

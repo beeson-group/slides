@@ -10,8 +10,8 @@ import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
-// the slide of the demo deck with a paragraph, a list, and a figure in a zone
+const DECK = 'test-deck.html';
+// the slide of the demo deck with a paragraph, a list, and a figure in a figure box
 const FIGURES = [...readFileSync(DECK, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('Figures are first class citizens'));
 const PLATFORMS = ['mac', 'other'];
 const KEYS = {
@@ -216,7 +216,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await drawnAt(page, at), 'img');
     const front = await render(page);
-    assert.deepEqual(changedTags(raised, front), ['<figure class="zone" style="z-index: 1">']);
+    assert.deepEqual(changedTags(raised, front), ['<figure class="figure-box" style="z-index: 1">']);
     await checkEdit(page, front, raised);
     // Send to Back puts the figure behind the heading and the list in the flow, with a z-index under
     // 0 in place of its z-index
@@ -227,7 +227,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await drawnAt(page, at), 'p');
     const back = await render(page);
-    assert.deepEqual(changedTags(front, back), ['<figure class="zone" style="z-index: -1">'], 'Send to Back does not put the figure behind the heading and the list');
+    assert.deepEqual(changedTags(front, back), ['<figure class="figure-box" style="z-index: -1">'], 'Send to Back does not put the figure behind the heading and the list');
     await checkEdit(page, back, front);
   });
 
@@ -332,7 +332,7 @@ for (const platform of PLATFORMS) {
     // Bring Forward passes the list, which is a layer since it is moved, and the figure stays over it
     await press(page, KEYS[platform].forward);
     await frames(page);
-    assert.deepEqual(changedTags(page.source, await render(page)), ['<p style="position: relative; z-index: 1">', '<figure class="zone" style="z-index: 1">']);
+    assert.deepEqual(changedTags(page.source, await render(page)), ['<p style="position: relative; z-index: 1">', '<figure class="figure-box" style="z-index: 1">']);
     assert.deepEqual(await orders(page), { front: true, forward: true, backward: true, back: true }, 'the commands that put the paragraph back are dimmed');
     await press(page, KEYS[platform].backward);
     await frames(page);

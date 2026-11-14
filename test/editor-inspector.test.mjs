@@ -16,13 +16,13 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 
-const FIGURE = '<figure class="zone fragment" data-fragment-index="2">';
+const FIGURE = '<figure class="figure-box fragment" data-fragment-index="2">';
 const LEAD = '<p>The lead-in of a display</p>';
-const PAPER = '<img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">';
+const WHITE_FIGURE = '<img class="white-figure" src="../../demo/figure-light.png" alt="A white raster figure">';
 
 const P = '.reveal section.present > p';
-const ZONE = '.reveal section.present .zone';
-const IMG = '.reveal section.present .zone > img';
+const FIGURE_BOX = '.reveal section.present .figure-box';
+const IMG = '.reveal section.present .figure-box > img';
 const PANEL = '#beeson-edit-panel-format';
 
 let browser;
@@ -89,9 +89,9 @@ const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.bee
 // caption while the figure is selected
 const boxOf = (page, selector) => page.evaluate(`(() => {
   let el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width);
-  const caps = el.matches('figure, .zone, .plate') && window.BeesonEditor.selection().includes(el) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
+  const caps = el.matches('figure, .figure-box, .plate') && window.BeesonEditor.selection().includes(el) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
   const out = (b) => ({ left: Math.min(b.left, ...caps.map((c) => c.left)), top: Math.min(b.top, ...caps.map((c) => c.top)), right: Math.max(b.right, ...caps.map((c) => c.right)), bottom: Math.max(b.bottom, ...caps.map((c) => c.bottom)) });
-  const pic = el.matches('figure, .zone, .plate') ? [...el.querySelectorAll(':scope > img, :scope > video')].find((m) => m.getBoundingClientRect().width) : null;
+  const pic = el.matches('figure, .figure-box, .plate') ? [...el.querySelectorAll(':scope > img, :scope > video')].find((m) => m.getBoundingClientRect().width) : null;
   el = pic ?? el;
   const r = el.getBoundingClientRect();
   const [w, h] = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : [0, 0];
@@ -155,27 +155,27 @@ for (const platform of PLATFORMS) {
   test(`a click in the inspector keeps the selected figure, and X typed 40 px to the right writes its translate on ${platform}`, async () => {
     const page = await inspectorPage(platform, slideWith(FIGURE));
     await selectFigure(page, IMG);
-    assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'the figure is not selected by a click on its image and Esc');
+    assert.deepEqual(await framed(page, [FIGURE_BOX]), [FIGURE_BOX], 'the figure is not selected by a click on its image and Esc');
     // the figure has the Image pane with its tabs, as an image with a caption in Keynote, and its
     // place in the Arrange tab
     assert.equal(await pane(page), 'image');
     await tap(page, 'Arrange');
     assert.equal(await pane(page), 'arrange');
     await tap(page, 'Slide');
-    assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'a click on Align to Slide clears the selection');
+    assert.deepEqual(await framed(page, [FIGURE_BOX]), [FIGURE_BOX], 'a click on Align to Slide clears the selection');
     await tap(page, 'Selection');
     // X and Y are the position of the figure on the slide, and a position 40 px to the right is
     // written as a translate of 40 px
     const field = (n) => page.evaluate(`Number(document.querySelector('${PANEL} #beeson-edit-num-${n}').value)`);
     const x0 = await field('x'), y0 = await field('y');
     await typeInto(page, '#beeson-edit-num-x', String(x0 + 40));
-    assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'a value typed into X clears the selection');
-    const moved = [FIGURE, '<figure class="zone fragment" data-fragment-index="2" style="translate: 40px 0px">'];
+    assert.deepEqual(await framed(page, [FIGURE_BOX]), [FIGURE_BOX], 'a value typed into X clears the selection');
+    const moved = [FIGURE, '<figure class="figure-box fragment" data-fragment-index="2" style="translate: 40px 0px">'];
     await roundTrip(page, [moved]);
     assert.equal(await field('x'), x0 + 40);
     // Y is written next to X, and Reset Position takes both off
     await typeInto(page, '#beeson-edit-num-y', String(y0 - 12));
-    const both = [FIGURE, '<figure class="zone fragment" data-fragment-index="2" style="translate: 40px -12px">'];
+    const both = [FIGURE, '<figure class="figure-box fragment" data-fragment-index="2" style="translate: 40px -12px">'];
     await byteExact(page, [both]);
     await undo(page);
     await byteExact(page, [moved]);
@@ -222,11 +222,11 @@ for (const platform of PLATFORMS) {
     const p = await boxOf(page, P);
     await selectFigure(page, IMG);
     await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 }, { modifiers: 'Shift' });
-    assert.deepEqual(await framed(page, [P, ZONE]), [P, ZONE]);
+    assert.deepEqual(await framed(page, [P, FIGURE_BOX]), [P, FIGURE_BOX]);
     assert.equal(await pane(page), 'arrange');
     await tap(page, 'Slide');
     await tap(page, 'Align Left');
-    assert.deepEqual(await framed(page, [P, ZONE]), [P, ZONE], 'Align Left clears the selection');
+    assert.deepEqual(await framed(page, [P, FIGURE_BOX]), [P, FIGURE_BOX], 'Align Left clears the selection');
     const text = await page.evaluate('window.BeesonEditor.render()');
     const x = (tag) => Number(text.match(new RegExp(`${tag.slice(0, -1)} style="translate: (-?\\d+)px 0px">`))?.[1]);
     const [px, fx] = [x(LEAD.slice(0, 3)), x(FIGURE)];
@@ -244,7 +244,7 @@ for (const platform of PLATFORMS) {
     await byteExact(page, edits);
     // the two left edges are at the left edge of the slide
     const left = await page.evaluate(`document.querySelector('.reveal .slides').getBoundingClientRect().left`);
-    for (const s of [P, ZONE]) assert.ok(Math.abs((await boxOf(page, s)).left - left) <= 1, `${s} is not at the left edge`);
+    for (const s of [P, FIGURE_BOX]) assert.ok(Math.abs((await boxOf(page, s)).left - left) <= 1, `${s} is not at the left edge`);
     await saved(page, edits);
     assert.deepEqual(errors(page), []);
   });
@@ -267,16 +267,16 @@ for (const platform of PLATFORMS) {
   });
 
   test(`the description typed into the Image pane is written into the alt of the image on ${platform}`, async () => {
-    const page = await inspectorPage(platform, slideWith(PAPER));
+    const page = await inspectorPage(platform, slideWith(WHITE_FIGURE));
     await click(page, '.reveal section.present .plate > img');
     assert.equal(await pane(page), 'image');
     await typeInto(page, 'textarea[name="alt"]', 'Zero-velocity curves, with "quotes" & an ampersand');
     assert.deepEqual(await framed(page, ['.reveal section.present .plate']), ['.reveal section.present .plate'], 'a description typed clears the selection');
-    const alt = [PAPER, '<img class="paper" src="../../demo/figure-light.png" alt="Zero-velocity curves, with &quot;quotes&quot; &amp; an ampersand">'];
+    const alt = [WHITE_FIGURE, '<img class="white-figure" src="../../demo/figure-light.png" alt="Zero-velocity curves, with &quot;quotes&quot; &amp; an ampersand">'];
     await roundTrip(page, [alt]);
     // Decorative writes the empty alt, and a second click takes the alt off
     await tap(page, 'Decorative');
-    await byteExact(page, [[PAPER, '<img class="paper" src="../../demo/figure-light.png" alt>']]);
+    await byteExact(page, [[WHITE_FIGURE, '<img class="white-figure" src="../../demo/figure-light.png" alt>']]);
     assert.equal(await page.evaluate(`document.querySelector('${PANEL} textarea[name="alt"]').disabled`), true);
     await undo(page);
     await byteExact(page, [alt]);
@@ -286,7 +286,7 @@ for (const platform of PLATFORMS) {
 }
 
 test('Edit Alt Text… of the context menu shows the Image pane with its description focused', async () => {
-  const page = await inspectorPage('other', slideWith(PAPER));
+  const page = await inspectorPage('other', slideWith(WHITE_FIGURE));
   await click(page, '.reveal section.present .plate > img');
   await tap(page, 'Arrange');
   await exec(page, 'figure.alt');

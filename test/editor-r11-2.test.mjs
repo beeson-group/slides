@@ -39,13 +39,13 @@ let saves = 0;
 async function load(t, platform, n = 4) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   await page.evaluate(`Reveal.slide(${n})`);
@@ -101,7 +101,7 @@ const caretAt = (page, selector, needle, k) => page.evaluate(`(() => {
 const ITEM = '.reveal section.present ul > li, .reveal section.present ol > li';
 const PARA = '.reveal section.present > p';
 const ITEMS = [
-  '<li class="fragment" data-fragment-index="1">Dark and light mode: export one file per mode, mark them <code>for-dark</code> and <code>for-light</code>.</li>',
+  '<li class="fragment" data-fragment-index="1">Dark and light mode: export one file per mode, marked <code>for-dark</code> and <code>for-light</code>.</li>',
   '<li class="fragment" data-fragment-index="2">You might have noticed a toggle on the top right: try clicking it on this slide.</li>',
   '<li class="fragment" data-fragment-index="3">You should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>',
 ];
@@ -118,7 +118,7 @@ const caretAtEnd = (page, i) => page.evaluate(`(() => {
 })()`);
 
 // the tag and the text of the editing host of the caret
-const caretBlock = (page) => page.evaluate(`(() => {
+const caretElement = (page) => page.evaluate(`(() => {
   const n = getSelection().focusNode;
   const host = (n.nodeType === 1 ? n : n.parentElement).closest('[contenteditable="true"]');
   return host ? { tag: host.localName, text: host.textContent.trim() } : null;
@@ -153,7 +153,7 @@ for (const platform of PLATFORMS) {
       const shape = new RegExp(`${escape(ITEMS[0])}\\n  </${kind}>\\n  <p style="translate: 0px 20px"></p>\\n  ${escape(second)}\\n    ${escape(ITEMS[1])}\\n    ${escape(ITEMS[2])}\\n  </${kind}>`);
       assert.match(cut, shape, `the list is not cut at a paragraph: ${cut.match(/for-light<\/code>\.[\s\S]{0,220}/)?.[0]}`);
       assert.equal(await undoLabel(page), 'Undo New Paragraph');
-      assert.deepEqual(await caretBlock(page), { tag: 'p', text: '' }, 'the caret is not in the new paragraph');
+      assert.deepEqual(await caretElement(page), { tag: 'p', text: '' }, 'the caret is not in the new paragraph');
       await type(page, 'Z');
       const typed = await render(page);
       assert.ok(typed.includes(`</${kind}>\n  <p style="translate: 0px 20px">Z</p>\n  ${second}`), 'the typed text is not in the new paragraph');
@@ -182,7 +182,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Enter');
     const cut = await render(page);
     assert.ok(cut.includes(`<p></p>\n  <ul style="translate: 0px 20px">\n    ${ITEMS[0]}`), `the empty first item is not a paragraph before the list: ${cut.match(/frameless\.<\/p>[\s\S]{0,160}/)?.[0]}`);
-    assert.deepEqual(await caretBlock(page), { tag: 'p', text: '' });
+    assert.deepEqual(await caretElement(page), { tag: 'p', text: '' });
     await roundTrip(page);
   });
 
@@ -243,7 +243,7 @@ for (const platform of PLATFORMS) {
     await selectBoth(page);
     await modShift(page, platform, ...BIGGER);
     await frames(page);
-    assert.equal(await render(page), readFileSync('index.html', 'utf8'), 'Bigger does not set Body on every block');
+    assert.equal(await render(page), readFileSync('test-deck.html', 'utf8'), 'Bigger does not set Body on every block');
     await undo(page);
     assert.equal(await render(page), page.source);
   });
@@ -345,15 +345,15 @@ for (const platform of PLATFORMS) {
     await caretOnLine(page, 0, x, true);
     const x0 = await caretX(page);
     await press(page, 'ArrowDown');
-    assert.equal((await caretBlock(page)).text, 'ab');
+    assert.equal((await caretElement(page)).text, 'ab');
     await press(page, 'ArrowDown');
-    assert.match((await caretBlock(page)).text, /^You might/);
+    assert.match((await caretElement(page)).text, /^You might/);
     const x1 = await caretX(page);
     assert.ok(Math.abs(x1 - x0) < 20, `ArrowDown puts the caret at x ${x1}, away from its column at ${x0}`);
     await press(page, 'ArrowUp');
-    assert.equal((await caretBlock(page)).text, 'ab');
+    assert.equal((await caretElement(page)).text, 'ab');
     await press(page, 'ArrowUp');
-    assert.match((await caretBlock(page)).text, /^Dark and light/);
+    assert.match((await caretElement(page)).text, /^Dark and light/);
     const x2 = await caretX(page);
     assert.ok(Math.abs(x2 - x0) < 20, `ArrowUp puts the caret at x ${x2}, away from its column at ${x0}`);
     // a caret moved by ArrowLeft takes a new column

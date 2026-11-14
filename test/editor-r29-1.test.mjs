@@ -1,6 +1,6 @@
 // regression tests of R29.1 on both platforms, three leftovers of the skeptics: the sheet of a
 // formula in a new box replaced by the sheet of another formula drops the box, an emptied item or
-// paragraph that had a line break is saved empty, and a line glued to an element pushed by typing
+// paragraph that had a line break is saved empty, and a line attached to an element pushed by typing
 // follows it in the entry of the typing
 
 import assert from 'node:assert/strict';
@@ -80,26 +80,27 @@ async function clickAway(page) {
 
 // 1. a new text box, or the empty words of a shape, with the sheet of a new inline formula open,
 // and a click on the formula of the slide, which replaces the sheet with the sheet of this formula.
-// the box or the words are dropped as at a click away, and the file and the history are kept
-// through two clicks away after it
+// the words are dropped as at a click away, and the file and the history are kept through two
+// clicks away after it. the text box is kept as at a click away, written as an empty paragraph in
+// the entry of its insert
 const ROUTES = [
   ['a new text box', async (page) => {
     await click(page, '.beeson-edit-top [data-command="insert.text"]');
     await sleep(300);
     assert.equal(await page.evaluate(`!!document.querySelector(${js(`${SLIDE} .beeson-pending`)})`), true, 'the box is not drawn');
-  }, `${SLIDE} .beeson-pending`],
+  }, `${SLIDE} .beeson-pending`, true],
   ['the empty words of a shape', async (page) => {
     await click(page, `${SLIDE} > .shape`);
     await frames(page);
     await press(page, 'Enter');
     await frames(page);
     assert.equal(await page.evaluate(`!!document.activeElement?.matches(${js(`${SLIDE} > .shape > p`)})`), true, 'the caret is not in the words of the shape');
-  }, `${SLIDE} > .shape > p[data-generated]`],
+  }, `${SLIDE} > .shape > p[data-generated]`, false],
 ];
 
 for (const platform of PLATFORMS) {
-  for (const [name, open, left] of ROUTES) {
-    test(`1: the sheet of a formula in ${name} replaced by the sheet of another formula drops it, and the file and the history are kept (${platform})`, async (t) => {
+  for (const [name, open, left, kept] of ROUTES) {
+    test(`1: the sheet of a formula in ${name} replaced by the sheet of another formula ${kept ? 'keeps it empty' : 'drops it, and the file and the history are kept'} (${platform})`, async (t) => {
       const page = await load(t, platform, FORMULA);
       const label = (await state(page, 'edit.undo')).label;
       await open(page);
@@ -116,9 +117,14 @@ for (const platform of PLATFORMS) {
         await clickAway(page);
         assert.equal(await page.evaluate(`!!document.querySelector('.beeson-math')`), false, 'the sheet is still open');
         assert.equal(await page.evaluate(`document.querySelector(${js(left)})?.outerHTML ?? null`), null, `the box is left after click away ${k}`);
-        assert.equal(await render(page), page.source, 'the file is changed');
-        assert.equal((await state(page, 'edit.undo')).label, label, 'the history has an entry');
-        assert.equal((await status(page)).dirty, false, 'the editor reports unsaved changes');
+        if (kept) {
+          assert.equal((await render(page)).match(/<p( [^>]*)?><\/p>/g)?.length, 1, 'the empty box is not written as an empty paragraph');
+          assert.equal((await state(page, 'edit.undo')).label, 'Undo Insert Text Box');
+        } else {
+          assert.equal(await render(page), page.source, 'the file is changed');
+          assert.equal((await state(page, 'edit.undo')).label, label, 'the history has an entry');
+          assert.equal((await status(page)).dirty, false, 'the editor reports unsaved changes');
+        }
       }
       assert.deepEqual(errors(page), []);
     });
@@ -174,15 +180,15 @@ async function show(t, text, n, query = '') {
 }
 
 // the shown element of selector whose text holds needle, as an expression
-const blockOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
+const textElementOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
 
 // erase() presses Backspace count times from the end of the block of selector whose text holds
 // needle, then Esc
 async function erase(page, selector, needle, count) {
-  const at = await page.evaluate(`(() => { const r = ${blockOf(selector, needle)}.getBoundingClientRect(); return { x: r.right - 4, y: r.bottom - 12 }; })()`);
+  const at = await page.evaluate(`(() => { const r = ${textElementOf(selector, needle)}.getBoundingClientRect(); return { x: r.right - 4, y: r.bottom - 12 }; })()`);
   await click(page, at);
   await frames(page);
-  await page.evaluate(`(() => { const el = ${blockOf(selector, needle)}; const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
+  await page.evaluate(`(() => { const el = ${textElementOf(selector, needle)}; const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
   for (let i = 0; i < count; i++) await press(page, 'Backspace');
   await press(page, 'Escape');
   await frames(page);

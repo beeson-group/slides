@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css" />
     <link rel="stylesheet" href="../../theme/beeson.css" />
     <script>
-      // the warnings of the theme, read by test/strands.test.mjs
+      // the warnings of the theme, read by test/trajectories.test.mjs
       window.warnings = [];
       const warn = console.warn.bind(console);
       console.warn = (...args) => {
@@ -22,59 +22,59 @@
         <section class="figure">
           <div
             class="backdrop"
-            data-strands="../../demo/broucke-sample.js"
-            data-strands-select="frame=pulsating"
-            data-strands-color="family"
-            data-strands-ramp="e"
+            data-trajectories="../../demo/broucke-sample.js"
+            data-trajectories-select="frame=pulsating"
+            data-trajectories-color="family"
+            data-trajectories-ramp="e"
           ></div>
           <h2>The sample</h2>
         </section>
         <section class="figure">
-          <div class="backdrop" data-strands="missing.js"></div>
-          <div class="backdrop" data-strands="missing.js" data-strands-select="family=7"></div>
+          <div class="backdrop" data-trajectories="missing.js"></div>
+          <div class="backdrop" data-trajectories="missing.js" data-trajectories-select="family=7"></div>
           <h2>A missing file, named twice</h2>
         </section>
         <section class="figure">
-          <div class="backdrop" data-strands="strands-malformed.js"></div>
+          <div class="backdrop" data-trajectories="trajectories-malformed.js"></div>
           <h2>A file without its records</h2>
         </section>
         <section class="figure">
-          <div class="backdrop" data-strands="../../demo/broucke-sample.json"></div>
+          <div class="backdrop" data-trajectories="../../demo/broucke-sample.json"></div>
           <h2>A JSON file opened from the disk</h2>
         </section>
         <section class="figure">
-          <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="family=99"></div>
+          <div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="family=99"></div>
           <h2>A selection without a match</h2>
         </section>
         <section class="figure">
           <div
             class="backdrop"
-            data-strands="../../demo/broucke-sample.js"
-            data-strands-select="frame=pulsating"
-            data-strands-color="family"
-            data-strands-ramp="e"
-            data-strands-colormap="viridis"
+            data-trajectories="../../demo/broucke-sample.js"
+            data-trajectories-select="frame=pulsating"
+            data-trajectories-color="family"
+            data-trajectories-ramp="e"
+            data-trajectories-colormap="viridis"
           ></div>
           <h2>A colormap</h2>
         </section>
         <section class="figure">
           <div
             class="backdrop"
-            data-strands="../../demo/broucke-sample.js"
-            data-strands-select="frame=pulsating"
-            data-strands-ramp="e"
-            data-strands-colormap="magma"
+            data-trajectories="../../demo/broucke-sample.js"
+            data-trajectories-select="frame=pulsating"
+            data-trajectories-ramp="e"
+            data-trajectories-colormap="magma"
           ></div>
           <h2>A colormap of another name</h2>
         </section>
         <section class="figure">
           <div
             class="backdrop"
-            data-strands="../../demo/broucke-sample.js"
-            data-strands-select="frame=pulsating"
-            data-strands-ramp="e"
-            data-strands-shade="e"
-            data-strands-colormap="plasma"
+            data-trajectories="../../demo/broucke-sample.js"
+            data-trajectories-select="frame=pulsating"
+            data-trajectories-ramp="e"
+            data-trajectories-shade="e"
+            data-trajectories-colormap="plasma"
           ></div>
           <h2>A colormap with a shade</h2>
         </section>

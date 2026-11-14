@@ -16,6 +16,8 @@ export const MAX_RECENT = 10;
 export const pageOf = (): string => location.href.split(/[?#]/)[0];
 
 let list: Recent[] = [];
+// the number of changes of the list, since a read that answers after a change is stale
+let changes = 0;
 const watchers: (() => void)[] = [];
 
 export const recents = (): readonly Recent[] => list;
@@ -58,6 +60,7 @@ const valid = (r: unknown): r is Recent => {
 };
 
 function changed(next: Recent[]): void {
+  changes++;
   list = next;
   for (const fn of watchers) fn();
 }
@@ -75,12 +78,15 @@ async function store(next: Recent[]): Promise<void> {
 
 export async function loadRecents(): Promise<void> {
   if (typeof indexedDB === 'undefined') return;
+  const at = changes;
+  let next: Recent[] = [];
   try {
     const stored = await run<unknown>('readonly', (s) => s.get(KEY));
-    changed(Array.isArray(stored) ? stored.filter(valid).slice(0, MAX_RECENT) : []);
+    if (Array.isArray(stored)) next = stored.filter(valid).slice(0, MAX_RECENT);
   } catch {
-    changed([]);
+    // an empty list
   }
+  if (changes === at) changed(next);
 }
 
 const same = async (a: FileSystemFileHandle, b: FileSystemFileHandle): Promise<boolean> => {

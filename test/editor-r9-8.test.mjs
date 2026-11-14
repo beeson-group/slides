@@ -35,7 +35,7 @@ let saves = 0;
 
 // load opens the editor on the slide n of deck, served over HTTP, and keeps every window that the
 // page opens in window.__shows
-async function load(t, platform, { deck = 'index.html', n = 0, mode = 'light', width = 1600, height = 1000 } = {}) {
+async function load(t, platform, { deck = 'test-deck.html', n = 0, mode = 'light', width = 1600, height = 1000 } = {}) {
   const page = await browser.newPage({ width, height });
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
@@ -141,8 +141,8 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, { n: 2 });
     await page.evaluate(`window.BeesonEditor.exec('slide.hide')`);
     await press(page, 'Mod+Enter');
-    await page.waitFor(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Present the saved file')`);
-    const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent === 'Present the saved file').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await page.waitFor(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Discard changes')`);
+    const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent === 'Discard changes').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, at);
     await page.waitFor(showReady, 20000);
     assert.equal(await page.evaluate('window.__shows.length'), 0, 'Present opens the show in a new tab');
@@ -150,7 +150,9 @@ for (const platform of PLATFORMS) {
     assert.equal(await showHeading(page), 'Show your steps one at a time');
     await press(page, 'Escape');
     await page.waitFor(stageGone);
-    assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), true);
+    // Discard changes put the slides back as saved, with the slide shown again
+    assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal .slides [data-visibility="hidden"]')`), null);
     assert.deepEqual(errors(page), []);
   });
 }
@@ -262,13 +264,41 @@ for (const platform of PLATFORMS) {
     await press(page, 's');
     await sleep(1000);
     assert.ok(await page.evaluate(stageUp), 'the speaker view ends the show');
-    await page.waitFor(inShow(`/A new element is faded in/.test(w.__speaker?.document.querySelector('.speaker-controls-notes .value')?.textContent ?? '')`), 15000);
+    await page.waitFor(inShow(`/A new element is faded in/.test(w.__speaker?.document.querySelector('.speaker-controls-notes .value')?.textContent ?? '')`), 60000);
     await press(page, 'ArrowRight');
     await page.waitFor(`${SHOW}.Reveal.getIndices().f === 0`, 3000);
     await page.evaluate(inShow('(w.__speaker.close(), true)'));
     await press(page, 'Escape');
     await page.waitFor(stageGone);
     assert.equal(await editorHeading(page), 'Show your steps one at a time');
+    assert.deepEqual(errors(page), []);
+  });
+
+  // on a slow runner, the browser leaves full screen for the speaker view more than 2 s after S.
+  // this is forced here by holding back the change of full screen for 2.5 s
+  test(`in the show in place, the show goes on when the speaker view leaves full screen late (${platform})`, async (t) => {
+    const page = await present(t, platform);
+    await page.waitFor(fullStage, 5000);
+    await page.evaluate(`(() => {
+      const late = (ev) => {
+        if (document.fullscreenElement || !ev.isTrusted) return;
+        ev.stopImmediatePropagation();
+        window.removeEventListener('fullscreenchange', late, true);
+        setTimeout(() => {
+          document.dispatchEvent(new Event('fullscreenchange'));
+          setTimeout(() => (window.__late = !!document.querySelector('.beeson-edit-show')), 300);
+        }, 2500);
+      };
+      window.addEventListener('fullscreenchange', late, true);
+      return true;
+    })()`);
+    await page.evaluate(inShow(`(() => { const real = w.open; w.open = function (...a) { const v = real.apply(w, a); w.__speaker = v; return v; }; return true; })()`));
+    await press(page, 's');
+    await page.waitFor(`window.__late !== undefined`, 60000);
+    const up = await page.evaluate('window.__late');
+    // the frame of the show is gone with the show
+    await page.evaluate(inShow('(w.__speaker?.close(), true)')).catch(() => {});
+    assert.equal(up, true, 'the show ends when the speaker view leaves full screen late');
     assert.deepEqual(errors(page), []);
   });
 
@@ -435,7 +465,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await page.evaluate(SEG), ['fade']);
     assert.match(await page.evaluate(`document.querySelector('${segment('fade')}').title`), /next slide/);
     // the last slide is not left for another slide, hence it has no transition
-    await goTo(14);
+    await goTo(12);
     assert.deepEqual(await page.evaluate(SEG), [], 'the last slide shows a transition');
     assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-transition [data-command^="slide.transition."]')].every((b) => b.disabled)`), true);
     await roundTrip(page, 3);
@@ -533,17 +563,19 @@ const SPEAKER_FRAME = (w) => `${w}.__speaker?.document.querySelector('#current-s
 const keepSpeaker = (w) => `(() => { const w = ${w}; const real = w.open; w.open = function (...a) { const v = real.apply(w, a); w.__speaker = v; window.__speakerKept = v; return v; }; return true; })()`;
 const speakerReady = (w) => `(() => { try { return !!${SPEAKER_FRAME(w)}?.Reveal?.isReady?.(); } catch { return false; } })()`;
 const speakerKey = (keyCode) => `(window.__speakerKept.document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: ${keyCode}, bubbles: true })), true)`;
+// the speaker view loads the deck twice, with its surfaces, videos, and tycho viewers, hence it is
+// waited for 60 s, as a slide with one of them
 const within = (page, expression, timeout) => page.waitFor(expression, timeout).then(() => true, () => false);
 
 for (const platform of PLATFORMS) {
   test(`e in the speaker view of a deck opened by itself opens the editor in the window of the show at the slide shown, and closes the speaker view (${platform})`, async (t) => {
     const page = await browser.newPage({ width: 1600, height: 1000 });
     t.after(() => page.close().catch(() => {}));
-    await page.goto(`${server.origin}/index.html?still&edit-platform=${platform}#/2`);
+    await page.goto(`${server.origin}/test-deck.html?still&edit-platform=${platform}#/2`);
     await page.waitFor(deckSettled);
     await page.evaluate(keepSpeaker('window'));
     await press(page, 's');
-    await page.waitFor(speakerReady('window'), 20000);
+    await page.waitFor(speakerReady('window'), 60000);
     await sleep(500);
     await page.evaluate(speakerKey(69));
     assert.ok(await within(page, `new URLSearchParams(location.search).has('edit') && !!window.BeesonEditor`, 10000), 'e in the speaker view does not open the editor in the window of the show');
@@ -561,7 +593,7 @@ for (const platform of PLATFORMS) {
       await page.evaluate(`${SHOW}.Reveal.slide(3)`);
       await page.evaluate(keepSpeaker(SHOW));
       await press(page, 's');
-      await page.waitFor(speakerReady(SHOW), 20000);
+      await page.waitFor(speakerReady(SHOW), 60000);
       await sleep(500);
       const shown = await showHeading(page);
       await page.evaluate(speakerKey(keyCode));
@@ -576,7 +608,7 @@ for (const platform of PLATFORMS) {
       const page = await present(t, platform);
       await page.evaluate(keepSpeaker(SHOW));
       await press(page, 's');
-      await page.waitFor(speakerReady(SHOW), 20000);
+      await page.waitFor(speakerReady(SHOW), 60000);
       await sleep(500);
       await page.evaluate(`${SHOW}.focus()`);
       await press(page, key);

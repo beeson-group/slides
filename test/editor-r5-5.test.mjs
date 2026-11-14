@@ -1,6 +1,6 @@
 // the fixes of R5.5 on both platforms: the space after a smart dash at the end of a paragraph, the
 // Text pane live in an empty text, the switch Number the lines of the Code pane, the menu of the
-// delivery of a list in the Steps tab, a list in the panel after a change of layout to Split, and
+// delivery of a list in the Steps tab, a list in the text column after a change of layout to Split, and
 // typeset math in the running head of the Slide pane. each edit of the file is checked byte for
 // byte, after an undo and a redo, and after a save and an open
 
@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { substitution } from '../src/editor/text/substitute.ts';
-import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, type, typeKeys } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -53,17 +53,6 @@ const undo = (page) => page.evaluate('window.BeesonEditor.undo()');
 const redo = (page) => page.evaluate('window.BeesonEditor.redo()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
-
-// the characters of a US layout typed as trusted keys, each with its code and Shift
-const KEYS = { '"': ['Quote', 222, 8], "'": ['Quote', 222, 0], '-': ['Minus', 189, 0], ' ': ['Space', 32, 0], '.': ['Period', 190, 0] };
-async function typeKeys(page, text) {
-  for (const c of text) {
-    const [code, keyCode, mods] = KEYS[c] ?? [`Key${c.toUpperCase()}`, c.toUpperCase().charCodeAt(0), 0];
-    const base = { key: c, code, windowsVirtualKeyCode: keyCode, modifiers: mods };
-    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: c, unmodifiedText: c });
-    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-  }
-}
 
 // the caret put at the end of the first element at selector, with its block focused
 const caretAtEnd = (page, selector) =>
@@ -275,10 +264,10 @@ async function stepsPage(platform, width, height) {
   await last?.close().catch(() => {});
   const page = await browser.newPage({ width, height });
   last = page;
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`)).problems, []);
   await exec(page, 'view.steps');
   await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('li.fragment').closest('section')).h)`);
@@ -333,7 +322,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'slide.layout.split');
     await page.evaluate('new Promise((d) => setTimeout(d, 300))');
     const fit = await page.evaluate(`(() => {
-      const panel = document.querySelector('.reveal section.present > .panel');
+      const panel = document.querySelector('.reveal section.present > .text-column');
       const p = panel.getBoundingClientRect();
       const out = [...panel.children].filter((el) => !el.matches('.foot, aside')).filter((el) => el.getBoundingClientRect().bottom > p.bottom + 1).map((el) => el.localName);
       return { out, marked: document.querySelectorAll('.reveal section.present .beeson-overflow').length };
@@ -344,7 +333,7 @@ for (const platform of PLATFORMS) {
     assert.notEqual(split, source);
     for (const theme of ['dark', 'light']) {
       await page.evaluate(`document.documentElement.dataset.theme = '${theme}'`);
-      const [fg, bg] = await page.evaluate(`(() => { const c = document.querySelector('.reveal section.present > .panel code'); return [getComputedStyle(c).color, getComputedStyle(c.closest('.panel')).backgroundColor]; })()`);
+      const [fg, bg] = await page.evaluate(`(() => { const c = document.querySelector('.reveal section.present > .text-column code'); return [getComputedStyle(c).color, getComputedStyle(c.closest('.text-column')).backgroundColor]; })()`);
       assert.ok(contrast(fg, bg) >= 4.5, `inline code in the panel has a contrast of ${contrast(fg, bg).toFixed(2)} in ${theme} mode`);
     }
     await undo(page);

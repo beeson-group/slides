@@ -1,5 +1,5 @@
 // the Table pane of the Format tab, as the Table tab of Keynote: the size of the table and the cell
-// of the caret or the range of the cells selected as a block, the cells merged and unmerged, the
+// of the caret or the cell range, the cells merged and unmerged, the
 // header row, the rows and the columns added, deleted, and sorted, the heights of the rows and the
 // widths of the columns, the numbers at the right with Auto-Align, and the delete of the table
 

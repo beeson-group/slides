@@ -12,17 +12,17 @@ import { serve } from '../scripts/webdriver.mjs';
 import { lineText } from '../src/editor/commands/line.ts';
 import { byteExact, click, drag, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
 const SORTER = '.beeson-edit-sorter';
-const FIGURE = '<figure class="zone fragment" data-fragment-index="2">';
+const FIGURE = '<figure class="figure-box fragment" data-fragment-index="2">';
 const LEAD = '<p>The lead-in of a display</p>';
 const P = '.reveal section.present > p';
-const ZONE = '.reveal section.present .zone';
+const FIGURE_BOX = '.reveal section.present .figure-box';
 const SELECTED = '.beeson-overlay > .beeson-frame.selected:not([hidden])';
-const IMG = '.reveal section.present .zone > img:not([hidden])';
+const IMG = '.reveal section.present .figure-box > img:not([hidden])';
 const MATH = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('<h2>Math, an ordered list, and a zone</h2>'));
 
 let browser;
@@ -117,7 +117,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, { deck: DECK, n: 4 });
     await exec(page, 'view.lightTable');
     await frames(page);
-    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter one 5 slides', 'Chapter two 9 slides']);
+    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter one 5 slides', 'Chapter two 7 slides']);
     // a click on a head selects the slides of its section, as in PowerPoint
     await click(page, await nameAt(page, 'Chapter one'));
     await frames(page);
@@ -134,10 +134,10 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`document.querySelectorAll('.reveal .slides > section')[1].querySelector('h2')?.textContent === 'Chapter two'`);
     await frames(page);
     // the closing slide moves with Chapter two, hence Chapter one follows it as the appendix
-    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter two 9 slides', 'Appendix 5 slides']);
-    assert.deepEqual(await picked(page), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter two 7 slides', 'Appendix 5 slides']);
+    assert.deepEqual(await picked(page), [2, 3, 4, 5, 6, 7, 8]);
     assert.equal(await undoLabel(page), 'Undo Move Section');
-    await roundTrip(page, reordered(page.source, [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1, 2, 3, 4, 5]));
+    await roundTrip(page, reordered(page.source, [0, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5]));
     // a drop where the section already is leaves the file and the history alone
     await frames(page);
     const before = await undoLabel(page);
@@ -172,7 +172,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Enter');
     await page.waitFor(`document.querySelectorAll('.reveal .slides > section')[1].querySelector('h2').textContent === 'Part one'`);
     await frames(page);
-    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Part one 5 slides', 'Chapter two 9 slides']);
+    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Part one 5 slides', 'Chapter two 7 slides']);
     assert.equal(await undoLabel(page), 'Undo Rename Section');
     await byteExact(page, [['<h2>Chapter one</h2>', '<h2>Part one</h2>']]);
     await roundTrip(page, await render(page));
@@ -206,7 +206,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'ArrowDown');
     assert.equal(await page.evaluate(`document.activeElement.dataset.layout`), 'split');
     await press(page, 'Space');
-    await page.waitFor(`document.querySelectorAll('.reveal .slides > section').length === 16`);
+    await page.waitFor(`document.querySelectorAll('.reveal .slides > section').length === 14`);
     assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides > section')[5].matches('.split')`), true);
     await roundTrip(page, await render(page));
     assert.deepEqual(errors(page), []);
@@ -224,7 +224,7 @@ for (const platform of PLATFORMS) {
     await tap(page, 'Arrange');
     await tap(page, 'Horizontally');
     const text = await render(page);
-    const dx = Number(text.match(/<figure class="zone fragment" data-fragment-index="2" style="translate: (-?\d+)px 0px">/)?.[1]);
+    const dx = Number(text.match(/<figure class="figure-box fragment" data-fragment-index="2" style="translate: (-?\d+)px 0px">/)?.[1]);
     assert.ok(dx < 0, `the offset of the figure is ${dx}`);
     await byteExact(page, [[FIGURE, `${FIGURE.slice(0, -1)} style="translate: ${dx}px 0px">`]]);
     const slide = await rect(page, '.reveal .slides');
@@ -265,7 +265,7 @@ for (const platform of PLATFORMS) {
       [FIGURE, `${FIGURE.slice(0, -1)} style="translate: ${fx}px 0px">`],
     ]);
     const slide = await rect(page, '.reveal .slides');
-    const edges = [await rect(page, P), await rect(page, ZONE)].map((r) => [r.left, r.right]);
+    const edges = [await rect(page, P), await rect(page, FIGURE_BOX)].map((r) => [r.left, r.right]);
     assert.ok(edges.some(([l]) => Math.abs(l - slide.left) <= 1.5), `a frame is not at the left edge: ${js(edges)}`);
     assert.ok(edges.some(([, r]) => Math.abs(r - slide.right) <= 1.5), `a frame is not at the right edge: ${js(edges)}`);
     await roundTrip(page, text);

@@ -17,8 +17,8 @@ import { figuresReady, mountFigures, redrawFigures } from './tikz.ts';
 import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
-import { fitView, register, strandsFor, type View } from './strands.ts';
-import { scene } from './scenes.ts';
+import { fitView, register, trajectoriesFor, type View } from './trajectories.ts';
+import { builtIn } from './backdrops.ts';
 import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset, type Internal } from './steps.ts';
 import { numberTheorems } from './theorems.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
@@ -149,6 +149,17 @@ function stepPlots(slide: Element): void {
 // a backdrop that is a step of its slide is left blank until its step is shown
 const waiting = (o: Orbits) => o.el.classList.contains('fragment') && !o.el.classList.contains('visible');
 
+// true when the backdrop o is traced or looped at the current step of its slide, and false when it is
+// drawn complete or, as a step to come, left blank. on a slide of a reveal.js auto-animate, a loop is
+// started after the move and a trace is drawn complete. scripts/record.mjs records the backdrops of
+// this predicate in the print view, where each step is a clone of its slide
+function animated(o: Orbits, slide: Element | null = o.el.closest('section')): boolean {
+  if (waiting(o)) return false;
+  const loop = o.el.hasAttribute('data-loop');
+  if (slide?.hasAttribute('data-auto-animate')) return loop;
+  return loop || o.el.hasAttribute('data-live') || TRACED.some((c) => slide?.classList.contains(c));
+}
+
 function playBackdrop(o: Orbits, slide: HTMLElement): void {
   o.fit();
   if (still()) { o.complete(); return; }
@@ -164,7 +175,7 @@ function playBackdrop(o: Orbits, slide: HTMLElement): void {
       o.fit();
       if (loop) o.start();
     }, seconds * 1000 + 50);
-  } else if (loop || o.el.hasAttribute('data-live') || TRACED.some((c) => slide.classList.contains(c))) {
+  } else if (animated(o, slide)) {
     o.reset();
     o.start();
   } else o.complete();
@@ -222,9 +233,9 @@ function preview(el: HTMLElement): Orbits {
 
 // the window of the drawing of el fitted to box, by default its box on its slide, in slide px
 async function fitWindow(el: HTMLElement, box?: { left: number; top: number; width: number; height: number }): Promise<View | null> {
-  const strands = el.dataset.strands !== undefined ? (await strandsFor(el)).strands : scene(el.dataset.scene ?? '');
+  const trajectories = el.dataset.trajectories !== undefined ? (await trajectoriesFor(el)).trajectories : builtIn(el.dataset.backdrop ?? '');
   const b = box ?? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
-  return b.width && b.height ? fitView(strands, b, { width: 1920, height: 1080 }) : null;
+  return b.width && b.height ? fitView(trajectories, b, { width: 1920, height: 1080 }) : null;
 }
 
 function completeAll(): void {
@@ -350,10 +361,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
     const before = surfacesOf(ev.previousSlide);
     for (const s of before) s.stop();
-    // a surface whose data attributes other than data-stage match those of a surface on the slide
+    // a surface whose data attributes other than data-surface-state match those of a surface on the slide
     // before takes its camera, so that the turn of the camera continues across the slide change.
-    // data-shown is left out too, since each surface writes its drawn stage there
-    const key = (s: { el: HTMLElement }) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== 'stage' && k !== 'shown').sort());
+    // data-shown is left out too, since each surface writes its drawn state there
+    const key = (s: { el: HTMLElement }) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== 'surfaceState' && k !== 'shown').sort());
     for (const s of surfacesOf(ev.currentSlide)) {
       const from = before.find((b) => key(b) === key(s));
       if (from) s.follow(from);
@@ -363,7 +374,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     // every step of a slide before the current one is shown, and none of a slide after it
     syncCitations();
   });
-  // a step of a slide may set the stage of a surface on it, or the steps of a plot, and it may
+  // a step of a slide may set the state of a surface on it, or the steps of a plot, and it may
   // show a citation
   const step = () => {
     for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still());
@@ -429,12 +440,13 @@ const Beeson = {
   start,
   theme: { get, set: (theme: 'dark' | 'light') => set(theme), toggle: () => toggle() },
   backdrops,
+  animated,
   surfaces,
   plots,
   // resolved once every TikZ figure that is being drawn is drawn, see scripts/chrome.mjs
   figures: { get ready(): Promise<void> { return figuresReady(); } },
-  // called in a script file of polylines named in data-strands, see src/strands.ts
-  strands: register,
+  // called in a script file of polylines named in data-trajectories, see src/trajectories.ts
+  trajectories: register,
   // called by the editor after a structural change of the slides
   mount: mountWithin,
   // called by the editor on a backdrop, see remountBackdrop, preview, and fitWindow

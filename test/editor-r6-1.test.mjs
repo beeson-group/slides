@@ -192,7 +192,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'find.close');
     await frames(page);
     found.push(...(await clashes('the canvas')));
-    await click(page, '.reveal section.present figure.zone img:not([hidden])');
+    await click(page, '.reveal section.present figure.figure-box img:not([hidden])');
     await frames(page);
     found.push(...(await clashes('a figure')));
     await press(page, 'Escape');
@@ -288,7 +288,7 @@ for (const platform of PLATFORMS) {
   // edits its caption, where the context menu of an image in Keynote does not have an item for text
   test(`the context menu of the picture of a figure has no Edit Text, and the caption is still edited (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
-    const img = '.reveal section.present figure.zone img:not([hidden])';
+    const img = '.reveal section.present figure.figure-box img:not([hidden])';
     await click(page, img, { button: 'right' });
     await frames(page);
     const labels = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
@@ -308,7 +308,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await press(page, 'Escape');
     // a click on the caption edits it too
-    await click(page, '.reveal section.present figure.zone figcaption');
+    await click(page, '.reveal section.present figure.figure-box figcaption');
     await frames(page);
     assert.equal(await page.evaluate(`document.activeElement?.closest('figcaption')?.textContent ?? null`), 'A caption under a zone.');
     assert.deepEqual(errors(page), []);

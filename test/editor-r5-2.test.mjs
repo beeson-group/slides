@@ -20,8 +20,8 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const SECTIONS = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].map((m) => m[0]);
 const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
-const PAPER = SECTIONS.findIndex((s) => s.includes('<h2>A figure slide with a paper image</h2>'));
-const ZONE_IMG = '.reveal section.present .zone > img';
+const WHITE_FIGURE = SECTIONS.findIndex((s) => s.includes('<h2>A figure slide with a paper image</h2>'));
+const FIGURE_BOX_IMG = '.reveal section.present .figure-box > img';
 const PANEL = '#beeson-edit-panel-format';
 
 let browser;
@@ -124,7 +124,7 @@ const pictureBox = (page, selector) => page.evaluate(`(() => {
 // the height in slide px that the caption of the figure of ZONE_IMG adds to its picture, which the
 // field H of the figure selected as one object gives with the picture, as its frame holds both
 async function captionBand(page) {
-  const pic = await pictureBox(page, ZONE_IMG), cap = await slideBox(page, '.reveal section.present .zone > figcaption');
+  const pic = await pictureBox(page, FIGURE_BOX_IMG), cap = await slideBox(page, '.reveal section.present .figure-box > figcaption');
   return Math.max(pic.top + pic.height, cap.top + cap.height) - Math.min(pic.top, cap.top) - pic.height;
 }
 
@@ -152,44 +152,44 @@ async function setField(page, name, value) {
   await sleep(80);
 }
 
-// the zone of the math slide selected with a click on its image, whose grips and size fields size
+// the figure box of the math slide selected with a click on its image, whose grips and size fields size
 // the image, with its caption kept under it
-async function selectZoneFigure(page) {
-  await click(page, ZONE_IMG);
+async function selectFigureBoxFigure(page) {
+  await click(page, FIGURE_BOX_IMG);
   await frames(page);
 }
 
 for (const platform of PLATFORMS) {
   test(`${platform}: a picture sized past the box of its zone or plate is drawn at the size in its tag, with and without the editor`, async () => {
     const page = await editor(platform);
-    await selectZoneFigure(page);
+    await selectFigureBoxFigure(page);
     await arrange(page);
     await setField(page, 'width', 1000);
-    const pic = await pictureBox(page, ZONE_IMG);
+    const pic = await pictureBox(page, FIGURE_BOX_IMG);
     assert.ok(near(pic.width, 1000) && near(pic.height, 1200), `the image of width 1000 is drawn at ${Math.round(pic.width)} by ${Math.round(pic.height)}`);
     const edited = await render(page);
     assert.match(edited, /<img class="for-dark"[^>]* style="object-fit: contain; width: 1000px; height: 1333px"/, 'the box of the image is not written at the ratio of its zone');
     await roundTrip(page, edited);
     assert.deepEqual(errors(page), []);
 
-    // a paper image of a plate, which the theme scales down to fit
-    const plate = await editor(platform, PAPER);
+    // a white figure of a plate, which the theme scales down to fit
+    const plate = await editor(platform, WHITE_FIGURE);
     await click(plate, '.reveal section.present .plate > img');
     await click(plate, '.reveal section.present .plate > img');
     await arrange(plate);
     await setField(plate, 'width', 1800);
-    // the paper of 24 px around the picture is inside the width of the image
-    const paper = await slideBox(plate, '.reveal section.present .plate > img');
-    assert.ok(near(paper.width, 1800) && near(paper.height, 1752 * 1.2 + 48), `the paper image of width 1800 is drawn at ${Math.round(paper.width)} by ${Math.round(paper.height)}`);
+    // the white frame of 24 px around the picture is inside the width of the image
+    const whiteFigure = await slideBox(plate, '.reveal section.present .plate > img');
+    assert.ok(near(whiteFigure.width, 1800) && near(whiteFigure.height, 1752 * 1.2 + 48), `the paper image of width 1800 is drawn at ${Math.round(whiteFigure.width)} by ${Math.round(whiteFigure.height)}`);
     assert.deepEqual(errors(plate), []);
 
     // the same tags in a deck without the editor
     const show = await browser.newPage();
     await show.goto(`${server.origin}/${LAYOUTS}?still`);
     await show.waitFor(deckSettled);
-    await show.evaluate(`(() => { Reveal.slide(${MATH}); for (const img of document.querySelectorAll('.zone > img')) img.style.width = '1000px'; })()`);
+    await show.evaluate(`(() => { Reveal.slide(${MATH}); for (const img of document.querySelectorAll('.figure-box > img')) img.style.width = '1000px'; })()`);
     await frames(show);
-    const shown = await pictureBox(show, ZONE_IMG);
+    const shown = await pictureBox(show, FIGURE_BOX_IMG);
     assert.ok(near(shown.width, 1000) && near(shown.height, 1200), `the deck draws the image of width 1000 at ${Math.round(shown.width)} by ${Math.round(shown.height)}`);
     await show.close();
   });
@@ -198,10 +198,10 @@ for (const platform of PLATFORMS) {
 for (const platform of PLATFORMS) {
   test(`${platform}: W and H of the Arrange pane give the size of the drawn picture, not of the box of the image`, async () => {
     const page = await editor(platform);
-    await selectZoneFigure(page);
+    await selectFigureBoxFigure(page);
     const fields = await arrange(page);
-    const pic = await pictureBox(page, ZONE_IMG);
-    const box = await slideBox(page, ZONE_IMG);
+    const pic = await pictureBox(page, FIGURE_BOX_IMG);
+    const box = await slideBox(page, FIGURE_BOX_IMG);
     assert.ok(box.height - pic.height > 40, 'the picture fills the box of the image, which this test needs to tell them apart');
     const band = await captionBand(page);
     assert.deepEqual([Number(fields.w), Number(fields.h)], [Math.round(pic.width), Math.round(pic.height + band)], `W and H are ${fields.w} and ${fields.h}, and the picture is ${Math.round(pic.width)} by ${Math.round(pic.height)} with a caption of ${Math.round(band)}`);
@@ -252,21 +252,21 @@ const release = (page, at) => page.send('Input.dispatchMouseEvent', { type: 'mou
 for (const platform of PLATFORMS) {
   test(`${platform}: a dragged figure snaps to the end and the middle of a line, with the guide drawn`, async () => {
     const page = await editor(platform);
-    // a vertical line at x 1100 from y 300 to 700, left of the zone, with its middle at y 500
+    // a vertical line at x 1100 from y 300 to 700, left of the figure box, with its middle at y 500
     await addLine(page, { x: 1100, y: 300 }, { x: 1100, y: 700 });
     const drawn = await render(page);
-    await selectFigure(page, ZONE_IMG);
-    const zone = await slideBox(page, '.reveal section.present .zone');
-    // the left edge of the zone is dragged to 5 px right of the line, and its top to 5 px under the
+    await selectFigure(page, FIGURE_BOX_IMG);
+    const figureBox = await slideBox(page, '.reveal section.present .figure-box');
+    // the left edge of the figure box is dragged to 5 px right of the line, and its top to 5 px under the
     // middle of the line
-    const start = await screen(page, zone.left + zone.width / 2, zone.top + zone.height / 2);
+    const start = await screen(page, figureBox.left + figureBox.width / 2, figureBox.top + figureBox.height / 2);
     const k = (await screen(page, 1, 0)).x - (await screen(page, 0, 0)).x;
-    const dx = (1105 - zone.left) * k, dy = (505 - zone.top) * k;
+    const dx = (1105 - figureBox.left) * k, dy = (505 - figureBox.top) * k;
     await drag(page, start, { dx, dy, hold: true });
     const guides = await guidesShown(page);
     await release(page, { x: start.x + dx, y: start.y + dy });
     await frames(page);
-    const moved = await slideBox(page, '.reveal section.present .zone');
+    const moved = await slideBox(page, '.reveal section.present .figure-box');
     assert.ok(near(moved.left, 1100, 1), `the left edge of the zone is at ${moved.left.toFixed(1)}, not on the line at 1100`);
     assert.ok(near(moved.top, 500, 1), `the top of the zone is at ${moved.top.toFixed(1)}, not at the middle of the line at 500`);
     assert.ok(guides.some(([a, at]) => a === 'x' && near(at, 1100, 1)), `the guide of the line is not drawn: ${JSON.stringify(guides)}`);
@@ -283,11 +283,11 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: a dragged line snaps by its end to the middle of a figure and to the end of another line, with the guides drawn`, async () => {
     const page = await editor(platform);
-    // a horizontal line under the zone, whose right end is dragged to 3 px right of the middle of
-    // the zone at x 1500, which is not on a line of the layout
+    // a horizontal line under the figure box, whose right end is dragged to 3 px right of the middle of
+    // the figure box at x 1500, which is not on a line of the layout
     await addLine(page, { x: 1300, y: 1000 }, { x: 1450, y: 1000 });
     const k = (await screen(page, 1, 0)).x - (await screen(page, 0, 0)).x;
-    const z = await slideBox(page, '.reveal section.present .zone');
+    const z = await slideBox(page, '.reveal section.present .figure-box');
     const middle = z.left + z.width / 2;
     const ends = () => page.evaluate(`[...Reveal.getCurrentSlide().querySelectorAll('svg.line')].map((svg) => { const [x, y] = (svg.style.translate || '0px 0px').split(' ').map(parseFloat); const l = svg.querySelector('line'); const n = (a) => Number(l.getAttribute(a)); return [x + n('x1'), y + n('y1'), x + n('x2'), y + n('y2')]; })`);
     let at = await screen(page, 1375, 1000);
@@ -458,7 +458,7 @@ const IMG_STYLE = (style) => new RegExp(`<img class="for-dark"[^>]* style="${sty
 for (const platform of PLATFORMS) {
   test(`${platform}: with Constrain Proportions off, a side grip and the field H stretch an image, whose height is written`, async () => {
     let page = await editor(platform);
-    await selectZoneFigure(page);
+    await selectFigureBoxFigure(page);
     await arrange(page);
     assert.deepEqual(await constrainSwitch(page), { checked: true, disabled: false }, 'the switch of an image is not on and free');
     await toggleConstrain(page);
@@ -468,9 +468,9 @@ for (const platform of PLATFORMS) {
     // the picture of 600 by 720 is narrowed by 100 with its grip e, and keeps its height
     await drag(page, (await gripsAt(page)).e, { dx: -100 * k });
     await frames(page);
-    let box = await slideBox(page, ZONE_IMG);
+    let box = await slideBox(page, FIGURE_BOX_IMG);
     assert.ok(near(box.width, 500) && near(box.height, 720), `the image stretched by its grip e is drawn at ${Math.round(box.width)} by ${Math.round(box.height)}`);
-    assert.equal(await fitOf(page, ZONE_IMG), 'fill', 'the stretched picture is fitted in its box, not stretched to it');
+    assert.equal(await fitOf(page, FIGURE_BOX_IMG), 'fill', 'the stretched picture is fitted in its box, not stretched to it');
     let edited = await render(page);
     assert.match(edited, IMG_STYLE('width: 500px; height: 720px(; translate: [^"]+)?'), 'the width and the height are not written on the image');
     assert.deepEqual(await sizeFields(page), { w: '500', h: String(Math.round(720 + (await captionBand(page)))), wOff: false, hOff: false });
@@ -478,11 +478,11 @@ for (const platform of PLATFORMS) {
 
     // the field H with the switch off sets the height alone, of the picture with its caption
     page = await editor(platform);
-    await selectZoneFigure(page);
+    await selectFigureBoxFigure(page);
     await arrange(page);
     await toggleConstrain(page);
     await setField(page, 'height', 400);
-    box = await slideBox(page, ZONE_IMG);
+    box = await slideBox(page, FIGURE_BOX_IMG);
     const band = await captionBand(page);
     assert.ok(near(box.width, 600) && near(box.height + band, 400), `the image of a figure of height 400 is drawn at ${Math.round(box.width)} by ${Math.round(box.height)} over a caption of ${Math.round(band)}`);
     edited = await render(page);
@@ -493,12 +493,12 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: with Constrain Proportions on, a corner grip and W and H keep the aspect, and Shift on a corner frees it`, async () => {
     let page = await editor(platform);
-    await selectZoneFigure(page);
+    await selectFigureBoxFigure(page);
     await arrange(page);
     const k = await scaleOf(page);
     await drag(page, (await gripsAt(page)).se, { dx: -100 * k, dy: -20 * k });
     await frames(page);
-    let box = await slideBox(page, ZONE_IMG);
+    let box = await slideBox(page, FIGURE_BOX_IMG);
     assert.ok(near(box.width / box.height, 600 / 720, 0.01), `the corner grip changes the aspect to ${Math.round(box.width)} by ${Math.round(box.height)}`);
     let edited = await render(page);
     assert.match(edited, IMG_STYLE('width: \\d+px'), 'a height is written by a resize that keeps the aspect');
@@ -506,30 +506,30 @@ for (const platform of PLATFORMS) {
 
     // Shift on a corner frees the aspect, and then the side grip e and the field W keep the aspect
     // that the stretched image has. the grip is on the frame of the figure, which holds the band of
-    // 40 px between the picture fitted into its zone and the caption, and the zone of a picture with
+    // 40 px between the picture fitted into its figure box and the caption, and the figure box of a picture with
     // a width is the size of the picture, hence the picture is 40 px higher than the frame shrinks
     page = await editor(platform);
-    await selectZoneFigure(page);
+    await selectFigureBoxFigure(page);
     await arrange(page);
     await drag(page, (await gripsAt(page)).se, { dx: -100 * k, dy: -120 * k, modifiers: 'Shift' });
     await frames(page);
-    box = await slideBox(page, ZONE_IMG);
+    box = await slideBox(page, FIGURE_BOX_IMG);
     assert.ok(near(box.width, 500, 3) && near(box.height, 640, 3), `the corner grip with Shift draws the image at ${Math.round(box.width)} by ${Math.round(box.height)}, not at 500 by 640`);
     edited = await render(page);
     assert.match(edited, IMG_STYLE('width: \\d+px; height: \\d+px'), 'the height of an image stretched with Shift is not written');
     const aspect = box.width / box.height;
     await drag(page, (await gripsAt(page)).e, { dx: -100 * k });
     await frames(page);
-    box = await slideBox(page, ZONE_IMG);
+    box = await slideBox(page, FIGURE_BOX_IMG);
     assert.ok(near(box.width / box.height, aspect, 0.01), `the grip e of a stretched image changes its aspect from ${aspect.toFixed(3)} to ${(box.width / box.height).toFixed(3)}`);
     // the fields of the picture selected inside its figure give the picture alone
-    await click(page, ZONE_IMG);
+    await click(page, FIGURE_BOX_IMG);
     await frames(page);
     await setField(page, 'width', 200);
-    box = await slideBox(page, ZONE_IMG);
+    box = await slideBox(page, FIGURE_BOX_IMG);
     assert.ok(near(box.width, 200) && near(box.height, 200 / aspect), `the field W of a stretched image draws it at ${Math.round(box.width)} by ${Math.round(box.height)}`);
     await setField(page, 'height', 300);
-    box = await slideBox(page, ZONE_IMG);
+    box = await slideBox(page, FIGURE_BOX_IMG);
     assert.ok(near(box.width, 300 * aspect) && near(box.height, 300), `the field H of a stretched image draws it at ${Math.round(box.width)} by ${Math.round(box.height)}`);
     edited = await render(page);
     for (let n = 0; n < 3; n++) await undo(page);
@@ -547,8 +547,8 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: a video is stretched with its switch off, and a QR code keeps its square with its switch held on`, async () => {
     let page = await editor(platform, SPLIT);
-    const VIDEO = '.reveal section.present .zone > video';
-    // the zone is selected with a first click, and its video with a second
+    const VIDEO = '.reveal section.present .figure-box > video';
+    // the figure box is selected with a first click, and its video with a second
     await click(page, VIDEO);
     await click(page, VIDEO);
     await frames(page);
@@ -687,11 +687,11 @@ const selected = (page) => page.evaluate(`(window.BeesonEditor.selection?.() ?? 
 for (const platform of PLATFORMS) {
   test(`${platform}: the first click on the image of a figure selects the figure, and the second the image, which is rotated without its caption, and Esc selects the figure`, async () => {
     const page = await editor(platform);
-    const caption = await slideBox(page, '.reveal section.present .zone .caption');
-    await click(page, ZONE_IMG);
+    const caption = await slideBox(page, '.reveal section.present .figure-box .caption');
+    await click(page, FIGURE_BOX_IMG);
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'the first click on the image does not select its figure');
-    await click(page, ZONE_IMG);
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'the first click on the image does not select its figure');
+    await click(page, FIGURE_BOX_IMG);
     await frames(page);
     assert.deepEqual(await selected(page), ['img.for-dark'], 'the second click on the image does not select the image');
     assert.equal((await state(page, 'image.editMask')).enabled, true, 'Edit Mask is not offered on the image');
@@ -699,13 +699,13 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'selection.container')).enabled, true, 'Select Figure is not offered on the image');
     await exec(page, 'selection.container');
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'Select Figure does not select the figure of the image');
-    await click(page, ZONE_IMG);
-    const z = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present .zone').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom + 3 }; })()`);
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'Select Figure does not select the figure of the image');
+    await click(page, FIGURE_BOX_IMG);
+    const z = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present .figure-box').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom + 3 }; })()`);
     await click(page, z);
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'a click on the band under the figure does not select it');
-    await click(page, ZONE_IMG);
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'a click on the band under the figure does not select it');
+    await click(page, FIGURE_BOX_IMG);
     await frames(page);
     assert.deepEqual(await selected(page), ['img.for-dark'], 'a click on the image of a selected figure does not select the image');
     const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
@@ -715,14 +715,14 @@ for (const platform of PLATFORMS) {
     const edited = await render(page);
     assert.match(edited, /<img class="for-dark" [^>]*style="rotate: -?\d+(\.\d+)?deg"/, 'the image is not rotated');
     assert.match(edited, /<img class="for-light" [^>]*style="rotate: -?\d+(\.\d+)?deg"/, 'the image of the other mode is not rotated with it');
-    assert.match(edited, /<figure class="zone fragment" data-fragment-index="2">/, 'the figure is rotated');
-    assert.deepEqual(await slideBox(page, '.reveal section.present .zone .caption'), caption, 'the caption moves with the image');
+    assert.match(edited, /<figure class="figure-box fragment" data-fragment-index="2">/, 'the figure is rotated');
+    assert.deepEqual(await slideBox(page, '.reveal section.present .figure-box .caption'), caption, 'the caption moves with the image');
     await roundTrip(page, edited);
     await goTo(page, MATH);
-    await selectPicture(page, ZONE_IMG);
+    await selectPicture(page, FIGURE_BOX_IMG);
     await press(page, 'Escape');
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'Esc on the image does not select its figure');
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'Esc on the image does not select its figure');
     assert.deepEqual(errors(page), []);
   });
 }
@@ -732,19 +732,19 @@ for (const platform of PLATFORMS) {
 for (const platform of PLATFORMS) {
   test(`${platform}: the first click on the image of a locked figure selects the figure, which is not moved or rotated`, async () => {
     const page = await editor(platform);
-    await selectFigure(page, ZONE_IMG);
+    await selectFigure(page, FIGURE_BOX_IMG);
     await press(page, 'Mod+L');
     await frames(page);
     const locked = await render(page);
-    assert.match(locked, /<figure class="zone fragment" data-fragment-index="2" data-locked>/, 'the figure is not locked');
+    assert.match(locked, /<figure class="figure-box fragment" data-fragment-index="2" data-locked>/, 'the figure is not locked');
     await press(page, 'Escape');
-    await click(page, ZONE_IMG);
+    await click(page, FIGURE_BOX_IMG);
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'the first click on the image of a locked figure does not select the figure');
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'the first click on the image of a locked figure does not select the figure');
     assert.equal((await state(page, 'selection.selectMedia')).enabled, false, 'Return selects the image of a locked figure');
     assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-rotor')].filter((r) => !r.hidden && r.getBoundingClientRect().width).length`), 0, 'a rotate grip is drawn on a locked figure');
     const k = await scaleOf(page);
-    await drag(page, ZONE_IMG, { dx: 120 * k, dy: 40 * k });
+    await drag(page, FIGURE_BOX_IMG, { dx: 120 * k, dy: 40 * k });
     await frames(page);
     assert.equal(await render(page), locked, 'a drag of the image changes a locked figure');
     assert.deepEqual(errors(page), []);
@@ -781,7 +781,7 @@ const groupView = (page) => page.evaluate(`(() => {
 for (const platform of PLATFORMS) {
   test(`${platform}: a selected group is drawn with one frame and one set of grips around its members, which scale them together`, async () => {
     const page = await editor(platform);
-    await selectFigure(page, ZONE_IMG);
+    await selectFigure(page, FIGURE_BOX_IMG);
     const lead = await page.evaluate(`(() => { const r = ${LEAD}.getBoundingClientRect(); return { x: r.right + 3, y: r.top + r.height / 2 }; })()`);
     await click(page, lead, { modifiers: 'Shift' });
     await exec(page, 'arrange.group');
@@ -891,7 +891,7 @@ for (const platform of PLATFORMS) {
   test(`${platform}: the faded picture of Edit Mask at a high zoom is clipped to the canvas, out of the inspector`, async () => {
     const page = await editor(platform);
     if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
-    await selectZoneFigure(page);
+    await selectFigureBoxFigure(page);
     await page.evaluate('window.BeesonEditorShell.stage.setZoom(3)');
     await frames(page);
     await exec(page, 'image.editMask');

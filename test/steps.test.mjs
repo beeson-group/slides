@@ -163,14 +163,14 @@ test('the last step of a slide is shown alone, and a step is added to restore th
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
 
   // a slide whose fragments are empty spans, e.g. the steps of a plot, is not dimmed and is left as it is
   const restored = await page.evaluate(`[...document.querySelectorAll('.slides > section')]
     .filter((section) => section.querySelector('.fragment[data-restore]'))
     .map((section) => section.querySelector('h1, h2').textContent)`);
-  assert.deepEqual(restored, ['Show your steps one at a time', 'Equations are first class citizens', 'Figures are first class citizens, too', 'Explain concepts, visually', 'Color the terms and the marks', 'Embedding TyCHO scenes', 'Embedding videos', 'Starting a video on a click', 'TikZ figures in both modes', 'A drawing, with its parts as steps']);
+  assert.deepEqual(restored, ['Show your steps one at a time', 'Equations are first class citizens', 'Figures are first class citizens, too', 'Explain concepts, visually', 'Color the terms and the points', 'Embedding TyCHO scenes', 'Embedding videos', 'Starting a video on a click']);
 
   await page.evaluate(`Reveal.slide(2)`);
   const seen = [];

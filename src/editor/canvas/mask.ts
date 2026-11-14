@@ -213,20 +213,20 @@ function syncLive(app: App, el: Element): void {
 type Orbit = { el: HTMLElement; view: { cx: number; cy: number; half: number }; fit(): void };
 // the fields of an Orbits of src/orbits.ts that a preview of a window sets. they are private in the
 // theme, which reads the window from the attributes only when it mounts a backdrop
-type OrbitFields = { cx: number; cy: number; half: number; fitted: boolean; fittedFor: string; strands: { pts: ArrayLike<number> }[] };
+type OrbitFields = { cx: number; cy: number; half: number; fitted: boolean; fittedFor: string; trajectories: { pts: ArrayLike<number> }[] };
 
 const orbits = (): Orbit[] => (window as unknown as { Beeson?: { backdrops?: Orbit[] } }).Beeson?.backdrops ?? [];
 
 export const orbitOf = (el: Element): Orbit | null => orbits().find((o) => o.el === el) ?? null;
 
-// the window of the drawing of o set to view, or fitted again to its strands with null
+// the window of the drawing of o set to view, or fitted again to its trajectories with null
 export function setView(o: Orbit, view: { cx: number; cy: number; half: number } | null): void {
   const f = o as unknown as OrbitFields;
   if (view) {
     f.fitted = false;
     ({ cx: f.cx, cy: f.cy, half: f.half } = view);
   } else {
-    f.fitted = o.el.dataset.strands !== undefined;
+    f.fitted = o.el.dataset.trajectories !== undefined;
     f.fittedFor = '';
   }
   o.fit();
@@ -239,16 +239,16 @@ export function syncBackdrops(): void {
     const d = o.el.dataset;
     const want = { cx: +(d.cx ?? 0), cy: +(d.cy ?? 0), half: +(d.half ?? 0.5) };
     const v = o.view, fitted = (o as unknown as OrbitFields).fitted;
-    if (d.half === undefined && d.strands !== undefined) {
+    if (d.half === undefined && d.trajectories !== undefined) {
       if (!fitted) setView(o, null);
     } else if (fitted || v.cx !== want.cx || v.cy !== want.cy || v.half !== want.half) setView(o, want);
   }
 }
 
-// the extent of the drawing of o in its units, or null before its strands are loaded
+// the extent of the drawing of o in its units, or null before its trajectories are loaded
 export function extentOf(o: Orbit): { x0: number; x1: number; y0: number; y1: number } | null {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-  for (const s of (o as unknown as OrbitFields).strands ?? []) {
+  for (const s of (o as unknown as OrbitFields).trajectories ?? []) {
     const p = s.pts;
     for (let i = 0; i + 1 < p.length; i += 2) {
       if (p[i] < x0) x0 = p[i];

@@ -1,5 +1,5 @@
 // tests of R7.8 on both platforms with trusted input: every row of a new table kept, a placeholder
-// with icons in an empty zone that is drawn by the editor only, a mask resized by its handles, and
+// with icons in an empty figure box that is drawn by the editor only, a mask resized by its handles, and
 // a sort of the rows of a table. after each edit the text is checked byte for byte, after an undo
 // and a redo, and after a save and an open
 
@@ -14,7 +14,7 @@ import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { numberOf, sortOrder } from '../src/editor/table.ts';
 import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PLATFORMS = ['mac', 'other'];
 // the window of the pictures of round 3 on the Mac, and a window of 1920 by 1080 elsewhere
@@ -107,7 +107,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(shape, [3, 3, 3]);
     const slide = await rect(page, '.reveal section.present');
     const table = await rect(page, '.reveal section.present table');
-    const figure = await rect(page, '.reveal section.present figure.zone');
+    const figure = await rect(page, '.reveal section.present figure.figure-box');
     assert.ok(table.top >= slide.top && table.bottom <= slide.bottom, `the table at ${js(table)} runs past the slide at ${js(slide)}`);
     // a table that does not fit beside the figure is put at the center of the slide with a fill
     const center = Math.abs((table.left + table.right - slide.left - slide.right) / 2) < 3;
@@ -200,14 +200,14 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the deck of empty zones: a split slide and a content slide with an empty zone each, and a figure
+// the deck of empty figure boxes: a split slide and a content slide with an empty figure box each, and a figure
 // slide with an empty plate
-const EMPTY = 'test/pages/editor-empty-zone.html';
+const EMPTY = 'test/pages/editor-empty-figure-box.html';
 const PLACEHOLDER = '.reveal section.present .beeson-placeholder';
 const shownPlaceholders = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present .beeson-placeholder')].filter((p) => p.getBoundingClientRect().width > 0).length`);
 const buttonOf = (page, label) => rect(page, `${PLACEHOLDER} button[aria-label="${label}"]`);
 
-// state 98 of round 3: an empty zone was drawn as nothing until a file was dragged over it, where
+// state 98 of round 3: an empty figure box was drawn as nothing until a file was dragged over it, where
 // PowerPoint draws a content placeholder with icons that insert into it
 for (const platform of PLATFORMS) {
   test(`an empty zone or plate is drawn with a placeholder of the editor only, which a save does not write (${platform})`, async (t) => {
@@ -218,7 +218,7 @@ for (const platform of PLATFORMS) {
       assert.equal(await shownPlaceholders(page), 1, `slide ${n} does not show one placeholder`);
       const labels = await page.evaluate(`[...document.querySelectorAll('${PLACEHOLDER} button')].map((b) => b.getAttribute('aria-label'))`);
       assert.deepEqual(labels, ['Insert Image', 'Insert Video', 'Insert Table', 'Insert QR Code']);
-      const slot = await rect(page, '.reveal section.present :is(.zone, .plate)');
+      const slot = await rect(page, '.reveal section.present :is(.figure-box, .plate)');
       const box = await rect(page, PLACEHOLDER);
       assert.ok(box.left >= slot.left - 0.5 && box.right <= slot.right + 0.5 && box.top >= slot.top - 0.5 && box.bottom <= slot.bottom + 0.5, `the placeholder at ${js(box)} is not inside its slot at ${js(slot)}`);
       // the icons are at the center of the slot
@@ -244,7 +244,7 @@ for (const platform of PLATFORMS) {
   test(`the QR Code icon of a placeholder inserts a QR code into its zone, and an undo draws the placeholder again (${platform})`, async (t) => {
     const page = await load(t, platform, { deck: EMPTY, n: 0 });
     await click(page, await buttonOf(page, 'Insert QR Code'));
-    await page.waitFor(`!!document.querySelector('.reveal section.present .zone > .qr')`);
+    await page.waitFor(`!!document.querySelector('.reveal section.present .figure-box > .qr')`);
     await frames(page);
     assert.equal(await shownPlaceholders(page), 0);
     assert.equal(await undoLabel(page), 'Undo Insert QR Code');
@@ -256,7 +256,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await shownPlaceholders(page), 0);
     const edited = await roundTrip(page);
-    assert.match(edited, /<div class="zone">\s*<div class="qr" data-qr="https:\/\/example.com"><\/div>\s*<\/div>/);
+    assert.match(edited, /<div class="figure-box">\s*<div class="qr" data-qr="https:\/\/example.com"><\/div>\s*<\/div>/);
   });
 
   test(`the Table icon of a placeholder inserts a table of the size chosen into its zone (${platform})`, async (t) => {
@@ -265,14 +265,14 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
     // the cell of the second row and the second column of the grid of 10 columns
     await click(page, await rect(page, '.beeson-table-picker .grid > :nth-child(12)'));
-    await page.waitFor(`!!document.querySelector('.reveal section.present .zone > table')`);
+    await page.waitFor(`!!document.querySelector('.reveal section.present .figure-box > table')`);
     await frames(page);
-    assert.deepEqual(await page.evaluate(`[...document.querySelector('.reveal section.present .zone > table').rows].map((r) => r.cells.length)`), [2, 2]);
+    assert.deepEqual(await page.evaluate(`[...document.querySelector('.reveal section.present .figure-box > table').rows].map((r) => r.cells.length)`), [2, 2]);
     assert.equal(await shownPlaceholders(page), 0);
     assert.equal(await page.evaluate('document.activeElement.localName'), 'th');
     assert.equal(await undoLabel(page), 'Undo Insert Table');
     const edited = await roundTrip(page);
-    assert.match(edited, /<div class="zone">\s*<table>\s*<tbody>\s*<tr><th style="width: \d+px"><\/th><th style="width: \d+px"><\/th><\/tr>\s*<tr><td><\/td><td><\/td><\/tr>\s*<\/tbody>\s*<\/table>\s*<\/div>/);
+    assert.match(edited, /<div class="figure-box">\s*<table>\s*<tbody>\s*<tr><th style="width: \d+px"><\/th><th style="width: \d+px"><\/th><\/tr>\s*<tr><td><\/td><td><\/td><\/tr>\s*<\/tbody>\s*<\/table>\s*<\/div>/);
   });
 
   test(`the Image icon of a placeholder inserts the file chosen into its plate (${platform})`, async (t) => {
@@ -307,13 +307,13 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
     const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
     await page.send('DOM.setFileInputFiles', { files: [resolve('demo/clip-dark.mp4')], objectId: result.objectId });
-    await page.waitFor(`!!document.querySelector('.reveal section.present .zone > video')`);
+    await page.waitFor(`!!document.querySelector('.reveal section.present .figure-box > video')`);
     await frames(page);
     assert.equal(await shownPlaceholders(page), 0);
     assert.equal(await undoLabel(page), 'Undo Insert Video');
     assert.equal((await state(page, 'insert.video')).label, 'Video…');
     const edited = await render(page);
-    assert.match(edited, /<div class="zone">\s*<video [^>]*src="media\/clip-dark\.mp4"[^>]*><\/video>\s*<\/div>/);
+    assert.match(edited, /<div class="figure-box">\s*<video [^>]*src="media\/clip-dark\.mp4"[^>]*><\/video>\s*<\/div>/);
     await undo(page);
     await frames(page);
     await byteExact(page);
@@ -327,9 +327,9 @@ for (const platform of PLATFORMS) {
 }
 
 // the deck of layouts of the mask tests, whose slide 3 has a dark image of 1200 by 1440 px in a
-// zone of 600 by 800 px
+// figure box of 600 by 800 px
 const LAYOUTS = 'test/pages/editor-layouts.html';
-const IMG = '.reveal section.present figure.zone img.for-dark';
+const IMG = '.reveal section.present figure.figure-box img.for-dark';
 const BAR = 'dialog.beeson-mask-bar';
 const written = async (page) => (await render(page)).match(/<img class="for-dark"[^>]*?(?: style="([^"]*)")?>/)[1] ?? null;
 const handlesShown = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-mask-window i')].filter((i) => getComputedStyle(i).display !== 'none').length`);

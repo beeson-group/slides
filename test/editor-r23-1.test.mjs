@@ -108,7 +108,7 @@ async function caretIn(page, selector) {
 }
 
 // the block of selector selected as an object, by a click into its text and Esc
-async function selectBlock(page, selector) {
+async function selectTextElement(page, selector) {
   await caretIn(page, selector);
   await press(page, 'Escape');
   await frames(page);
@@ -268,7 +268,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, 3);
     await exec(page, 'view.steps');
     await frames(page);
-    await selectBlock(page, 'p');
+    await selectTextElement(page, 'p');
     const control = await page.evaluate(`(() => { const b = document.querySelector(${js(EFFECT)}); return b && { disabled: b.disabled, text: b.textContent }; })()`);
     assert.deepEqual(control, { disabled: false, text: '—' }, 'the Effect control is not enabled for an element shown with the slide');
     await click(page, EFFECT);
@@ -291,9 +291,9 @@ for (const platform of PLATFORMS) {
 // the content of the mark of each item of the slide of lists in root, which is none for an item
 // drawn without its mark
 const marks = (root = 'document') => `[...${root}.querySelectorAll('li')].map((li) => [li.closest('ul, ol').localName + (li.closest('ul, ol').className ? '.' + li.closest('ul, ol').className : ''), li.textContent, getComputedStyle(li, '::before').content])`;
-const LISTS = [['ul', 'A dash', '""'], ['ul', '', 'none'], ['ul.dots', '', 'none'], ['ul.arrows', '', 'none'], ['ol', '', 'none']];
+const LISTS = [['ul', 'A chevron', '""'], ['ul', '', 'none'], ['ul.dots', '', 'none'], ['ul.dashes', '', 'none'], ['ol', '', 'none']];
 
-// G7. the slide of lists has an empty item in a list of dashes, of dots, of arrows, and of numbers,
+// G7. the slide of lists has an empty item in a list of chevrons, of dots, of dashes, and of numbers,
 // whose marks the editor draws, since an empty item is the placeholder of a new slide
 for (const platform of PLATFORMS) {
   test(`G7: an empty list item is drawn without its mark in the show and in the print view, and with it in the editor (${platform})`, async (t) => {
@@ -324,7 +324,7 @@ const drawn = (page) => page.evaluate(`(() => {
   return { box: [r.width, r.height].map(round), picture: [r.left + (r.width - w) / 2, r.top + (r.height - h) / 2, w, h].map(round) };
 })()`);
 
-// G8. the picture of 1200 by 1440 px is drawn letterboxed at 600 by 720 px in the zone of 600 by
+// G8. the picture of 1200 by 1440 px is drawn letterboxed at 600 by 720 px in the figure box of 600 by
 // 800 px, hence Oval writes its width, and the figure is moved by the 40 px that the picture rises
 for (const platform of PLATFORMS) {
   test(`G8: Oval on a picture drawn smaller than its box gives the ellipse of the picture, for both pictures of a pair (${platform})`, async (t) => {
@@ -338,8 +338,8 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(now.box, now.picture.slice(2), 'the box of the oval picture is not the picture');
     assert.deepEqual(now.picture, before.picture, 'the picture is moved');
     const expected = edited([
-      ['<figure class="zone">\n    <img class="for-dark" src="../../demo/figure-dark.png" alt="A pair">\n    <img class="for-light" src="../../demo/figure-light.png" alt="A pair">',
-        '<figure class="zone" style="translate: 0px 40px">\n    <img class="for-dark oval" src="../../demo/figure-dark.png" alt="A pair" style="width: 600px">\n    <img class="for-light oval" src="../../demo/figure-light.png" alt="A pair" style="width: 600px">'],
+      ['<figure class="figure-box">\n    <img class="for-dark" src="../../demo/figure-dark.png" alt="A pair">\n    <img class="for-light" src="../../demo/figure-light.png" alt="A pair">',
+        '<figure class="figure-box" style="translate: 0px 40px">\n    <img class="for-dark oval" src="../../demo/figure-dark.png" alt="A pair" style="width: 600px">\n    <img class="for-light oval" src="../../demo/figure-light.png" alt="A pair" style="width: 600px">'],
     ]);
     await roundTrip(page, expected, 'Undo Oval');
     assert.deepEqual(errors(page), []);
@@ -366,7 +366,7 @@ for (const platform of PLATFORMS) {
       page = await load(t, platform, 6);
       const [own, text] = await colors(page, selector);
       assert.notEqual(own, text, `${selector} is drawn in the text color`);
-      await selectBlock(page, selector);
+      await selectTextElement(page, selector);
       assert.equal((await state(page, 'text.tone.text')).checked, false, `Text is checked on ${selector}`);
       await exec(page, 'text.tone.text');
       await frames(page);
@@ -378,7 +378,7 @@ for (const platform of PLATFORMS) {
     }
     page = await load(t, platform, 6);
     // on a block in the text color, Text takes the tone of its words off
-    await selectBlock(page, 'p');
+    await selectTextElement(page, 'p');
     await exec(page, 'text.tone.text');
     await roundTrip(page, edited([['<p>Body words <span class="tone-accent">in orange</span> here.</p>', '<p>Body words in orange here.</p>']]), 'Undo Text Color');
     assert.deepEqual(errors(page), []);

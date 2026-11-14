@@ -63,23 +63,23 @@ for (const platform of PLATFORMS) {
     await page.evaluate(`Reveal.slide(${index})`);
     assert.deepEqual(await section(page), WITHOUT);
     await click(page, '#beeson-edit-panel-format .ed-sec button[data-command="backdrop.choose"]');
-    await page.waitFor(`!!document.querySelector('.beeson-backdrop-gallery [data-tile="nest"]')`);
-    await click(page, '.beeson-backdrop-gallery [data-tile="nest"]');
+    await page.waitFor(`!!document.querySelector('.beeson-backdrop-gallery [data-tile="tubes"]')`);
+    await click(page, '.beeson-backdrop-gallery [data-tile="tubes"]');
     assert.equal((await section(page)).pane, 'backdrop');
     await press(page, 'Escape');
-    assert.deepEqual(await section(page), WITH('Lyapunov Families'));
+    assert.deepEqual(await section(page), WITH('Cislunar Manifolds'));
     await exec(page, 'edit.undo');
     assert.deepEqual(await section(page), WITHOUT, 'after the undo of Add Backdrop');
     assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
     await exec(page, 'edit.redo');
     await press(page, 'Escape');
-    assert.deepEqual(await section(page), WITH('Lyapunov Families'), 'after the redo of Add Backdrop');
+    assert.deepEqual(await section(page), WITH('Cislunar Manifolds'), 'after the redo of Add Backdrop');
     // Delete of the backdrop, selected from the pane, and its undo
     await click(page, '#beeson-edit-panel-format .ed-sec button[data-command="backdrop.select"]');
     await press(page, 'Delete');
     assert.deepEqual(await section(page), WITHOUT, 'after Delete of the backdrop');
     await exec(page, 'edit.undo');
     await press(page, 'Escape');
-    assert.deepEqual(await section(page), WITH('Lyapunov Families'), 'after the undo of Delete');
+    assert.deepEqual(await section(page), WITH('Cislunar Manifolds'), 'after the undo of Delete');
   });
 }

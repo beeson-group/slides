@@ -13,13 +13,13 @@ import { deckSettled, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { editProblems, textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { tokenize } from '../src/editor/tokens.ts';
-import { center, click, press, saveAndReopen, selectFigure, selectPicture } from './helpers/editor.mjs';
+import { center, click, press, previewFrames, recordPreview, saveAndReopen, selectFigure, selectPicture } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const DECK = 'test/pages/editor-r20-8.html';
 const SOURCE = readFileSync(DECK, 'utf8');
 // the figure of the first slide
-const FIGURE = '<figure class="zone">\n    <img src="../../demo/figure-light.png" alt="A figure">';
+const FIGURE = '<figure class="figure-box">\n    <img src="../../demo/figure-light.png" alt="A figure">';
 const PANEL = '#beeson-edit-panel-format';
 const GHOST = '0.25';
 
@@ -107,7 +107,7 @@ async function caretIn(page, selector) {
 
 // the block of selector selected as an object, by a click into its text and Esc, or added to the
 // selection by a click with Shift
-async function selectBlock(page, selector, modifiers = '') {
+async function selectTextElement(page, selector, modifiers = '') {
   if (modifiers) await click(page, await center(page, `.reveal section.present ${selector}`), { modifiers });
   else {
     await caretIn(page, selector);
@@ -155,8 +155,8 @@ for (const platform of PLATFORMS) {
 
   test(`Center acts on a list and a display selected as objects, on a caption, and on a small paragraph, and draws the display centered (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await selectBlock(page, 'ul');
-    await selectBlock(page, 'div.math', 'Shift');
+    await selectTextElement(page, 'ul');
+    await selectTextElement(page, 'div.math', 'Shift');
     assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 2);
     await exec(page, 'text.align.center');
     await frames(page);
@@ -198,49 +198,49 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Ghosted writes the class ghost on a figure, a block, and a line, and each is drawn at the ghost opacity (${platform})`, async (t) => {
+  test(`Faint writes the class ghost on a figure, a block, and a line, and each is drawn at the ghost opacity (${platform})`, async (t) => {
     const page = await load(t, platform);
     await selectFigure(page, '.reveal section.present figure img');
-    await selectBlock(page, 'p', 'Shift');
+    await selectTextElement(page, 'p', 'Shift');
     await showPane(page, 'Arrange');
-    assert.equal(await page.evaluate(`document.querySelector('${PANEL} [data-command="arrange.ghost"]')?.checked`), false);
-    await click(page, `${PANEL} label:has(> [data-command="arrange.ghost"])`);
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} [data-command="arrange.faint"]')?.checked`), false);
+    await click(page, `${PANEL} label:has(> [data-command="arrange.faint"])`);
     await frames(page);
-    const expected = edited([['<p>Alpha', '<p class="ghost">Alpha'], [FIGURE, FIGURE.replace('zone', 'zone ghost')]]);
+    const expected = edited([['<p>Alpha', '<p class="faint">Alpha'], [FIGURE, FIGURE.replace('figure-box', 'figure-box faint')]]);
     assert.equal(await render(page), expected);
     assert.equal(await style(page, 'figure', 'opacity'), GHOST);
     assert.equal(await style(page, 'p', 'opacity'), GHOST);
-    assert.equal(await page.evaluate(`document.querySelector('${PANEL} [data-command="arrange.ghost"]')?.checked`), true);
-    await roundTrip(page, expected, 'Undo Ghosted');
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} [data-command="arrange.faint"]')?.checked`), true);
+    await roundTrip(page, expected, 'Undo Faint');
     // a line, and the command again takes the class off
     await exec(page, 'selection.clear');
     await selectLine(page, 'svg.line');
-    await exec(page, 'arrange.ghost');
-    const line = edited([['<p>Alpha', '<p class="ghost">Alpha'], [FIGURE, FIGURE.replace('zone', 'zone ghost')], ['<svg class="line tone-accent" width="200" height="1" style="translate: 200px 900px"><defs><marker id="line-1"', '<svg class="line tone-accent ghost" width="200" height="1" style="translate: 200px 900px"><defs><marker id="line-1"']]);
+    await exec(page, 'arrange.faint');
+    const line = edited([['<p>Alpha', '<p class="faint">Alpha'], [FIGURE, FIGURE.replace('figure-box', 'figure-box faint')], ['<svg class="line tone-accent" width="200" height="1" style="translate: 200px 900px"><defs><marker id="line-1"', '<svg class="line tone-accent faint" width="200" height="1" style="translate: 200px 900px"><defs><marker id="line-1"']]);
     assert.equal(await render(page), line);
     assert.equal(await style(page, 'svg.line', 'opacity'), GHOST);
-    await exec(page, 'arrange.ghost');
+    await exec(page, 'arrange.faint');
     assert.equal(await render(page), expected);
     assert.deepEqual(errors(page), []);
   });
 
   test(`Reset Slide keeps the class ghost, and a ghosted step is drawn ghosted in the editor (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await selectBlock(page, 'p');
-    await exec(page, 'arrange.ghost');
+    await selectTextElement(page, 'p');
+    await exec(page, 'arrange.faint');
     await exec(page, 'slide.reset');
     await frames(page);
-    assert.ok((await render(page)).includes('<p class="ghost">Alpha'), 'Reset Slide took ghost off');
+    assert.ok((await render(page)).includes('<p class="faint">Alpha'), 'Reset Slide took ghost off');
     await page.evaluate('Reveal.slide(3)');
     await frames(page);
-    assert.equal(await style(page, 'p.ghost', 'opacity'), GHOST);
+    assert.equal(await style(page, 'p.faint', 'opacity'), GHOST);
     assert.deepEqual(errors(page), []);
   });
 
   test(`Dim of the Steps pane writes semi-fade-out, and Preview Steps draws the element dimmed from its step on (${platform})`, async (t) => {
     const page = await load(t, platform, 2);
     await still(page);
-    await selectBlock(page, 'p:nth-of-type(4)');
+    await selectTextElement(page, 'p:nth-of-type(4)');
     await exec(page, 'steps.effect', { effect: 'dim' });
     await frames(page);
     const expected = edited([['<p class="fragment" data-fragment-index="3">Theta', '<p class="fragment semi-fade-out" data-fragment-index="3">Theta']]);
@@ -248,14 +248,13 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, expected);
     // the element is drawn at full opacity while the slide is edited, since every step is shown
     assert.equal(await style(page, 'p:nth-of-type(2)', 'opacity'), '1');
-    const run = page.evaluate(`Promise.resolve(window.BeesonEditor.exec('steps.preview')).then(() => true)`);
-    const seen = [];
-    for (let k = 0; k <= 3; k++) {
-      await page.waitFor(`document.documentElement.dataset.previewStep === ${js(String(k))}`);
-      await frames(page);
-      seen.push(await page.evaluate(`[...document.querySelectorAll('.reveal section.present p')].map((p) => getComputedStyle(p).opacity)`));
-    }
-    await run;
+    // each frame of the preview is recorded in the page as it is drawn, since the preview goes on
+    // by a clock of 800 ms a step, and a wait for one step from the test may miss it
+    await recordPreview(page, `[...document.querySelectorAll('.reveal section.present p')].map((p) => getComputedStyle(p).opacity)`);
+    await page.evaluate(`Promise.resolve(window.BeesonEditor.exec('steps.preview')).then(() => true)`);
+    const played = await previewFrames(page);
+    const seen = [0, 1, 2, 3].map((k) => played.find((f) => f.step === String(k))?.read);
+    assert.ok(seen.every(Boolean), `the preview did not draw each of its steps 0 to 3: ${js(played.map((f) => f.step))}`);
     assert.deepEqual(seen.map((s) => s[1]), ['1', GHOST, GHOST, GHOST], 'the dimmed Zeta');
     assert.deepEqual(seen.map((s) => s[3]), ['1', '1', '1', GHOST], 'Theta, dimmed at its own step');
     assert.deepEqual(errors(page), []);
@@ -331,8 +330,8 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'figure.oval')).checked, false);
     await click(page, `${PANEL} label:has(> [data-command="figure.oval"])`);
     await frames(page);
-    // the picture is drawn letterboxed in its zone, hence Oval writes its width and keeps it in place
-    const expected = edited([[FIGURE, '<figure class="zone" style="translate: 0px 40px">\n    <img src="../../demo/figure-light.png" alt="A figure" style="width: 600px" class="oval">']]);
+    // the picture is drawn letterboxed in its figure box, hence Oval writes its width and keeps it in place
+    const expected = edited([[FIGURE, '<figure class="figure-box" style="translate: 0px 40px">\n    <img src="../../demo/figure-light.png" alt="A figure" style="width: 600px" class="oval">']]);
     assert.equal(await render(page), expected);
     assert.equal(await style(page, 'figure img', 'clipPath'), 'inset(0px round 50%)');
     assert.equal((await state(page, 'figure.oval')).checked, true);
@@ -381,7 +380,7 @@ for (const platform of PLATFORMS) {
     await page.send('DOM.setFileInputFiles', { files: [resolve('demo/clip-light.mp4')], objectId: result.objectId });
     await page.waitFor('window.__done', 20000);
     await frames(page);
-    assert.match(await render(page), /<video class="ghost"[^>]*>/);
+    assert.match(await render(page), /<video class="faint"[^>]*>/);
     assert.equal(await style(page, 'figure video', 'opacity'), GHOST);
     assert.deepEqual(errors(page), []);
   });
@@ -451,14 +450,14 @@ test('a ghosted fragment is drawn at the ghost opacity at its step, after it, wi
   for (let i = 0; i < 4; i++) {
     if (i) await page.evaluate('Reveal.next()');
     await sleep(150);
-    seen.push(await page.evaluate(`(() => { const s = Reveal.getCurrentSlide(), g = s.querySelector('.ghost'); return [g.classList.contains('visible') ? getComputedStyle(g).opacity : 'hidden', s.hasAttribute('data-complete')]; })()`));
+    seen.push(await page.evaluate(`(() => { const s = Reveal.getCurrentSlide(), g = s.querySelector('.faint'); return [g.classList.contains('visible') ? getComputedStyle(g).opacity : 'hidden', s.hasAttribute('data-complete')]; })()`));
   }
   assert.deepEqual(seen, [['hidden', false], [GHOST, false], [GHOST, false], [GHOST, true]]);
   const print = await browser.newPage();
   t.after(() => print.close().catch(() => {}));
   await printView(print, `${server.origin}/${DECK}?print-pdf`);
-  const pages = await print.evaluate(`[...document.querySelectorAll('.pdf-page section')].filter((s) => s.querySelector('.ghost')).map((s) => {
-    const g = s.querySelector('.ghost');
+  const pages = await print.evaluate(`[...document.querySelectorAll('.pdf-page section')].filter((s) => s.querySelector('.faint')).map((s) => {
+    const g = s.querySelector('.faint');
     return g.classList.contains('visible') ? getComputedStyle(g).opacity : 'hidden';
   })`);
   assert.ok(pages.length >= 3, `the print view has ${pages.length} pages of the slide`);
@@ -470,11 +469,11 @@ test('a ghosted fragment is drawn at the ghost opacity at its step, after it, wi
 // center reveal.js reads in its print layout
 test('the scope rule allows center, ghost, oval, and the crop of an oval picture, and refuses center on a section', () => {
   const theme = new Set(themeClasses(readFileSync(new URL('../theme/beeson.css', import.meta.url), 'utf8')));
-  assert.ok(theme.has('center') && theme.has('ghost') && theme.has('oval'));
+  assert.ok(theme.has('center') && theme.has('faint') && theme.has('oval'));
   const attrs = (html) => tokenize(html).find((x) => x.type === 'start').attrs;
-  assert.deepEqual(editProblems('p', attrs('<p>'), { classes: { center: true, ghost: true } }, theme), []);
+  assert.deepEqual(editProblems('p', attrs('<p>'), { classes: { center: true, faint: true } }, theme), []);
   assert.deepEqual(editProblems('section', attrs('<section>'), { classes: { center: true } }, theme), ['the class center on a section']);
-  assert.deepEqual(editProblems('section', attrs('<section>'), { classes: { ghost: true } }, theme), []);
+  assert.deepEqual(editProblems('section', attrs('<section>'), { classes: { faint: true } }, theme), []);
   assert.deepEqual(textProblems('<section class="center"><p class="center">A</p></section>', theme), ['the class center on a section']);
   // the crop of an oval picture is cut with the ellipse
   assert.deepEqual(editProblems('img', attrs('<img class="oval">'), { style: { scale: '2', 'clip-path': 'inset(25% round 50%)' } }, theme), []);

@@ -3,9 +3,9 @@
 // Vestini's website (MIT) and reduced to the families drawn on the slides. all quantities are
 // nondimensional, in the rotating frame
 
-import { scene } from './scenes.ts';
-import { colormapColor, fitView, load, mix, shadeOf, strandsFor } from './strands.ts';
-import type { Colormap, Dot, StrandRecord } from './strands.ts';
+import { builtIn } from './backdrops.ts';
+import { colormapColor, fitView, load, mix, shadeOf, trajectoriesFor } from './trajectories.ts';
+import type { Colormap, Dot, TrajectoryData } from './trajectories.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
 export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
@@ -13,27 +13,27 @@ export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // the last of them. color, when set, is a CSS color or a pair of them for the dark and the light
 // mode in place of the color of the tone. alpha, when set, replaces the opacity of the tone. ink,
 // when set, replaces the color of the tone with the color at the fraction at between the two
-// colors of the pair of the palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1
-// and --strand-2 for pair 0, or with shade the shade at the fraction at of the first color of the
+// colors of the pair of the palette --trajectory-1 to --trajectory-8 in theme/beeson.css, i.e. --trajectory-1
+// and --trajectory-2 for pair 0, or with shade the shade at the fraction at of the first color of the
 // pair, or with map the color at the fraction at between the ends of the colormap map. craft, when
-// true, marks the path of a spacecraft, whose head is drawn without data-heads. a strand of a file
+// true, marks the path of a spacecraft, whose head is drawn without data-heads. a trajectory of a file
 // may also set its weight, i.e. its width in line widths, the radius of its head in line widths in
 // place of the size of its backdrop, a glow, a soft halo of its own color, and a fade, the seconds
 // of its clock from its first point after which its opacity falls to zero at its last point, as the
 // square of the time left, in FADE_BANDS bands of equal time
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; color?: string | [string, string]; alpha?: number; ink?: { pair: number; at: number; shade?: boolean; map?: Colormap }; craft?: boolean; weight?: number; head?: number; glow?: boolean; fade?: number };
+export type Trajectory = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; color?: string | [string, string]; alpha?: number; ink?: { pair: number; at: number; shade?: boolean; map?: Colormap }; craft?: boolean; weight?: number; head?: number; glow?: boolean; fade?: number };
 const FADE_BANDS = 12;
 
-// the opacity of strand s, and its width in line widths
-const alphaOf = (s: Strand): number => s.alpha ?? (s.tone === 'orange' || s.tone === 'violet' ? 0.42 : s.tone === 'text' ? 0.8 : s.tone === 'line' ? 0.36 : 1);
-const widthOf = (s: Strand): number => (s.tone === 'hero' ? 2.2 : s.tone === 'text' ? 1.3 : 1) * (s.weight ?? 1);
+// the opacity of trajectory s, and its width in line widths
+const alphaOf = (s: Trajectory): number => s.alpha ?? (s.tone === 'orange' || s.tone === 'violet' ? 0.42 : s.tone === 'text' ? 0.8 : s.tone === 'line' ? 0.36 : 1);
+const widthOf = (s: Trajectory): number => (s.tone === 'hero' ? 2.2 : s.tone === 'text' ? 1.3 : 1) * (s.weight ?? 1);
 
-// a name for the color of strand s. two strands of one name are drawn in one color in either mode
-const colorOf = (s: Strand): string => (s.color ? `color ${JSON.stringify(s.color)}` : s.ink ? `ink ${JSON.stringify(s.ink)}` : s.tone === 'orange' || s.tone === 'hero' ? 'accent' : s.tone === 'violet' ? 'violet' : s.tone === 'text' || s.tone === 'line' ? 'text' : 'stroke');
+// a name for the color of trajectory s. two trajectories of one name are drawn in one color in either mode
+const colorOf = (s: Trajectory): string => (s.color ? `color ${JSON.stringify(s.color)}` : s.ink ? `ink ${JSON.stringify(s.ink)}` : s.tone === 'orange' || s.tone === 'hero' ? 'accent' : s.tone === 'violet' ? 'violet' : s.tone === 'text' || s.tone === 'line' ? 'text' : 'stroke');
 
-// the points of strand s at which the bands of its fade begin, i.e. the last point at or before the
-// time of its fade and the last point before each later band, or null for a strand without a fade
-function bandsOf(s: Strand): Uint32Array | null {
+// the points of trajectory s at which the bands of its fade begin, i.e. the last point at or before the
+// time of its fade and the last point before each later band, or null for a trajectory without a fade
+function bandsOf(s: Trajectory): Uint32Array | null {
   const n = s.times.length, fadeAt = s.times[0] + (s.fade ?? Infinity), span = s.T - fadeAt;
   if (!(span > 0)) return null;
   const out = new Uint32Array(FADE_BANDS);
@@ -57,11 +57,11 @@ const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
 // the radii of the heads of a trace for each value of the attribute data-heads, in line widths.
-// without data-heads, a head of full size is drawn on each strand of a spacecraft alone
+// without data-heads, a head of full size is drawn on each trajectory of a spacecraft alone
 const HEADS: Record<string, number> = { full: 2.2, small: 0.55, none: 0 };
 // the number of colors of the palette of theme/beeson.css, in pairs
 const PALETTE = 8;
-// the distance in canvas pixels within which the path drawn for a strand follows its points. a
+// the distance in canvas pixels within which the path drawn for a trajectory follows its points. a
 // segment whose smooth curve departs further from its chord is drawn as the curve, and a point
 // closer than this to the line through its kept neighbors is left out of the path
 const TOLERANCE = 0.1;
@@ -208,13 +208,6 @@ export function ramp(a: number, b: number, factor: number): number[] {
   return out;
 }
 
-// count values from a to b, crowded toward a with the exponent p
-export function spaced(a: number, b: number, count: number, p: number): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < count; i++) out.push(a + (b - a) * Math.pow(i / (count - 1), p));
-  return out;
-}
-
 // x of the collinear point L1, L2, or L3 at the mass ratio mu, by Newton on the force balance along
 // the x axis, from the leading terms of the series of each point in mu
 export function lagrange(n: 1 | 2 | 3, mu = MU): number {
@@ -247,27 +240,8 @@ export function lyapunovFamily(n: 1 | 2, amplitudes: number[], h: number, start 
   return family(guess, 0, values, [4], [3], h, () => 0.3, () => 6, lead.length);
 }
 
-// the distant retrograde orbits over the distances given of the crossing on the Earth side of the
-// Moon. the seed is the Keplerian speed in the rotating frame
-export function droFamily(distances: number[], h: number): Member[] {
-  const guess = (x0: number) => {
-    const d = 1 - MU - x0;
-    const s = new Float64Array(6);
-    s[0] = x0;
-    s[4] = Math.sqrt(MU / d) + d;
-    return s;
-  };
-  const tmin = (x0: number) => {
-    const d = 1 - MU - x0;
-    return (0.4 * Math.PI) / (Math.sqrt(MU / (d * d * d)) + 1);
-  };
-  const lead = ramp(0.02, distances[0], 1.12);
-  const values = lead.concat(distances).map((d) => 1 - MU - d);
-  return family(guess, 0, values, [4], [3], h, tmin, (x0) => 10 * tmin(x0), lead.length);
-}
-
 // the whole orbit from its half, mirrored in the x axis
-export function closed(m: Member): Strand {
+export function closed(m: Member): Trajectory {
   const n = m.times.length, T = m.t, N = 2 * n - 1;
   const pts = new Float64Array(2 * N), tt = new Float32Array(N);
   for (let i = 0; i < n; i++) {
@@ -280,8 +254,8 @@ export function closed(m: Member): Strand {
   return { pts, times: tt, T: 2 * T };
 }
 
-// a strand from a recorded flight of x, y, z triples
-export function open(path: number[], times: number[]): Strand {
+// a trajectory from a recorded flight of x, y, z triples
+export function open(path: number[], times: number[]): Trajectory {
   const n = times.length, pts = new Float64Array(2 * n);
   for (let i = 0; i < n; i++) {
     pts[2 * i] = path[3 * i]; pts[2 * i + 1] = path[3 * i + 1];
@@ -289,7 +263,7 @@ export function open(path: number[], times: number[]): Strand {
   return { pts, times: Float32Array.from(times), T: times[n - 1] };
 }
 
-// a strand as drawn on a canvas. px holds its points in canvas pixels, keep the indices of the
+// a trajectory as drawn on a canvas. px holds its points in canvas pixels, keep the indices of the
 // points of its path in increasing order, and ctl four numbers per segment, the two inner control
 // points of the cubic Bézier curve of the segment, or NaN for a segment drawn straight. ctl is null
 // when every segment is drawn straight
@@ -302,7 +276,7 @@ const curved = (ctl: Float32Array | null, j: number): ctl is Float32Array => ctl
 // the path of the points px, in canvas pixels. a segment is drawn as the curve of the centripetal
 // Catmull–Rom spline through the points of [Yuksel et al. 2011](https://doi.org/10.1016/j.cad.2010.08.008)
 // where this curve departs from the chord by more than tolerance, i.e. where the points are too
-// sparse for the turn of the strand. on a closed strand, whose last point is within half a pixel
+// sparse for the turn of the trajectory. on a closed trajectory, whose last point is within half a pixel
 // of its first, the spline is continued across this point. the points of the straight runs are
 // thinned by Douglas–Peucker within tolerance
 export function pathOf(px: Float32Array, tolerance = TOLERANCE): Path {
@@ -313,7 +287,7 @@ export function pathOf(px: Float32Array, tolerance = TOLERANCE): Path {
   let ctl: Float32Array | null = null;
   for (let j = 0; j < n - 1; j++) {
     const x1 = px[2 * j], y1 = px[2 * j + 1], x2 = px[2 * j + 2], y2 = px[2 * j + 3];
-    // the neighbors of the segment, the points across the joint on a closed strand, or the
+    // the neighbors of the segment, the points across the joint on a closed trajectory, or the
     // reflections of the far end at an end of an open one
     let x0 = 2 * x1 - x2, y0 = 2 * y1 - y2, x3 = 2 * x2 - x1, y3 = 2 * y2 - y1;
     if (j > 0) { x0 = px[2 * j - 2]; y0 = px[2 * j - 1]; } else if (closed) { x0 = px[2 * n - 4]; y0 = px[2 * n - 3]; }
@@ -374,7 +348,7 @@ export function pointOn(path: Path, j: number, f: number): [number, number] {
   return [w0 * x1 + w1 * c[k] + w2 * c[k + 2] + w3 * x2, w0 * y1 + w1 * c[k + 1] + w2 * c[k + 3] + w3 * y2];
 }
 
-// adds to pen the path of a strand from its point from, its first by default, to the fraction f of
+// adds to pen the path of a trajectory from its point from, its first by default, to the fraction f of
 // its segment from point j to j + 1, i.e. to the head of its trace, and to its last point with j its
 // last index. a point from left out of keep is on a straight run, whose segments are not curved
 export function trace(pen: Pen, path: Path, j: number, f: number, from = 0): void {
@@ -420,11 +394,11 @@ type Colors = { stroke: string; body: string; accent: string; violet: string; te
 
 const CACHE = new WeakMap<HTMLElement, Orbits>();
 
-// one drawing per `.backdrop` element. the strands are drawn on the base canvas, and the heads and
+// one drawing per `.backdrop` element. the trajectories are drawn on the base canvas, and the heads and
 // the pointer glow on the head canvas
 export class Orbits {
   readonly el: HTMLElement;
-  private strands: Strand[];
+  private trajectories: Trajectory[];
   private cx: number;
   private cy: number;
   private half: number;
@@ -448,39 +422,39 @@ export class Orbits {
   private pointer: { x: number; y: number; r: number } | null = null;
   // the bodies of a file of polylines, drawn in place of the Moon and the Earth, or null
   private dots: Dot[] | null;
-  // true when the window is fitted to the strands of a file, i.e. without data-half
+  // true when the window is fitted to the trajectories of a file, i.e. without data-half
   private fitted: boolean;
   // the box and the slide for which the window was last fitted, in slide pixels
   private fittedFor = '';
   private loaded: boolean;
-  // true when start() was called before the strands of a file were loaded
+  // true when start() was called before the trajectories of a file were loaded
   private pending = false;
   private headSize: number;
-  // seconds in which the longest strand is traced
+  // seconds in which the longest trajectory is traced
   readonly duration: number;
-  // seconds between the starts of two strands one after the other, from data-stagger
+  // seconds between the starts of two trajectories one after the other, from data-stagger
   private stagger: number;
-  // true when a head is drawn on every strand, and false when on the strands of a spacecraft alone
+  // true when a head is drawn on every trajectory, and false when on the trajectories of a spacecraft alone
   private everyHead: boolean;
-  // the colors of the strands with an ink, resolved in redraw() for the current mode
+  // the colors of the trajectories with an ink, resolved in redraw() for the current mode
   private inks: string[] = [];
   // copies of the canvases and of the trail, traced in the colors of the old mode during a flip, or
   // null
   private ghosted: { base: HTMLCanvasElement; head: HTMLCanvasElement; trail: HTMLCanvasElement | null; c: Colors; inks: string[] } | null = null;
-  // during a trace, the strands before the index cached are drawn on the trail a piece per frame, and
+  // during a trace, the trajectories before the index cached are drawn on the trail a piece per frame, and
   // the others are stroked whole at every frame, see order()
   private cached = 0;
-  // the point of each strand before cached up to which it is drawn on the trail, a point of its path
+  // the point of each trajectory before cached up to which it is drawn on the trail, a point of its path
   private upTo: number[] = [];
-  // the first points of the bands of the fade of each strand, from bandsOf()
+  // the first points of the bands of the fade of each trajectory, from bandsOf()
   private bands: (Uint32Array | null)[] = [];
-  // a canvas outside the page with the bodies and the strands before cached up to upTo, copied onto
+  // a canvas outside the page with the bodies and the trajectories before cached up to upTo, copied onto
   // the base canvas at every frame of a trace, or null outside a trace
   private trail: HTMLCanvasElement | null = null;
-  // resolved when the strands are in place, at once for a named scene and after the load of a file
+  // resolved when the trajectories are in place, at once for a built-in backdrop and after the load of a file
   readonly ready: Promise<void>;
-  // the records of the file once it is loaded, which the editor reads to tell two selections apart
-  records: StrandRecord[] | null = null;
+  // the trajectories of the file once it is loaded, which the editor reads to tell two selections apart
+  fileTrajectories: TrajectoryData[] | null = null;
 
   static of(el: HTMLElement): Orbits | undefined {
     return CACHE.get(el);
@@ -494,8 +468,8 @@ export class Orbits {
 
   constructor(el: HTMLElement) {
     this.el = el;
-    const file = el.dataset.strands !== undefined;
-    this.strands = file ? [] : scene(el.dataset.scene ?? '');
+    const file = el.dataset.trajectories !== undefined;
+    this.trajectories = file ? [] : builtIn(el.dataset.backdrop ?? '');
     this.dots = file ? [] : null;
     this.loaded = !file;
     this.fitted = file && el.dataset.half === undefined;
@@ -518,25 +492,25 @@ export class Orbits {
     for (const c of [this.base, this.head]) c.setAttribute('aria-hidden', 'true');
     el.prepend(this.head);
     el.prepend(this.base);
-    this.labels = [...el.querySelectorAll<HTMLElement>('.lab')];
-    this.Tmax = Math.max(...this.strands.map((s) => s.T));
-    this.idx = this.strands.map(() => 0);
+    this.labels = [...el.querySelectorAll<HTMLElement>('.label')];
+    this.Tmax = Math.max(...this.trajectories.map((s) => s.T));
+    this.idx = this.trajectories.map(() => 0);
     this.order();
     CACHE.set(el, this);
     this.fit();
     this.ready = file
-      ? Promise.all([strandsFor(el), load(el.dataset.strands ?? '')]).then(([{ strands, dots }, f]) => {
-          this.records = f?.families ?? null;
-          this.install(strands, dots);
+      ? Promise.all([trajectoriesFor(el), load(el.dataset.trajectories ?? '')]).then(([{ trajectories, dots }, f]) => {
+          this.fileTrajectories = f?.families ?? null;
+          this.install(trajectories, dots);
         })
       : Promise.resolve();
   }
 
-  private install(strands: Strand[], dots: Dot[]): void {
-    this.strands = strands;
+  private install(trajectories: Trajectory[], dots: Dot[]): void {
+    this.trajectories = trajectories;
     this.dots = dots;
-    this.Tmax = Math.max(...strands.map((s) => s.T));
-    this.idx = strands.map(() => 0);
+    this.Tmax = Math.max(...trajectories.map((s) => s.T));
+    this.idx = trajectories.map(() => 0);
     this.order();
     this.loaded = true;
     this.fittedFor = '';
@@ -548,28 +522,28 @@ export class Orbits {
     }
   }
 
-  // sets cached, the number of strands at the start of the order of the strands that are drawn in
-  // pieces during a trace. a strand is drawn in pieces where the seams of the pieces are too faint to
+  // sets cached, the number of trajectories at the start of the order of the trajectories that are drawn in
+  // pieces during a trace. a trajectory is drawn in pieces where the seams of the pieces are too faint to
   // be seen, i.e. it is a hairline without a glow at an opacity of 0.5 or less, and where the pieces
-  // keep the order of the strands, i.e. every earlier strand of another color is traced before it
+  // keep the order of the trajectories, i.e. every earlier trajectory of another color is traced before it
   // begins. two strokes of one color give the same pixels in either order
   private order(): void {
     const ends = new Map<string, number>();
     const seconds = (i: number, t: number) => (t / this.Tmax) * this.duration + i * this.stagger;
     let k = 0;
-    for (; k < this.strands.length; k++) {
-      const s = this.strands[k], color = colorOf(s), begin = seconds(k, s.times[0]);
+    for (; k < this.trajectories.length; k++) {
+      const s = this.trajectories[k], color = colorOf(s), begin = seconds(k, s.times[0]);
       if (s.glow || alphaOf(s) > 0.5 || widthOf(s) > 1) break;
       if ([...ends].some(([other, end]) => other !== color && end > begin)) break;
       ends.set(color, Math.max(ends.get(color) ?? -Infinity, seconds(k, s.times[s.times.length - 1])));
     }
     this.cached = k;
-    this.upTo = this.strands.map(() => 0);
-    this.bands = this.strands.map(bandsOf);
+    this.upTo = this.trajectories.map(() => 0);
+    this.bands = this.trajectories.map(bandsOf);
     this.trail = null;
   }
 
-  // the last point of the path of strand i at or before its point j
+  // the last point of the path of trajectory i at or before its point j
   private lastKept(i: number, j: number): number {
     const keep = this.paths[i].keep;
     let lo = 0, hi = keep.length - 1;
@@ -581,7 +555,7 @@ export class Orbits {
     return keep[lo];
   }
 
-  // the window in the units of the strands: its center and its half height
+  // the window in the units of the trajectories: its center and its half height
   get view(): { cx: number; cy: number; half: number } {
     return { cx: this.cx, cy: this.cy, half: this.half };
   }
@@ -637,11 +611,11 @@ export class Orbits {
     return { stroke: cs.getPropertyValue('--stroke').trim(), body: cs.getPropertyValue('--body').trim(), accent: cs.getPropertyValue('--accent').trim(), violet: cs.getPropertyValue('--violet').trim(), text: cs.getPropertyValue('--text').trim(), light: this.el.ownerDocument.documentElement.dataset.theme === 'light' };
   }
 
-  // the colors of the strands with an ink in the current mode. a color of the palette is serialized
-  // by the canvas as #rrggbb or rgba(), which mix() reads, and a strand is given the stroke color
+  // the colors of the trajectories with an ink in the current mode. a color of the palette is serialized
+  // by the canvas as #rrggbb or rgba(), which mix() reads, and a trajectory is given the stroke color
   // when its colors are missing or of another form
   private paint(ctx: CanvasRenderingContext2D, c: Colors): void {
-    if (!this.strands.some((s) => s.ink)) { this.inks = []; return; }
+    if (!this.trajectories.some((s) => s.ink)) { this.inks = []; return; }
     const cs = getComputedStyle(this.el);
     const color = (name: string) => {
       const value = cs.getPropertyValue(name).trim();
@@ -650,10 +624,10 @@ export class Orbits {
       ctx.fillStyle = value;
       return String(ctx.fillStyle);
     };
-    const palette = Array.from({ length: PALETTE }, (_, i) => color(`--strand-${i + 1}`));
+    const palette = Array.from({ length: PALETTE }, (_, i) => color(`--trajectory-${i + 1}`));
     // the shades and the ends of a colormap keep their contrast against the background of the slide
     const bg = color('--bg') || undefined;
-    this.inks = this.strands.map((s) => {
+    this.inks = this.trajectories.map((s) => {
       if (!s.ink) return '';
       if (s.ink.map) return colormapColor(s.ink.map, s.ink.at, bg);
       const k = (2 * s.ink.pair) % PALETTE;
@@ -676,13 +650,13 @@ export class Orbits {
     const w = this.el.offsetWidth, h = this.el.offsetHeight;
     if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
     this.unghost();
-    if (this.fitted && this.strands.length) {
+    if (this.fitted && this.trajectories.length) {
       const section = this.el.closest('section');
       const box = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
       const slide = { width: section?.offsetWidth || w, height: section?.offsetHeight || h };
       const key = [box.left, box.top, w, h, slide.width, slide.height].join();
       if (key !== this.fittedFor) {
-        const view = fitView(this.strands, box, slide);
+        const view = fitView(this.trajectories, box, slide);
         if (view) ({ cx: this.cx, cy: this.cy, half: this.half } = view);
         this.fittedFor = key;
       }
@@ -694,7 +668,7 @@ export class Orbits {
     this.lw = Math.max(1, 0.7 * dpr * (r.height / h));
     const key = [this.W, this.H, this.cx, this.cy, this.half].join();
     if (key !== this.pathsFor) {
-      this.paths = this.strands.map((s) => {
+      this.paths = this.trajectories.map((s) => {
         const n = s.times.length, out = new Float32Array(2 * n);
         for (let i = 0; i < n; i++) { out[2 * i] = this.X(s.pts[2 * i]); out[2 * i + 1] = this.Y(s.pts[2 * i + 1]); }
         return pathOf(out);
@@ -740,10 +714,10 @@ export class Orbits {
     }
   }
 
-  // the color, opacity, width, and glow of strand i: those of its tone, then its own ink, alpha,
+  // the color, opacity, width, and glow of trajectory i: those of its tone, then its own ink, alpha,
   // weight, and glow where it has them
   private pen(ctx: CanvasRenderingContext2D, c: Colors, i: number, inks = this.inks): void {
-    const s = this.strands[i], tone = s.tone;
+    const s = this.trajectories[i], tone = s.tone;
     ctx.strokeStyle = s.color ? (typeof s.color === 'string' ? s.color : s.color[c.light ? 1 : 0]) : s.ink ? inks[i] : tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
     ctx.globalAlpha = alphaOf(s);
     ctx.lineWidth = widthOf(s) * this.lw;
@@ -752,9 +726,9 @@ export class Orbits {
     if (s.glow) ctx.shadowColor = ctx.strokeStyle;
   }
 
-  // strokes strand i from its point from, its first by default, up to the fraction f of its segment
-  // from point j to j + 1. up to its fade, the strand is stroked in one path, since two strokes of one
-  // strand at an opacity below 1 overlap or leave a gap at their joint. beyond its fade, it is stroked
+  // strokes trajectory i from its point from, its first by default, up to the fraction f of its segment
+  // from point j to j + 1. up to its fade, the trajectory is stroked in one path, since two strokes of one
+  // trajectory at an opacity below 1 overlap or leave a gap at their joint. beyond its fade, it is stroked
   // in bands of equal time, which begin and end at its points, at an opacity that falls to zero at its
   // last point. a stroke from a later point draws the pixels of the same bands beyond this point
   private stroke(ctx: CanvasRenderingContext2D, i: number, j: number, f: number, from = 0): void {
@@ -780,9 +754,9 @@ export class Orbits {
     ctx.globalAlpha = base;
   }
 
-  // the last point drawn of strand i
+  // the last point drawn of trajectory i
   private drawn(i: number): number {
-    return this.done ? this.strands[i].times.length - 1 : this.idx[i];
+    return this.done ? this.trajectories[i].times.length - 1 : this.idx[i];
   }
 
   // true between the start and the end of a trace that is not a loop
@@ -790,13 +764,13 @@ export class Orbits {
     return !this.loop && this.t0 !== null && !this.finished;
   }
 
-  // the fraction of the segment of strand i from point j to j + 1 reached at the flight time tau
+  // the fraction of the segment of trajectory i from point j to j + 1 reached at the flight time tau
   private fraction(i: number, j: number, tau: number): number {
-    const t = this.strands[i].times, dt = t[j + 1] - t[j];
+    const t = this.trajectories[i].times, dt = t[j + 1] - t[j];
     return dt > 0 ? Math.min(1, Math.max(0, (tau - t[j]) / dt)) : 1;
   }
 
-  // draws the bodies and the strands on the base canvas for the current mode
+  // draws the bodies and the trajectories on the base canvas for the current mode
   redraw(): void {
     if (!this.W) return;
     const ctx = this.base.getContext('2d');
@@ -808,10 +782,10 @@ export class Orbits {
     this.paintHead(now, c);
   }
 
-  // draws the bodies and every strand, a finished strand whole and a strand in its trace up to its
-  // head at the time now. the strands are stroked in the order of their file or scene at every
+  // draws the bodies and every trajectory, a finished trajectory whole and a trajectory in its trace up to its
+  // head at the time now. the trajectories are stroked in the order of their file or built-in backdrop at every
   // frame, the order of the still, hence the last frame of a trace is its still apart from the heads.
-  // with a trail, the trail is copied in place of the bodies, and each strand before cached is
+  // with a trail, the trail is copied in place of the bodies, and each trajectory before cached is
   // stroked from its point of upTo on
   private draw(ctx: CanvasRenderingContext2D, c: Colors, now: number, inks = this.inks, trail: HTMLCanvasElement | null = null): void {
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
@@ -819,7 +793,7 @@ export class Orbits {
     if (trail) ctx.drawImage(trail, 0, 0);
     else this.bodies(ctx, c);
     const tracing = this.midTrace;
-    this.strands.forEach((s, i) => {
+    this.trajectories.forEach((s, i) => {
       const n = s.times.length, j = this.drawn(i), from = trail && i < this.cached ? this.upTo[i] : 0;
       if (from > 0 && from >= n - 1) return;
       if (j < n - 1) {
@@ -835,8 +809,8 @@ export class Orbits {
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
   }
 
-  // the trail of the trace, laid with the bodies and the strands before cached up to upTo when it
-  // is missing, or null without a strand before cached
+  // the trail of the trace, laid with the bodies and the trajectories before cached up to upTo when it
+  // is missing, or null without a trajectory before cached
   private trailOf(c: Colors): HTMLCanvasElement | null {
     if (!this.cached) return null;
     if (!this.trail) {
@@ -856,7 +830,7 @@ export class Orbits {
     return this.trail;
   }
 
-  // draws on the trails the pieces of the strands before cached that their heads have passed since
+  // draws on the trails the pieces of the trajectories before cached that their heads have passed since
   // the last frame, i.e. from the point of upTo to the last point of the path passed, and moves upTo
   // there. a piece ends at a point of the path, since a stroke to a point left out of the path ends
   // at the point of the path before it
@@ -883,13 +857,15 @@ export class Orbits {
     this.pending = false;
     this.t0 = null;
     this.finished = false;
-    this.idx = this.strands.map(() => 0);
-    this.upTo = this.strands.map(() => 0);
+    this.idx = this.trajectories.map(() => 0);
+    this.upTo = this.trajectories.map(() => 0);
     this.redraw();
   }
 
-  start(): void {
-    if (Orbits.reduced()) { this.complete(); return; }
+  // with force, the backdrop is traced in a still deck too, e.g. in the print view for a recording of
+  // scripts/record.mjs
+  start(force = false): void {
+    if (!force && Orbits.reduced()) { this.complete(); return; }
     if (!this.loaded) { this.pending = true; return; }
     if (this.raf || (this.finished && !this.loop)) return;
     this.t0 = performance.now();
@@ -920,7 +896,7 @@ export class Orbits {
     CACHE.delete(this.el);
   }
 
-  // tints the drawn strands within r slide pixels of the client point in the accent color, or
+  // tints the drawn trajectories within r slide pixels of the client point in the accent color, or
   // clears the tint when clientX is null
   glow(clientX: number | null, clientY = 0, r = 20): void {
     if (clientX === null || !this.W) this.pointer = null;
@@ -952,12 +928,12 @@ export class Orbits {
     if (this.pointer) this.glowing(ctx, c);
   }
 
-  // the head of the first strand of a scene, or of each strand of a file, which has no strands and no
+  // the head of the first trajectory of a built-in backdrop, or of each trajectory of a file, which has no trajectories and no
   // paths before it is loaded
   private loopHead(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
-    const count = this.dots === null ? Math.min(1, this.strands.length) : this.strands.length;
+    const count = this.dots === null ? Math.min(1, this.trajectories.length) : this.trajectories.length;
     for (let i = 0; i < count && this.paths[i]; i++) {
-      const s = this.strands[i], p = this.paths[i].px, n = s.times.length;
+      const s = this.trajectories[i], p = this.paths[i].px, n = s.times.length;
       const tau = this.raf && this.t0 !== null ? ((((now - this.t0) / 1000) % LOOP) / LOOP) * s.T : this.finished ? 0.37 * s.T : 0;
       let j = 0;
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
@@ -975,52 +951,58 @@ export class Orbits {
     }
   }
 
-  // the flight time reached by strand i at the time now, which is negative before its start
+  // the flight time reached by trajectory i at the time now, which is negative before its start
   private clock(i: number, now: number): number {
     return (((now - (this.t0 ?? now)) / 1000 - i * this.stagger) / this.duration) * this.Tmax;
   }
 
-  // the radius of the head of strand i in line widths: the one of its record, or the one of the
-  // backdrop on the path of a spacecraft, or on every strand with data-heads set
+  // the radius of the head of trajectory i in line widths: the one given in its file, or the one of the
+  // backdrop on the path of a spacecraft, or on every trajectory with data-heads set
   private headOf(i: number): number {
-    const s = this.strands[i];
+    const s = this.trajectories[i];
     return s.head ?? (this.everyHead || s.craft ? this.headSize : 0);
   }
 
-  // true when a head is drawn on at least one strand during a trace
+  // true when a head is drawn on at least one trajectory during a trace
   get headed(): boolean {
-    return this.strands.some((_, i) => this.headOf(i) > 0);
+    return this.trajectories.some((_, i) => this.headOf(i) > 0);
   }
 
-  // the seconds into the trace at which its last strand is traced to its end, with strand i started
+  // the seconds into the trace at which its last trajectory is traced to its end, with trajectory i started
   // i times the stagger late
   get span(): number {
     if (!(this.Tmax > 0)) return this.duration;
-    return Math.max(...this.strands.map((s, i) => (s.times[s.times.length - 1] / this.Tmax) * this.duration + i * this.stagger));
+    return Math.max(...this.trajectories.map((s, i) => (s.times[s.times.length - 1] / this.Tmax) * this.duration + i * this.stagger));
   }
 
-  // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file
+  // the seconds after which the frames of a loop repeat, i.e. one revolution of its heads, or 0 for a
+  // backdrop that is not a loop
+  get period(): number {
+    return this.loop ? LOOP : 0;
+  }
+
+  // the seconds into the trace at which its first head is drawn, e.g. at the start of a trajectory of a file
   get headAfter(): number {
     if (!(this.Tmax > 0)) return 0;
-    const first = Math.min(...this.strands.map((s, i) => (this.headOf(i) > 0 ? (s.times[0] / this.Tmax) * this.duration + i * this.stagger : Infinity)));
+    const first = Math.min(...this.trajectories.map((s, i) => (this.headOf(i) > 0 ? (s.times[0] / this.Tmax) * this.duration + i * this.stagger : Infinity)));
     return Number.isFinite(first) ? first : 0;
   }
 
   private heads(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
     if (!this.headed) return;
     ctx.fillStyle = c.accent;
-    this.strands.forEach((s, i) => {
+    this.trajectories.forEach((s, i) => {
       const j = this.idx[i], tau = this.clock(i, now), size = this.headOf(i);
-      // the head of a strand is not drawn before times[0] of this strand
+      // the head of a trajectory is not drawn before times[0] of this trajectory
       if (!size || j >= s.times.length - 1 || tau < s.times[0]) return;
       const [X, Y] = this.at(i, j, tau);
       ctx.beginPath(); ctx.arc(X, Y, size * this.lw, 0, 2 * Math.PI); ctx.fill();
     });
   }
 
-  // tints the drawn strands within the radius of the pointer. a segment of a strand is stroked when its
+  // tints the drawn trajectories within the radius of the pointer. a segment of a trajectory is stroked when its
   // box, with its control points where it is curved, meets the box of the disc, and the stroke is
-  // clipped to the disc, since the points of a strand may lie far apart on either side of it
+  // clipped to the disc, since the points of a trajectory may lie far apart on either side of it
   private glowing(ctx: CanvasRenderingContext2D, c: Colors): void {
     const g = this.pointer;
     if (!g) return;
@@ -1031,7 +1013,7 @@ export class Orbits {
     ctx.clip();
     ctx.strokeStyle = c.accent; ctx.globalAlpha = 0.35; ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.beginPath();
-    this.strands.forEach((_, i) => {
+    this.trajectories.forEach((_, i) => {
       const { px: p, ctl } = this.paths[i], last = this.drawn(i);
       let pen = false;
       for (let j = 1; j <= last; j++) {
@@ -1056,9 +1038,9 @@ export class Orbits {
     ctx.restore();
   }
 
-  // the point of strand i at the flight time tau, on its segment from point j to j + 1
+  // the point of trajectory i at the flight time tau, on its segment from point j to j + 1
   private at(i: number, j: number, tau: number): [number, number] {
-    return pointOn(this.paths[i], j, j < this.strands[i].times.length - 1 ? this.fraction(i, j, tau) : 0);
+    return pointOn(this.paths[i], j, j < this.trajectories[i].times.length - 1 ? this.fraction(i, j, tau) : 0);
   }
 
   private frame(now: number): void {
@@ -1066,7 +1048,7 @@ export class Orbits {
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
     let flying = 0;
-    this.strands.forEach((s, i) => {
+    this.trajectories.forEach((s, i) => {
       const n = s.times.length, tau = this.clock(i, now);
       let j = this.idx[i];
       while (j < n - 1 && s.times[j + 1] <= tau) j++;

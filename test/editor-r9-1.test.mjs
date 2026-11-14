@@ -20,10 +20,10 @@ const DECK = 'test/pages/editor-r8-5.html';
 const GROUP_DECK = 'test/pages/editor-r9-1.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const QR = '.reveal section.present > .qr';
-const ZONE_PAIR = 0, ZONE_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3;
-const FIGURES = [ZONE_PAIR, ZONE_ONE, PLATE_PAIR, PLATE_ONE];
+const FIGURE_BOX_PAIR = 0, FIGURE_BOX_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3;
+const FIGURES = [FIGURE_BOX_PAIR, FIGURE_BOX_ONE, PLATE_PAIR, PLATE_ONE];
 const NAMES = ['a pair in a zone', 'one image in a zone', 'a pair in a plate', 'one image in a plate'];
-const PAIRS = [ZONE_PAIR, PLATE_PAIR];
+const PAIRS = [FIGURE_BOX_PAIR, PLATE_PAIR];
 const IMG = '.reveal section.present img';
 const FRAME = '.beeson-overlay > .beeson-frame.selected';
 const UNION = '.beeson-overlay > .beeson-frame.union';
@@ -33,7 +33,7 @@ const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 const SIGN = { nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0] };
 // the modifier that turns the snap off, held in every drag so that the pointer alone sets the size
 const FREE = { mac: 'Meta', other: 'Alt' };
-// the gap of the theme between a picture and its caption in a zone, in slide px
+// the gap of the theme between a picture and its caption in a figure box, in slide px
 const GAP = 16;
 // the screen px by which the frame of a figure with a caption stands outside it, clear of the text
 // of its caption, as the frame of a text box in Keynote stands off its text (K58)
@@ -86,11 +86,11 @@ const gripOn = (box, deg, h) => {
   return turned(box, deg, sx < 0 ? box.left : sx > 0 ? right(box) : cx(box), sy < 0 ? box.top : sy > 0 ? bottom(box) : cy(box));
 };
 
-const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...[...el.classList].filter((c) => /^(zone|plate|caption|for-dark|for-light)$/.test(c))].join('.'))`);
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...[...el.classList].filter((c) => /^(figure-box|plate|caption|for-dark|for-light)$/.test(c))].join('.'))`);
 
 // what is drawn, in screen px: the scale of the slide, the corners of the picture of each shown
 // image, fitted by object-fit and turned by its rotate, the box of the image without its rotate,
-// the caption that a zone holds with the angle of the zone, the frame of the selection with its
+// the caption that a figure box holds with the angle of the figure box, the frame of the selection with its
 // size without its rotate, the frame of a group with its angle, and the grips
 const LOOK = `(() => {
   const s = document.querySelector('.reveal .slides');
@@ -117,7 +117,7 @@ const LOOK = `(() => {
     });
     return { corners, deg: angle(img), width: w, height: h, layout: { left: c.x - w0 / 2, top: c.y - h0 / 2, width: w0, height: h0 } };
   });
-  const cap = document.querySelector('.reveal section.present .zone > figcaption, .reveal section.present .zone > .caption');
+  const cap = document.querySelector('.reveal section.present .figure-box > figcaption, .reveal section.present .figure-box > .caption');
   const text = cap && document.createRange();
   text?.selectNodeContents(cap);
   const frame = shown(${js(FRAME)})[0] ?? null;
@@ -154,7 +154,7 @@ async function load(t, platform, mode, n, deck = DECK) {
   if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
   await page.evaluate(`Reveal.slide(${n})`);
   await frames(page);
-  page.figure = n === PLATE_PAIR || n === PLATE_ONE ? 'div.plate' : 'figure.zone';
+  page.figure = n === PLATE_PAIR || n === PLATE_ONE ? 'div.plate' : 'figure.figure-box';
   return page;
 }
 
@@ -258,7 +258,7 @@ function atPointer(g, ptr, h, a, where) {
   }
 }
 
-// the caption of a zone under the box of the shown image, as wide as it, at the gap of the theme
+// the caption of a figure box under the box of the shown image, as wide as it, at the gap of the theme
 function captionUnder(now, where) {
   if (!now.cap) return;
   const lay = now.pictures[0].layout;
@@ -266,20 +266,20 @@ function captionUnder(now, where) {
   assert.equal(now.capDeg, 0, `${where}: the caption is turned`);
 }
 
-// in a drag held by grip h, the grip alone is drawn, without the frame and the other grips, as in
-// Keynote (K77), at its place on box, the frame that the release draws
-function gripAlone(now, h, box, where) {
-  assert.equal(now.frame, null, `${where}: the frame is drawn at ${show(now.frame)}`);
-  assert.deepEqual(Object.keys(now.grips), [h], `${where}: the grips ${js(Object.keys(now.grips))} are drawn`);
+// in a drag held by grip h, the frame and all of its grips are drawn on box, the frame that the
+// release draws, and they follow the resized box
+function gripHeld(now, h, box, where) {
+  assert.ok(sameBox(now.frame, box), `${where}: the frame is at ${show(now.frame)}, not around ${show(box)}`);
+  assert.ok(Object.keys(now.grips).length > 1 && h in now.grips, `${where}: the grips ${js(Object.keys(now.grips))} are drawn`);
   const want = gripOn(box, 0, h), g = now.grips[h];
   assert.ok(near(g.x, want.x) && near(g.y, want.y), `${where}: the grip ${h} is at ${js(g)}, not on the frame ${show(box)} at ${js(want)}`);
 }
 
 // the box of the picture and its caption of a resize by grip h from the figure or from the picture,
-// with the grip alone drawn in the drag and the frame drawn after it
+// with the frame and the grips drawn in the drag and after it
 function resized(now, rest, h, ptr, from, where, held = false) {
   const box = from === 'figure' ? framed(now.pic, now) : now.pic;
-  if (held) gripAlone(now, h, box, where);
+  if (held) gripHeld(now, h, box, where);
   else assert.ok(sameBox(now.frame, box), `${where}: the frame is at ${show(now.frame)}, not around ${show(box)}`);
   captionUnder(now, where);
   const a = anchorOf(box, h), a0 = anchorOf(rest.frame, h);
@@ -303,10 +303,10 @@ const inward = (h, by = 40) => ({ dx: -SIGN[h][0] * by, dy: -SIGN[h][1] * by });
 // the group of two pairs, selected by a click on a member
 async function pickGroup(t, platform, mode) {
   const page = await load(t, platform, mode, 0, GROUP_DECK);
-  page.figure = 'figure.zone';
+  page.figure = 'figure.figure-box';
   await click(page, IMG);
   await frames(page);
-  assert.deepEqual(await selected(page), ['figure.zone', 'figure.zone'], 'a click on a member does not select the group');
+  assert.deepEqual(await selected(page), ['figure.figure-box', 'figure.figure-box'], 'a click on a member does not select the group');
   return page;
 }
 
@@ -343,7 +343,7 @@ for (const platform of PLATFORMS) {
             resized(await look(page), rest, h, ptr, from, `${where}, after the drag`);
             const edited = await render(page);
             const lines = changedLines(page.source, edited);
-            for (const l of lines) assert.match(l, /^<(figure class="zone"|div class="plate"|img )/, `${where}: the resize writes ${l}`);
+            for (const l of lines) assert.match(l, /^<(figure class="figure-box"|div class="plate"|img )/, `${where}: the resize writes ${l}`);
             const widths = lines.filter((l) => l.startsWith('<img')).map((l) => / style="width: (\d+)px"/.exec(l)?.[1]);
             assert.equal(widths.length, PAIRS.includes(n) ? 2 : 1, `${where}: the resize writes ${js(lines)}`);
             assert.ok(widths.every((w) => w && w === widths[0]), `${where}: the images are given the widths ${js(widths)}`);
@@ -356,7 +356,7 @@ for (const platform of PLATFORMS) {
     }
 
     test(`the frame of a figure and its grips stand off the text of its caption, while X and Y read the box of the figure, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, ZONE_ONE]) {
+      for (const n of [FIGURE_BOX_PAIR, FIGURE_BOX_ONE]) {
         const where = `${NAMES[n]} on ${platform} in ${mode} mode`;
         const page = await load(t, platform, mode, n);
         await pick(page, 'figure');
@@ -389,13 +389,13 @@ for (const platform of PLATFORMS) {
           await frames(page);
         }
         // the draft of an edited page left open may reach the storage after the next load clears it,
-        // and its card then makes the page inert
+        // and its dialog then makes the page inert
         await page.close();
       }
     });
 
     test(`a turned figure is framed turned with its picture and its caption, with its grips at the corners, and resized by them, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, ZONE_ONE]) {
+      for (const n of [FIGURE_BOX_PAIR, FIGURE_BOX_ONE]) {
         const where = `${NAMES[n]} turned by 30° on ${platform} in ${mode} mode`;
         const page = await load(t, platform, mode, n);
         await pick(page, 'figure');
@@ -429,20 +429,17 @@ for (const platform of PLATFORMS) {
           const at = `${where}, a drag of the grip se ${stage}`;
           assert.ok(now.figDeg === 30 && now.pictures[0].deg === 0, `${at}: the figure is not turned`);
           assert.ok(now.pictures[0].width < rest.pictures[0].width - 20, `${at}: the picture is ${now.pictures[0].width} px wide, from ${rest.pictures[0].width} px`);
-          if (stage === 'in the drag') {
-            assert.equal(now.frame, null, `${at}: the frame is drawn at ${show(now.frame)}`);
-            assert.deepEqual(Object.keys(now.grips), ['se'], `${at}: the grips ${js(Object.keys(now.grips))} are drawn`);
-          } else {
-            assert.equal(now.frameDeg, 30, `${at}: the frame is turned by ${now.frameDeg}°`);
-            assert.ok(near(now.grips.nw.x, rest.grips.nw.x) && near(now.grips.nw.y, rest.grips.nw.y), `${at}: the corner across from the grip moves from ${js(rest.grips.nw)} to ${js(now.grips.nw)}`);
-          }
+          // the frame is drawn turned with every grip in the drag too, and follows the resize
+          assert.equal(now.frameDeg, 30, `${at}: the frame is turned by ${now.frameDeg}°`);
+          assert.deepEqual(Object.keys(now.grips).sort(), [...HANDLES].sort(), `${at}: the grips ${js(Object.keys(now.grips))} are drawn`);
+          assert.ok(near(now.grips.nw.x, rest.grips.nw.x) && near(now.grips.nw.y, rest.grips.nw.y), `${at}: the corner across from the grip moves from ${js(rest.grips.nw)} to ${js(now.grips.nw)}`);
         }
         const edited = await render(page);
-        for (const l of changedLines(page.source, edited)) assert.match(l, /^<(figure class="zone"|img )/, `${where}: the resize writes ${l}`);
+        for (const l of changedLines(page.source, edited)) assert.match(l, /^<(figure class="figure-box"|img )/, `${where}: the resize writes ${l}`);
         await roundTrip(page, edited);
         await saved(page, edited, `r9-1-turned-${n}.html`);
         // the draft of an edited page left open may reach the storage after the next load clears it,
-        // and its card then makes the page inert
+        // and its dialog then makes the page inert
         await page.close();
       }
     });
@@ -463,7 +460,7 @@ for (const platform of PLATFORMS) {
         const got = { width: await fieldValue(page, 'width'), height: await fieldValue(page, 'height'), x: await fieldValue(page, 'x'), y: await fieldValue(page, 'y') };
         for (const [k, v] of Object.entries(want)) assert.ok(near(got[k], v, 1), `${where}: a typed ${id} of ${value} gives ${js(got)}, not ${js(want)}`);
         const edited = await render(page);
-        for (const l of changedLines(page.source, edited)) assert.match(l, /^<(figure class="zone"|img )/, `${where}: a typed ${id} writes ${l}`);
+        for (const l of changedLines(page.source, edited)) assert.match(l, /^<(figure class="figure-box"|img )/, `${where}: a typed ${id} writes ${l}`);
         await roundTrip(page, edited);
         return edited;
       };
@@ -518,7 +515,7 @@ for (const platform of PLATFORMS) {
       await saved(page, edited, 'r9-1-group.html');
     });
 
-    test(`while a grip or the rotate handle is held, it is drawn alone, without the frame and the other handles, for an element and a group, on ${platform} in ${mode} mode`, async (t) => {
+    test(`while the rotate handle is held, it is drawn alone, and while a grip is held, the frame and the grips are drawn without the rotate handle, for an element and a group, on ${platform} in ${mode} mode`, async (t) => {
       for (const kind of ['QR code', 'group']) {
         const where = `a ${kind} on ${platform} in ${mode} mode`;
         const page = kind === 'group' ? await pickGroup(t, platform, mode) : await load(t, platform, mode, 0, LAYOUTS);
@@ -537,7 +534,7 @@ for (const platform of PLATFORMS) {
           await drag(page, from, { ...by, modifiers: handle === 'rotor' ? undefined : FREE[platform], hold: true });
           await frames(page);
           const held = await overlay(page);
-          const want = handle === 'rotor' ? { frames: 0, grips: [], rotor: 1, stem: 0 } : { frames: 0, grips: ['se'], rotor: 0, stem: 0 };
+          const want = handle === 'rotor' ? { frames: 0, grips: [], rotor: 1, stem: 0 } : { frames: 1, grips: HANDLES, rotor: 0, stem: 0 };
           assert.deepEqual({ frames: held.frames, grips: held.grips, rotor: held.rotor, stem: held.stem }, want, `${where}: the held ${handle === 'rotor' ? 'rotate handle' : 'grip se'} draws ${js(held)}`);
           await release(page, { x: from.x + by.dx, y: from.y + by.dy });
           await frames(page);

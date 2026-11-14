@@ -1,6 +1,6 @@
 // the layout and the arrangement of the elements of a slide on both platforms, driven with trusted
-// input: a content slide changed to split from the chooser of the Slide pane writes div.panel
-// around its words and keeps its zone, Bring to Front and Send to Back of a QR code in the flow
+// input: a content slide changed to split from the chooser of the Slide pane writes div.text-column
+// around its words and keeps its figure box, Bring to Front and Send to Back of a QR code in the flow
 // write a z-index, a grouped pair is selected, moved, and deleted together, a lock keeps
 // an element from a drag, a rotation with Shift snaps to 15 degrees, and Reset Slide takes it
 // off. each edit is checked byte for byte, after an undo and a redo, against the scope rule, and
@@ -28,7 +28,7 @@ const SECTIONS = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/
 const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
 const TITLE = 0;
 const QR = '<div class="qr" data-qr="https://github.com/beeson-group/slides"></div>';
-const BACKDROP = '<div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6">';
+const BACKDROP = '<div class="backdrop" data-backdrop="tubes" data-cx="0.42" data-cy="0" data-half="0.6">';
 const BLOCK_END = '    <p class="who">The Beeson group<br>Princeton University</p>\n  </div>\n';
 
 let browser;
@@ -99,7 +99,7 @@ const drawnOver = (page) => page.evaluate(`(() => {
   };
   const r = q.getBoundingClientRect();
   const backdrop = top(r.left + r.width / 2, r.top + r.height / 2, s.querySelector(':scope > .backdrop'));
-  return { who: over(s.querySelector('.block > .who')), sub: over(s.querySelector('.block > .sub')), backdrop: backdrop === 'text' ? 'backdrop' : backdrop };
+  return { who: over(s.querySelector('.title-text > .who')), sub: over(s.querySelector('.title-text > .sub')), backdrop: backdrop === 'text' ? 'backdrop' : backdrop };
 })()`);
 
 // the problems of the scope rule in the rendered text that the file did not have before
@@ -130,13 +130,13 @@ async function saved(page, edits) {
   assert.ok(edits.every(([, after]) => text.includes(after)));
 }
 
-// the math slide of the deck of layouts written as a split slide: its words in the panel, one step
-// deeper, and its zone after the panel
+// the math slide of the deck of layouts written as a split slide: its words in the text column, one step
+// deeper, and its figure box after the text column
 function asSplit(section) {
   const lines = section.split('\n');
-  const zone = lines.findIndex((l) => l.startsWith('  <figure class="zone'));
-  const words = lines.slice(1, zone).map((l) => `  ${l}`);
-  return ['<section class="split">', '  <div class="panel">', ...words, '  </div>', ...lines.slice(zone)].join('\n');
+  const figureBox = lines.findIndex((l) => l.startsWith('  <figure class="figure-box'));
+  const words = lines.slice(1, figureBox).map((l) => `  ${l}`);
+  return ['<section class="split">', '  <div class="text-column">', ...words, '  </div>', ...lines.slice(figureBox)].join('\n');
 }
 
 test('relayout writes each layout from the parts of a slide, and gives back a slide already in its layout', () => {
@@ -150,23 +150,23 @@ test('relayout writes each layout from the parts of a slide, and gives back a sl
   assert.equal(relayout(split, 'content', '  '), math);
   // the block of a title slide takes the heading, made an h1, and the words, and a figure stays out
   const title = relayout(math, 'title', '  ');
-  assert.ok(title.startsWith('<section class="title">\n  <div class="block">\n    <h1>Math, an ordered list, and a zone</h1>\n'));
-  assert.ok(title.includes('\n  </div>\n  <figure class="zone fragment"'));
+  assert.ok(title.startsWith('<section class="title">\n  <div class="title-text">\n    <h1>Math, an ordered list, and a zone</h1>\n'));
+  assert.ok(title.includes('\n  </div>\n  <figure class="figure-box fragment"'));
   assert.equal(relayout(title, 'content', '  '), math);
   // a slide without a heading gets an empty one in a wrapper, a slide without words gets the empty
   // paragraph of a new split slide, and a class of another kind is kept
-  assert.equal(relayout('<section class="x">\n  <div class="zone"></div>\n</section>', 'split', '\t'), '<section class="split x">\n\t<div class="panel">\n\t\t<h2></h2>\n\t\t<p></p>\n\t</div>\n\t<div class="zone"></div>\n</section>');
+  assert.equal(relayout('<section class="x">\n  <div class="figure-box"></div>\n</section>', 'split', '\t'), '<section class="split x">\n\t<div class="text-column">\n\t\t<h2></h2>\n\t\t<p></p>\n\t</div>\n\t<div class="figure-box"></div>\n</section>');
   // the lines of a pre keep their white space
   assert.equal(shift('<pre>\n  a\n</pre>\n  <p>', '  ', '    '), '<pre>\n  a\n</pre>\n    <p>');
-  assert.deepEqual(arrange([kindOf('h2', []), kindOf('p', []), kindOf('div', ['zone']), kindOf('div', ['foot'])], 'split'), [{ wrap: 'panel', parts: [0, 1, 3] }, 2]);
+  assert.deepEqual(arrange([kindOf('h2', []), kindOf('p', []), kindOf('div', ['figure-box']), kindOf('div', ['foot'])], 'split'), [{ wrap: 'text-column', parts: [0, 1, 3] }, 2]);
 });
 
 for (const platform of PLATFORMS) {
-  test(`a content slide changed to split from the chooser writes div.panel around its words and keeps its zone on ${platform}`, async () => {
+  test(`a content slide changed to split from the chooser writes div.text-column around its words and keeps its zone on ${platform}`, async () => {
     const page = await layoutPage(platform, MATH);
     if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
     await frames(page);
-    await click(page, `${PANEL} .ed-card.ed-chooser`);
+    await click(page, `${PANEL} .ed-chooser`);
     await page.waitFor(`!!document.querySelector('.beeson-edit-layouts')`);
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-layouts .tile[aria-selected="true"]').dataset.layout`), 'content');
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-layouts .tile .pic').length`), 8);
@@ -178,7 +178,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await page.evaluate(lit), [true, true], 'the Coriolis term is not colored on the new slide');
     await roundTrip(page, [edit]);
     assert.deepEqual(await page.evaluate(lit), [true, true], 'the Coriolis term is not colored after a redo');
-    assert.deepEqual(await page.evaluate(`(() => { const s = Reveal.getCurrentSlide(); return [s.className.includes('split'), !!s.querySelector(':scope > .panel > h2'), !!s.querySelector(':scope > figure.zone')]; })()`), [true, true, true]);
+    assert.deepEqual(await page.evaluate(`(() => { const s = Reveal.getCurrentSlide(); return [s.className.includes('split'), !!s.querySelector(':scope > .text-column > h2'), !!s.querySelector(':scope > figure.figure-box')]; })()`), [true, true, true]);
     assert.equal((await state(page, 'slide.layout.split')).checked, true);
     await saved(page, [edit]);
     // the Slide menu changes it back, and Reset Slide is then disabled

@@ -114,7 +114,7 @@ function nearest(map, h) {
 // the decks of the item, with the slide of the figure, its image, the typed heights, and the width
 // and height that the brief gives where no width gives the typed height
 const FIGURE_CASES = [
-  ['index.html', FIGURES, IMG, [[200, { w: 159, h: 564 }], [422, { w: 159, h: 564 }], [496, { w: 159, h: 564 }], [437], [570]]],
+  ['test-deck.html', FIGURES, IMG, [[200, { w: 159, h: 564 }], [422, { w: 159, h: 564 }], [496, { w: 159, h: 564 }], [437], [570]]],
   [DECK, 0, '.reveal section.present figure img', [[200, { w: 116, h: 410 }], [311], [385], [422]]],
 ];
 
@@ -145,7 +145,7 @@ for (const platform of PLATFORMS) {
   }
 
   test(`a typed Height that no width gives is solved in less than 100 ms on slide 5, and undone, redone, and saved byte for byte (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', FIGURES);
+    const page = await load(t, platform, 'test-deck.html', FIGURES);
     await click(page, IMG);
     await sleep(100);
     const times = [];

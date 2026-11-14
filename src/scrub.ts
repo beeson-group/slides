@@ -54,9 +54,9 @@ export function initScrub(deck: Deck): void {
   track.className = 'scrub-track';
   const fill = document.createElement('span');
   track.append(fill);
-  const card = document.createElement('div');
-  card.className = 'scrub-card';
-  band.append(track, card);
+  const headingBox = document.createElement('div');
+  headingBox.className = 'scrub-heading';
+  band.append(track, headingBox);
   reveal.append(band);
 
   let ticks: { slide: HTMLElement; at: number; el: HTMLElement }[] = [];
@@ -112,12 +112,12 @@ export function initScrub(deck: Deck): void {
     if (t === hovered) return;
     hovered?.el.classList.remove('hover');
     hovered = t;
-    if (!t) { card.textContent = ''; return; }
+    if (!t) { headingBox.textContent = ''; return; }
     t.el.classList.add('hover');
-    card.textContent = heading(t.slide);
-    const half = card.offsetWidth / 2;
+    headingBox.textContent = heading(t.slide);
+    const half = headingBox.offsetWidth / 2;
     const x = Math.min(Math.max(t.at * zone.width, half), zone.width - half);
-    card.style.left = `${x}px`;
+    headingBox.style.left = `${x}px`;
   };
 
   const show = (on: boolean) => {

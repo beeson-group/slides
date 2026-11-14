@@ -26,7 +26,7 @@ let last = null;
 
 // the editor on deck served over HTTP, opened with text, at the slide of index, or at the slide of
 // the first element matched by a selector
-async function editor(platform, { deck = 'index.html', text = readFileSync(deck, 'utf8'), index = 0, change = '' } = {}) {
+async function editor(platform, { deck = 'test-deck.html', text = readFileSync(deck, 'utf8'), index = 0, change = '' } = {}) {
   await last?.close().catch(() => {});
   const page = await browser.newPage();
   last = page;
@@ -61,7 +61,7 @@ for (const platform of PLATFORMS) {
     if (!(await page.evaluate(`window.BeesonEditor.state('view.steps').checked`))) await exec(page, 'view.steps');
     await frames(page);
     const at = await page.evaluate(`(() => {
-      const cards = [...document.querySelectorAll('.beeson-edit-side .rows .card.step')];
+      const cards = [...document.querySelectorAll('.beeson-edit-side .rows .step:not(.plain)')];
       const grip = cards.at(-1).querySelector('.row .grip').getBoundingClientRect();
       const y = (cards[0].getBoundingClientRect().bottom + cards[1].getBoundingClientRect().top) / 2;
       return { x: grip.left + grip.width / 2, y: grip.top + grip.height / 2, to: y };
@@ -71,7 +71,7 @@ for (const platform of PLATFORMS) {
       const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
       const line = document.querySelector('.beeson-edit-side .drop-line');
       const ghost = document.querySelector('.beeson-steps-ghost');
-      const target = document.querySelectorAll('.beeson-edit-side .rows .card.step')[1];
+      const target = document.querySelectorAll('.beeson-edit-side .rows .step:not(.plain)')[1];
       return { shown: !!line && !line.hidden && !!ghost, line: line && box(line), ghost: ghost && box(ghost), target: box(target) };
     })()`);
     await press(page, 'Escape');
@@ -151,7 +151,7 @@ for (const platform of PLATFORMS) {
 }
 
 // the demo deck with a rehearsed second on each of its first two slides, in a file of its own
-const TIMED = () => readFileSync('index.html', 'utf8').replace('<section class="title">', '<section class="title" data-timing="1">').replace('<section class="section">', '<section class="section" data-timing="1">');
+const TIMED = () => readFileSync('test-deck.html', 'utf8').replace('<section class="title">', '<section class="title" data-timing="1">').replace('<section class="section">', '<section class="section" data-timing="1">');
 
 for (const platform of PLATFORMS) {
   test(`with Use Rehearsed Timings on, a show opened from the editor moves on after the timings on ${platform}`, async (t) => {

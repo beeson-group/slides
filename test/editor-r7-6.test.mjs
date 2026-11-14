@@ -224,7 +224,7 @@ for (const platform of PLATFORMS) {
     // the layout is shown again when the deck is opened again, and not on another deck
     const layout = await toolbarIds(page);
     await page.close();
-    const other = await load(t, platform, { deck: 'index.html', clear: false });
+    const other = await load(t, platform, { deck: 'test-deck.html', clear: false });
     assert.deepEqual((await toolbarIds(other)).slice(0, 3), ['toolbar.view', 'toolbar.zoom', 'edit.undo']);
     assert.ok(!(await toolbarIds(other)).includes('find.open'));
     await other.close();

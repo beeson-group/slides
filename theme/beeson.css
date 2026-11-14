@@ -17,23 +17,23 @@ html[data-theme="dark"] {
   --red: #ff4d4d;
   --stroke: rgba(242, 242, 239, 0.34);
   --body: rgba(242, 242, 239, 0.55);
-  /* the palette of a backdrop drawn from a file, in pairs: a value of data-strands-color takes
-     --strand-1 and --strand-2, the next value --strand-3 and --strand-4, and so on, and a strand is
-     colored between the two along data-strands-ramp. in each mode, every color is drawn at the
-     opacity 0.6 of a strand with a contrast of at least 2.5:1 against --bg, as test/strands.test.mjs
+  /* the palette of a backdrop drawn from a file, in pairs: a value of data-trajectories-color takes
+     --trajectory-1 and --trajectory-2, the next value --trajectory-3 and --trajectory-4, and so on, and a trajectory is
+     colored between the two along data-trajectories-ramp. in each mode, every color is drawn at the
+     opacity 0.6 of a trajectory with a contrast of at least 2.5:1 against --bg, as test/trajectories.test.mjs
      checks */
-  --strand-1: #c94fe6;
-  --strand-2: #f08050;
-  --strand-3: #3d8bff;
-  --strand-4: #2fd4c0;
-  --strand-5: #ffd23f;
-  --strand-6: #8fdc5a;
-  --strand-7: #6f7cff;
-  --strand-8: #f2f2ef;
-  --panel: #050505;
-  --panel-text: #f2f2ef;
-  --panel-subtle: #a6a6a0;
-  --paper: #ffffff;
+  --trajectory-1: #c94fe6;
+  --trajectory-2: #f08050;
+  --trajectory-3: #3d8bff;
+  --trajectory-4: #2fd4c0;
+  --trajectory-5: #ffd23f;
+  --trajectory-6: #8fdc5a;
+  --trajectory-7: #6f7cff;
+  --trajectory-8: #f2f2ef;
+  --text-column: #050505;
+  --text-column-text: #f2f2ef;
+  --text-column-subtle: #a6a6a0;
+  --white-figure: #ffffff;
   /* a QR code is drawn dark on a light tile in both modes, since many scanners do not read an
      inverted code */
   --qr-ink: #050505;
@@ -55,14 +55,14 @@ html[data-theme="light"] {
   --red: #c41e1e;
   --stroke: rgba(20, 20, 19, 0.3);
   --body: rgba(20, 20, 19, 0.5);
-  --strand-1: #8a2be2;
-  --strand-2: #b24500;
-  --strand-3: #1f5fd0;
-  --strand-4: #006c5f;
-  --strand-5: #7e5a00;
-  --strand-6: #356f00;
-  --strand-7: #3b3fb0;
-  --strand-8: #141413;
+  --trajectory-1: #8a2be2;
+  --trajectory-2: #b24500;
+  --trajectory-3: #1f5fd0;
+  --trajectory-4: #006c5f;
+  --trajectory-5: #7e5a00;
+  --trajectory-6: #356f00;
+  --trajectory-7: #3b3fb0;
+  --trajectory-8: #141413;
   --qr-ink: #141413;
   --qr-tile: var(--bg);
 }
@@ -132,15 +132,15 @@ html, body, .reveal-viewport { background: var(--bg); }
 }
 .reveal .slides section .backdrop,
 .reveal .slides section .surface,
-.reveal .slides section .zone,
+.reveal .slides section .figure-box,
 .reveal .slides section .run,
 .reveal .slides section .foot,
 .reveal .slides section .refs,
 .reveal .slides section .lockup,
-.reveal .slides section .block,
+.reveal .slides section .title-text,
 .reveal .slides section .sec,
 .reveal .slides section .caption,
-.reveal .slides section .panel { position: absolute; }
+.reveal .slides section .text-column { position: absolute; }
 
 /* ---- type ---- */
 .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
@@ -215,14 +215,14 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal svg.line marker { overflow: visible; }
 .reveal svg.line marker path { fill: currentColor; stroke: none; }
 
-/* lists: a short orange dash in place of a bullet, numbers in gray */
+/* lists: an orange chevron in place of a bullet, numbers in gray */
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
-.reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
-/* the items of a ul.dots or a ul.arrows take a ring or a chevron in place of the dash, centered
-   on its middle. a nested list without the class keeps the dash */
-.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; }
-.reveal ul.arrows > li::before { --mark-width: 12px; top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+.reveal ul > li::before { --mark-width: 12px; content: ""; position: absolute; left: 9px; top: calc(0.72em - 8px); width: 12px; height: 18px; background: var(--accent); clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+/* the items of a ul.dots or a ul.dashes take a ring or a short dash in place of the chevron,
+   centered on its middle. a nested list without the class keeps the chevron */
+.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; clip-path: none; }
+.reveal ul.dashes > li::before { --mark-width: 28px; top: 0.72em; left: 0; width: 28px; height: 2px; clip-path: none; }
 /* the number is the counter list-item, which a browser starts from the attribute start of an ol.
    it ends where a number of one digit ends, so that the gap before the words is the same for any
    number of digits */
@@ -252,9 +252,11 @@ html, body, .reveal-viewport { background: var(--bg); }
 
 /* code: the system monospace, since a monospace face is not vendored with the theme */
 .reveal pre, .reveal code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-.reveal code { font-size: 0.86em; color: var(--subtle); }
+/* inline code: a chip tinted with the text color, with rounded corners and a hairline, as in Obsidian and Jira. a chip
+   broken over two lines is closed at each end */
+.reveal code { font-size: 0.86em; color: var(--text); padding: 0.06em 0.3em; border-radius: 0.3em; background: color-mix(in srgb, var(--text) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .reveal pre { margin: 24px 0; padding: 24px 32px; font-size: 36px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--line) 45%, transparent); border-left: 2px solid var(--line); overflow: hidden; width: auto; box-shadow: none; }
-.reveal pre code { display: block; padding: 0; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
+.reveal pre code { display: block; padding: 0; border-radius: 0; background: none; box-shadow: none; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
 /* a box of the highlight plugin of reveal.js, i.e. a pre with the class code-wrapper. with data-line-numbers, the lines
    are numbered in a table, and each group of lines after the first is lit in a copy of the code, a fragment stacked
    over the first. the copies are thus opaque and are not dimmed as past steps, and the box is dimmed as a whole once a
@@ -271,11 +273,11 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .slides section:not([data-complete]) pre.code-wrapper > code.fragment.visible:not(.current-fragment) { opacity: 1; }
 .reveal .slides section:not([data-complete]) pre.code-wrapper:has(> code.fragment.visible):not(:has(> code.current-fragment)) { opacity: 0.45; }
 .reveal .hljs-keyword, .reveal .hljs-literal, .reveal .hljs-meta { color: var(--violet); }
-.reveal .hljs-built_in { color: var(--strand-3); }
+.reveal .hljs-built_in { color: var(--trajectory-3); }
 .reveal .hljs-title { color: var(--accent); }
-.reveal .hljs-params { color: var(--strand-6); }
-.reveal .hljs-string { color: var(--strand-4); }
-.reveal .hljs-number { color: var(--strand-5); }
+.reveal .hljs-params { color: var(--trajectory-6); }
+.reveal .hljs-string { color: var(--trajectory-4); }
+.reveal .hljs-number { color: var(--trajectory-5); }
 .reveal .hljs-comment { color: var(--muted); font-style: italic; }
 .reveal .hljs-operator { color: var(--subtle); }
 
@@ -345,17 +347,17 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 /* ---- backdrops, drawn with beeson.js ---- */
 .reveal .backdrop { pointer-events: auto; }
 .reveal .backdrop canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
-.reveal .backdrop .lab { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 28px; font-style: italic; color: var(--subtle); }
-.reveal .backdrop .lab sub { font-size: 0.7em; font-style: normal; vertical-align: -0.25em; }
+.reveal .backdrop .label { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 28px; font-style: italic; color: var(--subtle); }
+.reveal .backdrop .label sub { font-size: 0.7em; font-style: normal; vertical-align: -0.25em; }
 
 /* ---- surfaces, drawn with beeson.js and three.js, and turned with a drag ---- */
 .reveal .surface { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; }
 .reveal .surface.dragging { cursor: grabbing; }
 .reveal .surface canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
-.reveal .surface .lab { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 36px; color: var(--text); opacity: 0; pointer-events: none; filter: drop-shadow(0 0 3px var(--bg)) drop-shadow(0 0 1px var(--bg)); }
+.reveal .surface .label { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 36px; color: var(--text); opacity: 0; pointer-events: none; filter: drop-shadow(0 0 3px var(--bg)) drop-shadow(0 0 1px var(--bg)); }
 
 /* ---- layouts ---- */
-/* content, the default: a text column at the left margin, a figure zone at the right */
+/* content, the default: a text column at the left margin, a figure box at the right */
 .reveal .slides section { padding: 120px 120px 0 120px; }
 .reveal .slides section > h2 { width: 1100px; margin: 0 0 42px; }
 .reveal .slides section > p,
@@ -366,22 +368,25 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section > .math,
 .reveal .slides section > .col { max-width: 1000px; }
 .reveal .slides section > .col { margin: 0; }
-.reveal .slides section .zone { left: 1200px; top: 120px; width: 600px; height: 800px; }
+.reveal .slides section .figure-box { left: 1200px; top: 120px; width: 600px; height: 800px; }
 .reveal .slides section .backdrop { left: 1200px; top: 0; width: 720px; height: 1080px; }
 .reveal .slides section.narrow .backdrop { left: 920px; width: 1000px; }
 .reveal .slides section .surface { left: 1120px; top: 0; width: 800px; height: 1080px; }
 .reveal .slides section.narrow .surface { left: 880px; width: 1040px; }
-.reveal .slides section .zone > img,
-.reveal .slides section .zone > svg,
-.reveal .slides section .zone > video { display: block; width: 100%; height: 100%; object-fit: contain; }
-.reveal .slides section tycho-viewer.zone { display: block; }
-/* a viewer in a zone or a plate fills it, as a video does, and so does its still in the print view, see src/print.ts */
-.reveal .slides section .zone > tycho-viewer,
-.reveal .slides section .zone > .viewer-still,
+.reveal .slides section .figure-box > img,
+.reveal .slides section .figure-box > svg,
+.reveal .slides section .figure-box > video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.reveal .slides section tycho-viewer.figure-box { display: block; }
+/* the labels of a viewer inherit the face of the slide, and the recordings of the PowerPoint export
+   set them in this face as well, see scripts/scenes.mjs */
+.reveal tycho-viewer { --tycho-font: "Latin Modern Roman", "STIX Two Text", Georgia, "Times New Roman", serif; }
+/* a viewer in a figure box or a plate fills it, as a video does, and so does its still in the print view, see src/print.ts */
+.reveal .slides section .figure-box > tycho-viewer,
+.reveal .slides section .figure-box > .viewer-still,
 .reveal .slides section.figure .plate > tycho-viewer,
 .reveal .slides section.figure .plate > .viewer-still { width: 100%; height: 100%; }
-.reveal .slides section .zone > figcaption,
-.reveal .slides section .zone > .caption { position: absolute; left: 0; right: 0; top: 100%; margin-top: 16px; }
+.reveal .slides section .figure-box > figcaption,
+.reveal .slides section .figure-box > .caption { position: absolute; left: 0; right: 0; top: 100%; margin-top: 16px; }
 .reveal .slides section.narrow > h2,
 .reveal .slides section.narrow > p,
 .reveal .slides section.narrow > ul,
@@ -412,10 +417,10 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.figure .backdrop,
 .reveal .slides section.figure .surface,
 .reveal .slides section.figure .plate { left: 0; top: 0; width: 1920px; height: 1080px; }
-.reveal .slides section.title .block,
-.reveal .slides section.closing .block { left: 120px; bottom: 150px; width: 1240px; }
-.reveal .slides section.title .block h1,
-.reveal .slides section.closing .block h1 { margin: 0; }
+.reveal .slides section.title .title-text,
+.reveal .slides section.closing .title-text { left: 120px; bottom: 150px; width: 1240px; }
+.reveal .slides section.title .title-text h1,
+.reveal .slides section.closing .title-text h1 { margin: 0; }
 .reveal .slides section.title .sub,
 .reveal .slides section.closing .sub { margin: 30px 0 0; }
 .reveal .slides section.title .who,
@@ -425,7 +430,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 /* a QR code on a closing slide, in the lower right corner. the backdrop is drawn over it, and under the words */
 .reveal .slides section.closing .qr { position: absolute; right: 50px; bottom: 50px; width: 200px; }
 .reveal .slides section.closing .backdrop canvas { z-index: 1; pointer-events: none; }
-.reveal .slides section.closing .block { z-index: 2; }
+.reveal .slides section.closing .title-text { z-index: 2; }
 
 /* section: the words at the left, the outline of the talk under them, the backdrop at the right */
 .reveal .slides section.section .sec { left: 120px; top: 360px; width: 900px; }
@@ -439,53 +444,53 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.figure .plate > img,
 .reveal .slides section.figure .plate > svg,
 .reveal .slides section.figure .plate > video { display: block; width: 100%; height: 100%; object-fit: contain; object-position: right center; }
-/* a paper figure is framed at the size of its image, scaled down to fit and not enlarged, since the
-   paper would otherwise fill the whole box beside the image */
-.reveal .slides section.figure .plate:has(> img.paper) { display: flex; justify-content: flex-end; align-items: center; }
-.reveal .slides section .zone:has(> img.paper) { display: flex; justify-content: center; align-items: center; }
-.reveal .slides section.figure .plate > img.paper,
-.reveal .slides section .zone > img.paper { width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; }
+/* a white figure is framed at the size of its image, scaled down to fit and not enlarged, since the
+   frame would otherwise fill the whole box beside the image */
+.reveal .slides section.figure .plate:has(> img.white-figure) { display: flex; justify-content: flex-end; align-items: center; }
+.reveal .slides section .figure-box:has(> img.white-figure) { display: flex; justify-content: center; align-items: center; }
+.reveal .slides section.figure .plate > img.white-figure,
+.reveal .slides section .figure-box > img.white-figure { width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; }
 /* a picture with a width in its style, e.g. one sized in the editor, is drawn at that size, past
-   the box of its zone or plate, and with a height in its style as well it is stretched to it */
+   the box of its figure box or plate, and with a height in its style as well it is stretched to it */
 .reveal .slides section img[style*="width:"],
 .reveal .slides section video[style*="width:"] { max-width: none !important; max-height: none !important; flex-shrink: 0; }
 .reveal .slides section img[style*="width:"]:not([style*="height:"]),
 .reveal .slides section video[style*="width:"]:not([style*="height:"]) { height: auto !important; }
 .reveal .slides section img[style*="width:"][style*="height:"]:not([style*="object-fit"]),
 .reveal .slides section video[style*="width:"][style*="height:"]:not([style*="object-fit"]) { object-fit: fill !important; }
-/* a zone around a picture with a width is the size of the picture, hence its caption is under the
+/* a figure box around a picture with a width is the size of the picture, hence its caption is under the
    picture and as wide as it. the still of a viewer in the print view keeps the box of its viewer */
-.reveal .slides section .zone:not(.viewer-still):has(> img[style*="width:"], > video[style*="width:"], > .qr[style*="width:"]) { width: auto; height: auto; }
-/* the videos of a zone or a plate are stacked in one place, and a video under a later one that is shown is hidden
+.reveal .slides section .figure-box:not(.viewer-still):has(> img[style*="width:"], > video[style*="width:"], > .qr[style*="width:"]) { width: auto; height: auto; }
+/* the videos of a figure box or a plate are stacked in one place, and a video under a later one that is shown is hidden
    once the later one has faded in, see src/video.ts. in a plate of the class row, the figures are side by side,
    each in an equal share of the plate */
-.reveal .slides section .zone:has(> video ~ video),
+.reveal .slides section .figure-box:has(> video ~ video),
 .reveal .slides section.figure .plate:not(.row):has(> video ~ video) { display: grid; grid-template: 100% / 100%; }
-.reveal .slides section .zone > video,
+.reveal .slides section .figure-box > video,
 .reveal .slides section.figure .plate:not(.row) > video { grid-area: 1 / 1; }
 .reveal .slides section video[data-covered],
 .reveal .slides section video.fragment[data-covered] { visibility: hidden; transition: opacity 400ms ease-out, visibility 0s 400ms; }
 .reveal .slides section.figure .plate.row { display: flex; gap: 60px; }
 .reveal .slides section.figure .plate.row > * { flex: 1 1 0; min-width: 0; object-position: center; }
 
-/* split: the black panel of the group deck, dark in both modes, with a figure at the right */
-.reveal .slides section.split .panel { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--panel); color: var(--panel-text); }
-.reveal .slides section.split .panel h2 { width: auto; color: inherit; font-size: 64px; margin-bottom: 28px; }
-.reveal .slides section.split .panel p, .reveal .slides section.split .panel li { font-size: 48px; }
-.reveal .slides section.split .panel .foot, .reveal .slides section.split > .refs { color: #7c7c76; }
-/* the references of a split slide are on its panel */
+/* split: the black text column of the group deck, dark in both modes, with a figure at the right */
+.reveal .slides section.split .text-column { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--text-column); color: var(--text-column-text); }
+.reveal .slides section.split .text-column h2 { width: auto; color: inherit; font-size: 64px; margin-bottom: 28px; }
+.reveal .slides section.split .text-column p, .reveal .slides section.split .text-column li { font-size: 48px; }
+.reveal .slides section.split .text-column .foot, .reveal .slides section.split > .refs { color: #7c7c76; }
+/* the references of a split slide are on its text column */
 .reveal .slides section.split > .refs { max-width: 560px; }
-.reveal .slides section.split > .refs sup { color: var(--panel-subtle); }
-/* the style Small in the panel, and code in the colors of the panel, which is dark in both modes */
-.reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; color: var(--panel-text); }
-.reveal .slides section.split .panel code { color: var(--panel-subtle); }
-/* on the black canvas the edge of the panel is marked with a hairline */
-html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
-.reveal .slides section.split .zone { left: 880px; top: 120px; width: 920px; height: 800px; }
+.reveal .slides section.split > .refs sup { color: var(--text-column-subtle); }
+/* the style Small in the text column, and code in its colors, which is dark in both modes */
+.reveal .slides section.split .text-column .small, .reveal .slides section.split .text-column .small li { font-size: 36px; color: var(--text-column-text); }
+.reveal .slides section.split .text-column :not(pre) > code { color: var(--text-column-text); background: color-mix(in srgb, var(--text-column-text) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-column-text) 14%, transparent); }
+/* on the black canvas the edge of the text column is marked with a hairline */
+html:not([data-theme="light"]) .reveal .slides section.split .text-column { box-shadow: 1px 0 0 var(--line); }
+.reveal .slides section.split .figure-box { left: 880px; top: 120px; width: 920px; height: 800px; }
 .reveal .slides section.split .run { display: none; }
 .reveal .slides section.split::after { right: 120px; }
 
-/* ---- plot: an animated 2D plot in a zone or a plate, drawn from a JSON block, see src/plot.ts ---- */
+/* ---- plot: an animated 2D plot in a figure box or a plate, drawn from a JSON script, see src/plot.ts ---- */
 .reveal .slides section .plot { font-size: 28px; line-height: 1.2; color: var(--subtle); }
 .reveal .plot-body { display: flex; flex-direction: column; gap: 12px; width: 100%; height: 100%; }
 .reveal .plot button { margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
@@ -542,10 +547,10 @@ html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow
 .reveal .tikz > svg g.tikz-later { opacity: 0; }
 .reveal .tikz-error { font-size: 28px; color: var(--accent); }
 
-/* figure treatments: a white raster figure framed as paper, and a black-on-white line plot inverted in dark mode */
+/* figure treatments: a white raster figure framed in white, and a black-on-white line plot inverted in dark mode */
 .reveal img { margin: 0; border: 0; box-shadow: none; background: none; max-width: 100%; max-height: 100%; }
-.reveal .paper { background: var(--paper); padding: 24px; border-radius: 2px; box-sizing: border-box; }
-.reveal .paper > img { background: var(--paper); }
+.reveal .white-figure { background: var(--white-figure); padding: 24px; border-radius: 2px; box-sizing: border-box; }
+.reveal .white-figure > img { background: var(--white-figure); }
 html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); }
 /* a picture clipped to the ellipse of its box. the crop of the editor writes its inset with the same
    round 50% on an oval picture, which cuts the ellipse of the cropped box */
@@ -580,19 +585,19 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .slides section .shape.no-outline { --weight: 0px; }
 .reveal .slides section .shape.fill-none { background: none; }
 .reveal .slides section .shape.fill-ground { background: var(--bg); }
-.reveal .slides section .shape.veil { background: color-mix(in srgb, var(--bg) 75%, transparent); }
-.reveal .slides section .shape.veil:not(.weight-6, .weight-8) { --weight: 0px; }
+.reveal .slides section .shape.fill-translucent { background: color-mix(in srgb, var(--bg) 75%, transparent); }
+.reveal .slides section .shape.fill-translucent:not(.weight-6, .weight-8) { --weight: 0px; }
 .reveal .slides section .shape:is(.triangle, .arrow, .arrow-both, .brace, .plus, .equals) { border: 0; background: none; }
 .reveal .slides section .shape > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .reveal .slides section .shape > svg path { fill: color-mix(in srgb, currentColor 20%, var(--bg)); stroke: currentColor; stroke-width: var(--weight); stroke-linejoin: miter; }
 .reveal .slides section .shape.fill-none > svg path, .reveal .slides section .shape.brace > svg path { fill: none; }
 .reveal .slides section .shape.fill-ground > svg path { fill: var(--bg); }
-.reveal .slides section .shape.veil > svg path { fill: color-mix(in srgb, var(--bg) 75%, transparent); }
+.reveal .slides section .shape.fill-translucent > svg path { fill: color-mix(in srgb, var(--bg) 75%, transparent); }
 /* a flip mirrors the drawing and not the words */
 .reveal .slides section .shape.flip-x > svg { scale: -1 1; }
 .reveal .slides section .shape.flip-y > svg { scale: 1 -1; }
 .reveal .slides section .shape.flip-x.flip-y > svg { scale: -1 -1; }
-.reveal img:hover, .reveal .zone:hover > img { transition: filter 200ms ease-out; }
+.reveal img:hover, .reveal .figure-box:hover > img { transition: filter 200ms ease-out; }
 
 /* ---- steps: a new element is faded in, the earlier ones are dimmed until the slide is complete ---- */
 .reveal .slides section .fragment { transition: opacity 400ms ease-out; }
@@ -615,11 +620,11 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 /* stepped math: a held fragment is not dimmed, and the classes named by a shown data-highlight are colored. the
    colors are important, since the tone of a mark of a plot is set in its style attribute */
 .reveal .slides section:not([data-complete]) .fragment.visible[data-held]:not(.current-fragment) { opacity: 1; }
-/* a dimmed step, Dim of the editor, is drawn from its step on at the opacity of a ghost, also on the complete
-   slide. a ghost is an element set with Ghosted of the editor, and its opacity is important, since the steps
+/* a dimmed step, Dim of the editor, is drawn from its step on at the opacity of a faint element, also on the complete
+   slide. a faint element is an element set with Faint of the editor, and its opacity is important, since the steps
    set the opacity of a fragment */
 .reveal .slides section .fragment.visible.semi-fade-out:not([data-held]) { opacity: 0.25; }
-.reveal .slides section .ghost { opacity: 0.25 !important; }
+.reveal .slides section .faint { opacity: 0.25 !important; }
 .reveal .hl-target { transition: color 400ms ease-out; }
 .reveal .hl-accent { color: var(--accent) !important; }
 .reveal .hl-violet { color: var(--violet) !important; }
@@ -718,7 +723,7 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .scrub-tick.now { color: var(--accent); }
 .reveal .scrub-tick.hover { color: var(--text); }
 .reveal .scrub-time { font-size: 0.8em; }
-.reveal .scrub-card {
+.reveal .scrub-heading {
   position: absolute;
   bottom: 3.4em;
   max-width: 60%;
@@ -729,7 +734,7 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
   text-overflow: ellipsis;
   transform: translateX(-50%);
 }
-.reveal .scrub-card:empty { display: none; }
+.reveal .scrub-heading:empty { display: none; }
 .theme-switch {
   position: absolute;
   z-index: 40;

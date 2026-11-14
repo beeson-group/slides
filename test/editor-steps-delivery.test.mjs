@@ -28,7 +28,7 @@ after(async () => {
 });
 
 // the editor on a deck served over HTTP, opened with its text, with the Steps tab shown
-async function open(t, platform, { deck = 'index.html', text = readFileSync(deck, 'utf8'), width = 1920, height = 1080 } = {}) {
+async function open(t, platform, { deck = 'test-deck.html', text = readFileSync(deck, 'utf8'), width = 1920, height = 1080 } = {}) {
   const page = await browser.newPage({ width, height });
   t.after(() => page.close());
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
@@ -133,8 +133,8 @@ async function choose(page, label) {
   await page.evaluate('window.BeesonEditor.status()');
 }
 
-// the cards of the Steps tab, each with its head of a list and its rows as step and text
-const cards = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .rows .card.step')].map((c) => ({
+// the steps of the Steps pane, each with its head of a list and its rows as step and text
+const cards = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .rows .step:not(.plain)')].map((c) => ({
   head: c.querySelector('.list-head')?.querySelector('.chip').textContent ?? null,
   rows: [...c.querySelectorAll('.row')].map((r) => (r.classList.contains('nested') ? '  ' : '') + r.dataset.step + ' ' + r.querySelector('.text').textContent.slice(0, 12)),
 }))`);
@@ -215,7 +215,7 @@ for (const platform of PLATFORMS) {
 // data-autoslide is shown by itself after the delay, and the step after it waits for a key. reveal.js
 // cues the delay after a key, hence the key Right in place of Reveal.next()
 test('a step After Previous is shown by itself after its delay in the deck', async (t) => {
-  const text = readFileSync('index.html', 'utf8').replace(LI1, '<li class="fragment" data-fragment-index="1" data-autoslide="600">Each step');
+  const text = readFileSync('test-deck.html', 'utf8').replace(LI1, '<li class="fragment" data-fragment-index="1" data-autoslide="600">Each step');
   const file = `.after-previous-${process.pid}.html`;
   writeFileSync(file, text);
   t.after(() => rmSync(file, { force: true }));
@@ -311,7 +311,7 @@ test('a list delivered all at once moves the later steps up, and item by item mo
 
 // a delay of After Previous on the step of a list follows the list into its new delivery
 test('a list keeps the delay of its step through a change of its delivery', async (t) => {
-  const text = readFileSync('index.html', 'utf8').replace('<p>Design the complete slide first', '<p class="fragment" data-fragment-index="1" data-autoslide="700">Design the complete slide first')
+  const text = readFileSync('test-deck.html', 'utf8').replace('<p>Design the complete slide first', '<p class="fragment" data-fragment-index="1" data-autoslide="700">Design the complete slide first')
     .replace(LI1, '<li class="fragment" data-fragment-index="2">Each step')
     .replace(LI2, '<li class="fragment" data-fragment-index="3">Two elements')
     .replace(LI3, '<li class="fragment" data-fragment-index="4">When exporting');

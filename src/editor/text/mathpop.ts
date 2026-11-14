@@ -212,19 +212,19 @@ export function texEditor(options: { display(): boolean; label: string; placehol
 }
 
 // the sheet of a TeX: its title, its first TeX, whether it is a display, the label of its button,
-// the block that it is put beside and kept clear of, and commit, which writes the TeX and throws an
+// the text element that it is put beside and kept clear of, and commit, which writes the TeX and throws an
 // error to be shown at the field. with made, the sheet of a new formula, a click away commits a
 // TeX that is not empty, and made is selected after the commit. left is run after a click away
 // that closes the sheet without a commit
-type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; block(): Element; commit(tex: string): Promise<void>; done?(): void; made?: Element; left?(): void };
+type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; textEl(): Element; commit(tex: string): Promise<void>; done?(): void; made?: Element; left?(): void };
 
 // the sheet is put at the right of the text column, over the figure of the slide, or at the left,
-// and above or below a block that fills the slide. its width of 440 px fits at the right of the
+// and above or below a text element that fills the slide. its width of 440 px fits at the right of the
 // text column of a content slide in a window 1600 px wide
 const SIDES: Side[] = ['right', 'left', 'below', 'above'];
 
-// the block that holds a formula or a caret, e.g. a list item, a paragraph, or a display
-const blockOf = (el: Element): Element => el.closest(HOST) ?? el;
+// the text element that holds a formula or a caret, e.g. a list item, a paragraph, or a display
+const textElementOf = (el: Element): Element => el.closest(HOST) ?? el;
 
 // the formula that the sheet is open for, read by the Formula pane of the inspector
 let openFor: Element | null = null;
@@ -245,7 +245,7 @@ export function openInsert(app: App, host: Element, range: Range): void {
     open: '\\(',
     close: '\\)',
     primary: 'Insert',
-    block: () => blockOf(host),
+    textEl: () => textElementOf(host),
     commit: async (tex) => {
       // the empty words of a shape are not in the file yet, hence the formula is sent to them as typed
       // text, which commands/shape.ts writes as the words of the shape in one entry
@@ -331,11 +331,11 @@ export function install(app: App): void {
   }
 
   // a TeX with an error, or with a delimiter of a formula in it, is refused before the slide is
-  // touched, and the error is thrown to the field, where it is shown under the TeX. the block is
+  // touched, and the error is thrown to the field, where it is shown under the TeX. the text element is
   // written through app.doc as one entry of the history, and the focus is kept where it was
   async function setMath(container: Element, tex: string): Promise<void> {
     const host = container.closest(HOST);
-    if (!host) throw new Error('the formula is not in an editable block');
+    if (!host) throw new Error('the formula is not in a text element');
     const info = mathLookup()(container);
     if (!info) throw new Error('MathJax does not know this formula');
     const { error } = await previewTex(tex, info.display);
@@ -382,7 +382,7 @@ export function install(app: App): void {
     row.append(hint, cancel, apply);
     box.append(title, field, ed.preview, ed.message, row);
     document.body.append(box);
-    unplace = popoverBeside(app, box, sheet.block(), { sides: SIDES });
+    unplace = popoverBeside(app, box, sheet.textEl(), { sides: SIDES });
     apply.disabled = !sheet.tex.trim();
     void ed.refresh();
     // the commit key is held until the TeX typed before it is typeset, since Apply is dimmed or
@@ -474,8 +474,8 @@ export function install(app: App): void {
     const info = mathLookup()(container);
     if (!info) return;
     const fresh = !info.tex.trim();
-    // the block is taken now, since a commit draws the formula again in a new container
-    const block = blockOf(container);
+    // the text element is taken now, since a commit draws the formula again in a new container
+    const textEl = textElementOf(container);
     openSheet({
       title: fresh ? 'Insert Formula' : 'Edit Formula',
       tex: info.tex,
@@ -483,14 +483,14 @@ export function install(app: App): void {
       open: info.open,
       close: info.close,
       primary: fresh ? 'Insert' : 'Apply',
-      block: () => block,
+      textEl: () => textEl,
       commit: into
         ? (tex) => app.history.amend(into, async () => {
             await setMath(container, tex);
-            if (block.isConnected) app.selection.set('elements', [block]);
+            if (textEl.isConnected) app.selection.set('elements', [textEl]);
           })
         : (tex) => setMath(container, tex),
-      made: into ? block : undefined,
+      made: into ? textEl : undefined,
     }, container);
   }
 

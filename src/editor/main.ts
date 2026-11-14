@@ -13,7 +13,7 @@ import { installKeys } from './commands.ts';
 import { mathReady, mathLookup } from './math.ts';
 import { Navigator } from './navigator/navigator.ts';
 import { Steps } from './steps.ts';
-import { Layers } from './layers.ts';
+import { ShownSteps } from './shown-steps.ts';
 import { canWrite, fetchSource, install as installFiles } from './file/files.ts';
 import { install as installDrafts } from './file/drafts.ts';
 import { install as installFollow } from './file/follow.ts';
@@ -45,7 +45,7 @@ import { install as installNavigateCommands } from './commands/navigate.ts';
 import { install as installArrangeCommands } from './commands/arrange.ts';
 import { install as installSlideCommands } from './commands/slide.ts';
 import { install as installDeleteCommands } from './commands/delete.ts';
-import { install as installBlocks } from './text/blocks.ts';
+import { install as installTextElements } from './text/elements.ts';
 import { install as installLink } from './text/link.ts';
 import { install as installTextCommands } from './commands/text.ts';
 import { install as installSubstitute } from './text/substitute.ts';
@@ -95,7 +95,7 @@ const doc = new Doc({
 app.doc = doc;
 
 // the modules of today that are classes with a context: the slide list at the left, the steps of
-// the current slide in a pane at the right, and the layer switch. each is replaced by a module of
+// the current slide in a pane at the right, and the switch of the steps shown. each is replaced by a module of
 // the plan
 const nav = new Navigator(app);
 const steps = new Steps({
@@ -109,17 +109,17 @@ const steps = new Steps({
   tex: (el) => mathLookup()(el)?.tex ?? null,
   changed: () => app.invalidate('content'),
 });
-// a block of another layer is hidden, hence the selection is dropped at a change of the layer
-const layers = new Layers(() => app.current(), () => {
+// an element hidden at the steps shown is hidden, hence the selection is dropped at a change of them
+const shownSteps = new ShownSteps(() => app.current(), () => {
   app.selection.clear();
   app.invalidate('slide');
 });
 app.nav = nav;
 app.steps = steps;
-app.layers = layers;
+app.shownSteps = shownSteps;
 // the refresh of today, of every part after any change, in this order
 app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], () => {
-  layers.refresh();
+  shownSteps.refresh();
   steps.refresh();
   nav.refresh();
 });
@@ -129,7 +129,7 @@ app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], () => {
 installCanvas(app);
 installToolbar(app);
 installNotes(app);
-installStatusbar(app, layers.box);
+installStatusbar(app, shownSteps.box);
 installFiles(app);
 installDrafts(app);
 installFollow(app);
@@ -159,7 +159,7 @@ installNavigator(app);
 installThumbs(app);
 installSlideCommands(app);
 installDeleteCommands(app);
-installBlocks(app);
+installTextElements(app);
 installLink(app);
 installTextCommands(app);
 installSubstitute(app);
@@ -240,7 +240,7 @@ function status() {
     supported: canWrite(),
     dirty: app.dirty,
     file: app.handle?.name ?? null,
-    blocks: app.pairing?.blocks.length ?? 0,
+    texts: app.pairing?.texts.length ?? 0,
     sections: app.pairing?.sections.length ?? 0,
     // the elements whose step or place was changed since the last save
     tags: app.tagEdits.size,

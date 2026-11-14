@@ -95,7 +95,7 @@ export const stepsOfSlide = (slide: Element): number => showSteps(slide).n;
 // seen at k is hidden, and until the slide is complete, the earlier steps are dimmed to the 0.45
 // of theme/beeson.css, apart from a backdrop, a video, a fragment inside a shown one, and a fragment
 // held with data-keep. a video of the style play is seen with its poster before its step. a step
-// set to Dim is drawn at the ghost opacity from its step on, since the
+// set to Dim is drawn at the faint opacity from its step on, since the
 // rules of the thumbnails show every fragment at full opacity. the classes highlighted at k are
 // colored by applySteps of src/steps.ts
 export function showStep(host: HTMLElement, slide: Element, k: number): void {
@@ -112,7 +112,7 @@ export function showStep(host: HTMLElement, slide: Element, k: number): void {
   applySteps(clone);
   (frags as HTMLElement[]).forEach((f, i) => {
     const seen = i >= steps.length || seenAt(kinds[i], steps[i], k) || f.classList.contains('play');
-    const dim = seen && k < n && steps[i] < k - 1 && kinds[i] !== 'dim' && !f.matches('.backdrop, [data-held], .ghost, video, :has(video)') && !f.parentElement?.closest('.fragment.visible');
+    const dim = seen && k < n && steps[i] < k - 1 && kinds[i] !== 'dim' && !f.matches('.backdrop, [data-held], .faint, video, :has(video)') && !f.parentElement?.closest('.fragment.visible');
     f.classList.toggle('beeson-off', !seen);
     const ghost = kinds[i] === 'dim' && steps[i] < k && !f.matches('[data-held]');
     f.style.setProperty('opacity', dim ? '0.45' : ghost ? '0.25' : '', dim || ghost ? 'important' : '');
@@ -299,11 +299,11 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .summary { grid-row: 2; display: none; place-items: center; }
 .beeson-edit-presenter.asking .stage { display: none; }
 .beeson-edit-presenter.asking .summary { display: grid; }
-.beeson-edit-presenter .card { width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 20px 22px 18px; border: 1px solid var(--ed-menu-line); border-radius: 12px; background: var(--ed-panel); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); }
-.beeson-edit-presenter .card h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--ed-font); }
-.beeson-edit-presenter .card p { margin: 0 0 14px; color: var(--ed-muted); }
-.beeson-edit-presenter .card .buttons { display: flex; justify-content: flex-end; gap: 8px; }
-.beeson-edit-presenter .card .buttons button:not(.primary) { background: var(--ed-pressed); }
+.beeson-edit-presenter .dialog { width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 20px 22px 18px; border: 1px solid var(--ed-menu-line); border-radius: 12px; background: var(--ed-panel); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); }
+.beeson-edit-presenter .dialog h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--ed-font); }
+.beeson-edit-presenter .dialog p { margin: 0 0 14px; color: var(--ed-muted); }
+.beeson-edit-presenter .dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.beeson-edit-presenter .dialog .buttons button:not(.primary) { background: var(--ed-pressed); }
 @media (max-width: 900px) { .beeson-edit-presenter .hint { display: none; } .beeson-edit-presenter .stage { grid-template-columns: 1fr; overflow: auto; } }
 `;
 
@@ -350,7 +350,7 @@ export class Presenter {
   private readonly endMark = make('div', 'end-mark', 'End of the show');
   // the element of each part, the overlay of its frames while the display is customized, and the
   // drag of a frame or of its corner, with the layout that it changes
-  private readonly blocks: Record<string, HTMLElement> = {};
+  private readonly regions: Record<string, HTMLElement> = {};
   private readonly layout = make('div', 'layout');
   private readonly frames: Record<string, HTMLElement> = {};
   private press: { id: string; resize: boolean; x: number; y: number; from: Spot; box: { width: number; height: number }; layout: Layout } | null = null;
@@ -383,7 +383,7 @@ export class Presenter {
     clock.setAttribute('aria-label', 'Clock');
     this.options.setAttribute('aria-haspopup', 'dialog');
     this.options.setAttribute('aria-expanded', 'false');
-    this.options.addEventListener('click', () => this.showParts(this.popover.hidden));
+    this.options.addEventListener('click', () => this.showParts(this.popover.hidden !== false));
     const right = make('div', 'group');
     right.append(clock, this.options);
     const top = make('div', 'bar top');
@@ -459,9 +459,9 @@ export class Presenter {
     foot.append(nav, slideTime, info);
 
     const summary = make('div', 'summary');
-    const card = make('div', 'card');
-    card.setAttribute('role', 'alertdialog');
-    card.setAttribute('aria-label', 'Keep the new slide timings?');
+    const dialog = make('div', 'dialog');
+    dialog.setAttribute('role', 'alertdialog');
+    dialog.setAttribute('aria-label', 'Keep the new slide timings?');
     const h3 = make('h3', '', 'Keep the new slide timings?');
     const said = make('p');
     const buttons = make('div', 'buttons');
@@ -472,10 +472,10 @@ export class Presenter {
     discard.addEventListener('click', () => this.answer(false));
     keep.addEventListener('click', () => this.answer(true));
     buttons.append(discard, keep);
-    card.append(h3, said, buttons);
-    summary.append(card);
+    dialog.append(h3, said, buttons);
+    summary.append(dialog);
 
-    Object.assign(this.blocks, { current: colLeft, next: upcoming, notes, clock, timer: middle });
+    Object.assign(this.regions, { current: colLeft, next: upcoming, notes, clock, timer: middle });
     this.layout.hidden = true;
     for (const [id, text] of PARTS) {
       const frame = make('div', 'frame');
@@ -690,7 +690,7 @@ export class Presenter {
     for (const [id] of PARTS) {
       const s = layout ? layout[id] ?? SPOTS[id] : null;
       const text = TEXTS.includes(id);
-      Object.assign(this.blocks[id].style, {
+      Object.assign(this.regions[id].style, {
         left: s ? `${s.x * 100}%` : '',
         top: s ? `${s.y * 100}%` : '',
         width: s?.w !== undefined && !text ? `${s.w * 100}%` : '',
@@ -712,7 +712,7 @@ export class Presenter {
     const d = this.el.getBoundingClientRect();
     const out: Layout = { ...SPOTS };
     for (const [id] of PARTS) {
-      const el = this.blocks[id];
+      const el = this.regions[id];
       if (!seen(el)) continue;
       const r = el.getBoundingClientRect();
       const s: Spot = { x: (r.left - d.left) / d.width, y: (r.top - d.top) / d.height };
@@ -729,9 +729,9 @@ export class Presenter {
     const d = this.el.getBoundingClientRect();
     for (const [id] of PARTS) {
       const frame = this.frames[id];
-      frame.hidden = !seen(this.blocks[id]);
+      frame.hidden = !seen(this.regions[id]);
       if (frame.hidden) continue;
-      const r = this.blocks[id].getBoundingClientRect();
+      const r = this.regions[id].getBoundingClientRect();
       Object.assign(frame.style, { left: `${r.left - d.left}px`, top: `${r.top - d.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     }
   }
@@ -747,7 +747,7 @@ export class Presenter {
     const layout = this.measured();
     this.applyLayout(layout);
     const d = this.el.getBoundingClientRect();
-    const r = this.blocks[id].getBoundingClientRect();
+    const r = this.regions[id].getBoundingClientRect();
     this.press = { id, resize: !!target.closest('.grip'), x: ev.clientX, y: ev.clientY, from: { ...layout[id] }, box: { width: r.width / d.width, height: r.height / d.height }, layout };
     this.layout.setPointerCapture(ev.pointerId);
   }

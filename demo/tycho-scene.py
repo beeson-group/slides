@@ -11,7 +11,7 @@ Run it as
 
     uv run --project <the tycho checkout> --with scipy python demo/tycho-scene.py index.html
 
-The <tycho-viewer> element is written as a kiosk, i.e. without controls, into the zone of the slide
+The <tycho-viewer> element is written as a kiosk, i.e. without controls, into the figure box of the slide
 "Tycho on a slide", between its two marker comments, or in place of the div with the id tycho-slot
 on the first run. A kiosk plays from the initial state of the scene, in which the three panels are
 laid out, and its keys still step the selected member along the family.
@@ -182,7 +182,7 @@ def build():
 
 def main(deck):
     scene = build()
-    element = ty.build_embed(scene.to_document(), scene.to_container(), theme="dark", kiosk=True, class_="zone")
+    element = ty.build_embed(scene.to_document(), scene.to_container(), theme="dark", kiosk=True, class_="figure-box")
     page = Path(deck).read_text(encoding="utf-8")
     block = f"{START}\n{element}\n{END}"
     if START in page and END in page:
@@ -190,7 +190,7 @@ def main(deck):
         _, tail = rest.split(END, 1)
         page = head + block + tail
     else:
-        slot = '<div class="zone" id="tycho-slot"></div>'
+        slot = '<div class="figure-box" id="tycho-slot"></div>'
         if slot not in page:
             raise SystemExit("neither the markers nor the slot div are in the deck")
         page = page.replace(slot, block)

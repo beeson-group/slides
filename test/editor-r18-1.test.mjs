@@ -11,7 +11,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const SOURCE = readFileSync('index.html', 'utf8');
+const SOURCE = readFileSync('test-deck.html', 'utf8');
 const slideOf = (text, has) => [...text.matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => has(m[0]));
 const STEPS = slideOf(SOURCE, (s) => s.includes('Show your steps one at a time'));
 const FIGURES = slideOf(SOURCE, (s) => s.includes('Figures are first class citizens'));
@@ -40,7 +40,7 @@ const FRAGFOOT = SOURCE.replace(/<section[\s\S]*?<\/section>/g, (s) => (s.includ
   .replace(FOOT, '<div class="foot fragment" style="translate: 0px -150px">Slides can have backdrops');
 const footLine = SOURCE.split('\n').find((l) => l.includes(FOOT));
 const FOOTFIRST = SOURCE.replace(`${footLine}\n`, '').replace('<h2>Show your steps one at a time</h2>\n', `<h2>Show your steps one at a time</h2>\n${footLine.replace(FOOT, MOVED_FOOT)}\n`);
-const FIGOVER = SOURCE.replace('<figure class="zone">', '<figure class="zone" style="translate: -530px -40px">');
+const FIGOVER = SOURCE.replace('<figure class="figure-box">', '<figure class="figure-box" style="translate: -530px -40px">');
 
 const STEP_EL = { h2: `${S} > h2`, p: `${S} > p`, ul: `${S} > ul`, foot: `${S} > .foot` };
 const STEP_ROWS = { h2: 'Text: Show your steps', p: 'Text: Design the complete', ul: 'Text: Each step is', foot: 'Text: Slides can have' };
@@ -246,7 +246,7 @@ for (const platform of PLATFORMS) {
   // stacking context, hence the QR code passes all of its texts at once
   test(`${platform}: the QR code stays selected over the undo and the redo of Bring to Front, and Send to Back then moves it (C4)`, async (t) => {
     const page = await load(t, platform, OVERLAPS, CLOSING);
-    const pair = { h1: `${S} .block > h1`, qr: `${S} > .qr` };
+    const pair = { h1: `${S} .title-text > h1`, qr: `${S} > .qr` };
     const at = await overlap(page, pair.h1, pair.qr);
     assert.ok(at, 'the QR code is not over the heading');
     assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);

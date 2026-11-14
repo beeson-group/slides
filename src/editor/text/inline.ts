@@ -1,12 +1,12 @@
-// the formats of the words of a block, within the scope rule: strong, em, s, sup, sub, code, a
+// the formats of the words of a text element, within the scope rule: strong, em, s, sup, sub, code, a
 // link, and a span with one class tone-NAME of theme/beeson.css for the color of the words. a format is
 // set on the range of the text, on the word at the caret when nothing is selected, or on the
-// whole text of each selected block. the change is recorded as the content of the block before and
+// whole text of each selected text element. the change is recorded as the content of the text element before and
 // after, as typing is, and the command around it makes it one entry of the history
 
 import type { App } from '../app.ts';
 import * as flow from './flow.ts';
-import { canSetList, listKind, offsetIn, paragraphStyle, selectedBlocks, selectIn, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
+import { canSetList, listKind, offsetIn, paragraphStyle, selectedTextElements, selectIn, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './elements.ts';
 
 export type Match = (el: Element) => boolean;
 
@@ -34,7 +34,7 @@ export const isLink: Match = tagIs('a');
 export const CLEARED: Match = (el) => tagIs('strong', 'b', 'em', 'i', 'sup', 'sub', 'code', 'u', 's', 'strike', 'mark')(el) || isTone(el);
 
 // the elements that a format is not wrapped around, whose content is formatted instead
-const BLOCKISH = 'ul, ol, li, p, div, table, pre, h1, h2, h3, h4, h5, h6, mjx-container';
+const BREAKING = 'ul, ol, li, p, div, table, pre, h1, h2, h3, h4, h5, h6, mjx-container';
 const INNER = 'li, p, div, td, th, pre, h1, h2, h3, h4, h5, h6';
 
 const elementOf = (n: Node): Element | null => (n instanceof Element ? n : n.parentElement);
@@ -73,7 +73,7 @@ function trimEnd(range: Range): Range {
 }
 
 // the ranges that a format is set on: the text of the window or the word at its caret, and else
-// the whole text of each selected block. notes take only bold and italic
+// the whole text of each selected text element. notes take only bold and italic
 export function inlineTargets(app: App, notes = false, edge = false): Target[] {
   const spanned = flow.spanTargets(app);
   if (spanned.length) return spanned;
@@ -83,9 +83,9 @@ export function inlineTargets(app: App, notes = false, edge = false): Target[] {
     const range = trimEnd(wordRange(t.range, edge));
     return range.collapsed ? [] : [{ host: t.host, range }];
   }
-  // an item takes its nested items too, which are part of its block, and setFormat cuts the range
+  // an item takes its nested items too, which are part of its text element, and setFormat cuts the range
   // at each item
-  return selectedBlocks(app).map((host) => {
+  return selectedTextElements(app).map((host) => {
     const range = document.createRange();
     range.selectNodeContents(host);
     return { host, range };
@@ -162,8 +162,8 @@ function lift(host: Element, range: Range, match: Match): Node[] {
   return out;
 }
 
-// each run of inline nodes in nodes wrapped in an element of make, and the content of a block
-// among them formatted in the same way. a run of white space alone is not wrapped
+// each run of inline nodes in nodes wrapped in an element of make, and the content of an element
+// among them that breaks the line formatted in the same way. a run of white space alone is not wrapped
 function wrapRuns(nodes: Node[], make: () => Element): void {
   let run: Node[] = [];
   const flush = () => {
@@ -175,7 +175,7 @@ function wrapRuns(nodes: Node[], make: () => Element): void {
     run = [];
   };
   for (const n of nodes) {
-    if (n instanceof Element && n.matches(BLOCKISH) && !n.matches('mjx-container')) {
+    if (n instanceof Element && n.matches(BREAKING) && !n.matches('mjx-container')) {
       flush();
       wrapRuns([...n.childNodes], make);
     } else run.push(n);
@@ -190,7 +190,7 @@ function prune(host: Element): void {
   }
 }
 
-// the change of a format on each target, recorded in the history as the content of its block
+// the change of a format on each target, recorded in the history as the content of its text element
 // before and after. a target of the window keeps the formatted text selected, or the caret where it
 // was, so that the typing goes on at the caret
 export function edit(app: App, targets: Target[], change: (host: Element, range: Range) => Node[]): void {
@@ -230,17 +230,17 @@ export function edit(app: App, targets: Target[], change: (host: Element, range:
   app.invalidate('content');
 }
 
-// the parts of range in each block of host that it touches, e.g. an item and its nested items, so
+// the parts of range in each inner element of host that it touches, e.g. an item and its nested items, so
 // that a format does not cut an item in two
-function blockParts(host: Element, range: Range): Range[] {
+function innerParts(host: Element, range: Range): Range[] {
   const groups = new Map<Element, Text[]>();
   const root = range.commonAncestorContainer;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
     const edge = (n === range.startContainer && range.startOffset === n.length) || (n === range.endContainer && range.endOffset === 0);
     if (!range.intersectsNode(n) || edge || !n.data.trim() || n.parentElement?.closest('mjx-container')) continue;
-    const block = n.parentElement!.closest(INNER);
-    const key = block && host.contains(block) && block !== host ? block : host;
+    const inner = n.parentElement!.closest(INNER);
+    const key = inner && host.contains(inner) && inner !== host ? inner : host;
     groups.set(key, [...(groups.get(key) ?? []), n]);
   }
   if (groups.size < 2) return [range];
@@ -257,7 +257,7 @@ function blockParts(host: Element, range: Range): Range[] {
 
 // the nodes of range taken out of the format of match, and wrapped in an element of make if given
 export function setFormat(host: Element, range: Range, match: Match, make: (() => Element) | null): Node[] {
-  const parts = blockParts(host, range);
+  const parts = innerParts(host, range);
   if (parts.length > 1) return parts.flatMap((r) => setFormat(host, r, match, make));
   const nodes = lift(host, range, match);
   if (make) {
@@ -308,7 +308,7 @@ export function textColored(app: App): boolean {
 }
 
 // the words colored in tone, or given the text color of the theme with null. the tone text is a
-// span only in a block of a color of its own, and else the tone is taken off
+// span only in a text element of a color of its own, and else the tone is taken off
 export function setTone(app: App, tone: Tone | null): void {
   const targets = inlineTargets(app);
   edit(app, targets, (host, range) => {
@@ -365,9 +365,9 @@ export type Case = 'sentence' | 'lower' | 'upper' | 'title' | 'toggle';
 
 const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
 
-// text in the case of kind. before is the text of the block before it, which tells recase where a
+// text in the case of kind. before is the text of the text element before it, which tells recase where a
 // word or a sentence starts. a word starts after a character that is not a letter or a digit,
-// apart from an apostrophe inside a word, and a sentence at the start of a block and after a
+// apart from an apostrophe inside a word, and a sentence at the start of a text element and after a
 // period, an exclamation mark, or a question mark
 export function recase(text: string, kind: Case, before = ''): string {
   let prev = before.at(-1) ?? '';
@@ -449,7 +449,7 @@ export function changeCase(app: App, kind: Case | 'cycle'): void {
 }
 
 // the style that Copy Style takes and Paste Style sets: the formats of the words, their tone, and
-// the paragraph style and the kind of list of their block
+// the paragraph style and the kind of list of their text element
 export type TextStyle = {
   formats: Record<FormatName, boolean>;
   tone: Tone | null;
@@ -467,7 +467,7 @@ function covers(host: Element, range: Range): boolean {
 }
 
 // the style of the word at the caret or of the first character of the range of a text, or of the
-// first selected block. null where neither a text nor a block is selected
+// first selected text element. null where neither a text nor a text element is selected
 export function readStyle(app: App): TextStyle | null {
   const t = textTarget(app);
   if (t && t.host.matches('aside.notes')) return null;
@@ -529,7 +529,7 @@ function paint(host: Element, range: Range, style: TextStyle): Node[] {
 export const canPaint = (app: App): boolean => inlineTargets(app, false, true).length > 0;
 
 // style set on the words of the selection, as Paste Style and the Format Painter set it. where the
-// whole text of a block is selected, the kind of list is set too in a text, as the list commands are,
+// whole text of a text element is selected, the kind of list is set too in a text, as the list commands are,
 // then the paragraph style. a list item hence becomes a paragraph after the style of a paragraph
 export async function pasteStyle(app: App, style: TextStyle): Promise<void> {
   const targets = inlineTargets(app, false, true);

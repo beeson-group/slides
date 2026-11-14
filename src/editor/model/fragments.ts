@@ -39,7 +39,7 @@ export function fragmentRoot(source: Source): SrcEl | null {
   return (source.slides.children.find((c) => c.kind === 'element') as SrcEl | undefined) ?? null;
 }
 
-const emptyPairing = (): Pairing => ({ blocks: [], byLive: new Map(), elements: new Map(), inner: new Map(), sections: [], problems: [], root: null });
+const emptyPairing = (): Pairing => ({ texts: [], byLive: new Map(), elements: new Map(), inner: new Map(), sections: [], problems: [], root: null });
 
 // the pairing of the root of a fragment with the element of the page made from it
 export function pairFragment(source: Source, live: Element, math: MathLookup): Pairing {
@@ -52,7 +52,7 @@ export function pairFragment(source: Source, live: Element, math: MathLookup): P
 
 // the pairing of a fragment added to the pairing of the deck, with the slides in the order of the page
 export function mergePairing(into: Pairing, from: Pairing): void {
-  into.blocks.push(...from.blocks);
+  into.texts.push(...from.texts);
   for (const [k, v] of from.byLive) into.byLive.set(k, v);
   for (const [k, v] of from.elements) into.elements.set(k, v);
   for (const [k, v] of from.inner) into.inner.set(k, v);

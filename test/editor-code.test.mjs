@@ -37,10 +37,10 @@ after(async () => {
 async function open(t, platform) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close());
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   await page.evaluate('localStorage.clear()');
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`)).problems, []);
   if (!(await page.evaluate(`window.BeesonEditor.state('shell.format').checked`))) await page.evaluate(`window.BeesonEditor.exec('shell.format')`);

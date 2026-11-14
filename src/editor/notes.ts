@@ -1,6 +1,6 @@
 // the speaker notes of the current slide, in a pane under the canvas as in PowerPoint and Keynote,
 // in the font of the chrome and at a zoom of their own. the text that is edited is the aside.notes
-// of the slide, so that the typing, the history, find, and the save treat it as any other block.
+// of the slide, so that the typing, the history, find, and the save treat it as any other text element.
 // lay() sets the aside over the box of the pane, in the slide px of its section, at every zoom and
 // scroll of the canvas, and its font is divided by the scale of the slide, hence its text keeps
 // its size on the screen. while the notes are shown, a slide without notes gets an empty aside to
@@ -150,7 +150,7 @@ export function install(app: App): void {
 
   function ensure(): HTMLElement | null {
     const slide = app.current();
-    if (!slide || !app.pairing?.blocks.length || !shown()) return null;
+    if (!slide || !app.pairing?.texts.length || !shown()) return null;
     let aside = slide.querySelector<HTMLElement>(':scope > aside.notes');
     if (!aside) {
       aside = make('aside', 'notes');
@@ -375,7 +375,7 @@ export function notesListKind(app: App): 'ul' | 'none' | null {
   return !c ? null : c.li ? 'ul' : 'none';
 }
 
-// the notes take dashes and lines, and not numbers, dots, or arrows
+// the notes take lines and items of a plain ul, and not numbers, dots, or dashes
 export function canSetNotesList(app: App, kind: string): boolean {
   return (kind === 'none' || kind === 'ul') && notesListKind(app) !== null;
 }
@@ -424,7 +424,7 @@ export function joinNotesItem(app: App): void {
 }
 
 // a dash and a space typed at the start of a line of the notes make it an item, as an entry of
-// the history after the typing, named as the list command
+// the history after the typing, named as the list command Arrows of a plain ul
 function installDashes(app: App): void {
   let typed = false;
   document.addEventListener('beforeinput', (ev) => {
@@ -437,7 +437,7 @@ function installDashes(app: App): void {
     if (!c || c.li || !c.range.collapsed) return;
     const first = lineOf(c).nodes[0];
     if (!(first instanceof Text) || c.range.startContainer !== first || c.range.startOffset !== 2 || !/^[-–][  ]/u.test(first.data)) return;
-    void app.history.transact('Dashes', () => change(app, c, () => {
+    void app.history.transact('Arrows', () => change(app, c, () => {
       first.deleteData(0, 2);
       if (first.data) c.range.setStart(first, 0);
       else {

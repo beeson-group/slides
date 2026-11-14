@@ -4,7 +4,7 @@
 // a symbol at a step. a symbol is a part of the TeX selected in the field, which Color Symbol marks
 // with \class and colors in the chosen tone at the chosen step. the colored symbols of the formula
 // are listed under it, each with its tone and step and a button that takes its color off. the
-// formula is read again at each sync, since a formula is replaced when its block is typeset again
+// formula is read again at each sync, since a formula is replaced when its text element is typeset again
 
 import type { App } from '../app.ts';
 import { TONES, coloredOf, colorSteps, displayOf, formulaOf, type ColorStep, type Tone } from '../commands/math.ts';
@@ -238,7 +238,7 @@ export function formulaPane(app: App, run: Run): Control[] {
 }
 
 // the panes of a formula: Formula and Arrange for a display, and Formula, Text, and Arrange for an
-// inline formula, whose block is a text. the items are the blocks, so that the pane is not built
+// inline formula, whose text element is a text. the items are the text elements, so that the pane is not built
 // again when its formula is typeset again
 export function formulaView(app: App): { tabs: ('formula' | 'text' | 'arrange')[]; items: Element[] } | null {
   const f = formulaOf(app);

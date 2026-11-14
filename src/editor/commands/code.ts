@@ -58,7 +58,7 @@ export function codeAt(app: App, arg?: unknown): Element | null {
   const el = given instanceof Element ? given : sel.only() ?? (sel.kind === 'text' ? sel.items[0] ?? null : null);
   const pre = el?.closest('pre');
   const code = pre?.querySelector(':scope > code') ?? null;
-  // the code is inside the block of its pre, hence it is paired among the elements inside blocks
+  // the code is inside the text element of its pre, hence it is paired among the elements inside text elements
   const src = code ? app.pairing?.elements.get(code) ?? app.pairing?.inner.get(code) : null;
   return code && src?.open && code.closest('section') ? code : null;
 }
@@ -191,8 +191,8 @@ export function linesOf(group: string): Set<number> {
 
 // the scopes of highlight.js that the theme colors in beeson.css, with the property of the color
 const TOKENS: [string, string][] = [
-  ['keyword', 'violet'], ['literal', 'violet'], ['meta', 'violet'], ['built_in', 'strand-3'], ['title', 'accent'],
-  ['params', 'strand-6'], ['string', 'strand-4'], ['number', 'strand-5'], ['comment', 'muted'], ['operator', 'subtle'],
+  ['keyword', 'violet'], ['literal', 'violet'], ['meta', 'violet'], ['built_in', 'trajectory-3'], ['title', 'accent'],
+  ['params', 'trajectory-6'], ['string', 'trajectory-4'], ['number', 'trajectory-5'], ['comment', 'muted'], ['operator', 'subtle'],
 ];
 const NAME = (token: string) => `beeson-code-${token.replace(/_/g, '-')}`;
 const DIM = 'beeson-code-dim';

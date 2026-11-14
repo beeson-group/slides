@@ -11,7 +11,7 @@ import { byteExact, click, press, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const FIGURES = 4;
-const LAST = 14;
+const LAST = 12;
 
 let browser;
 let server;
@@ -34,10 +34,10 @@ const near = (a, b, tol = 1) => Math.abs(a - b) <= tol;
 
 // the editor on slide n of the demo deck, served over HTTP
 async function load(t, platform, n = 0) {
-  const text = readFileSync('index.html', 'utf8');
+  const text = readFileSync('test-deck.html', 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
@@ -63,20 +63,20 @@ async function present(t, platform, n) {
   return page;
 }
 
-// a point of the slide shown by the show, on the heading of slide 14 and away from its video
+// a point of the slide shown by the show, on the heading of slide 12 and away from its video
 const slidePoint = { x: 400, y: 180 };
 
 // finding opus 3 of round 6: a click past the last step of the last slide left the show up, while a
-// key forward ended it. a click plays the steps of slide 14 first, and a deck opened by itself
+// key forward ended it. a click plays the steps of slide 12 first, and a deck opened by itself
 // stays at its last slide at a click
 for (const platform of PLATFORMS) {
   test(`the show played by Present returns to the editor at a click past its last step (${platform})`, async (t) => {
     const page = await present(t, platform, LAST - 1);
     const at = () => page.evaluate(`${SHOW}.Reveal.getIndices().h`);
-    assert.equal(await page.evaluate(`${SHOW}.Reveal.availableFragments().next`), true, 'slide 14 does not have steps');
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.availableFragments().next`), true, 'slide 12 does not have steps');
     await click(page, slidePoint);
     await sleep(300);
-    assert.equal(await at(), LAST - 1, 'a step of slide 14 is skipped');
+    assert.equal(await at(), LAST - 1, 'a step of slide 12 is skipped');
     for (let i = 0; i < 10 && (await at()) < LAST; i++) {
       await click(page, slidePoint);
       await sleep(300);
@@ -94,7 +94,7 @@ for (const platform of PLATFORMS) {
 
     const deck = await browser.newPage({ width: 1600, height: 1000 });
     t.after(() => deck.close().catch(() => {}));
-    await deck.goto(`${server.origin}/index.html?still#/${LAST}`);
+    await deck.goto(`${server.origin}/test-deck.html?still#/${LAST}`);
     await deck.waitFor(deckSettled);
     for (let i = 0; i < 3; i++) {
       await click(deck, slidePoint);

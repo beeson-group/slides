@@ -11,7 +11,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LISTS = 'test/pages/editor-r13-3.html';
 
 let browser;
@@ -54,18 +54,18 @@ async function load(t, platform, deck, n) {
 }
 
 // the shown element of selector whose text holds needle, as an expression
-const blockOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
+const textElementOf = (selector, needle) => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
 
 // the caret put at the mark | of at, e.g. 'steps.| Direct', into the block of selector, by a click
 // into the block and a collapse of the selection there
 async function caretAt(page, selector, at) {
   const needle = at.replace('|', '');
   const k = at.indexOf('|');
-  const point = await page.evaluate(`(() => { const r = ${blockOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 4, y: r.top + r.height / 2 }; })()`);
+  const point = await page.evaluate(`(() => { const r = ${textElementOf(selector, needle)}.getBoundingClientRect(); return { x: r.left + 4, y: r.top + r.height / 2 }; })()`);
   await click(page, point);
   await frames(page);
   await page.evaluate(`(() => {
-    const el = ${blockOf(selector, needle)};
+    const el = ${textElementOf(selector, needle)};
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let n = w.nextNode(); n; n = w.nextNode()) {
       const i = n.data.indexOf(${js(needle)});
@@ -169,7 +169,7 @@ const ITEM = '.reveal section.present ol > li';
 for (const platform of PLATFORMS) {
   test(`one Undo by the key in Start at with 2.5 typed and not entered puts the shown 1 back, selected, without an entry of the history (${platform})`, async (t) => {
     const page = await load(t, platform, LISTS, 0);
-    await click(page, await page.evaluate(`(() => { const r = ${blockOf(ITEM, 'Bravo')}.getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`));
+    await click(page, await page.evaluate(`(() => { const r = ${textElementOf(ITEM, 'Bravo')}.getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`));
     await frames(page);
     await showTab(page, 'Text');
     const field = `document.querySelector(${js(START)})`;

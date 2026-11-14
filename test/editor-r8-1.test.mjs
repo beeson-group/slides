@@ -24,8 +24,8 @@ const MODES = ['dark', 'light'];
 const DECK = 'test/pages/editor-figure.html';
 // the slide of the figure with an image of each mode, and of the figure with one image
 const FIGURES = [{ n: 0, name: 'a pair' }, { n: 1, name: 'one image' }];
-const IMG = '.reveal section.present figure.zone > img';
-const CAPTION = '.reveal section.present figure.zone > figcaption';
+const IMG = '.reveal section.present figure.figure-box > img';
+const CAPTION = '.reveal section.present figure.figure-box > figcaption';
 const OVER = '.reveal section.present > p:nth-of-type(2)';
 const PANEL = '#beeson-edit-panel-format';
 const BAR = 'dialog.beeson-mask-bar';
@@ -56,7 +56,7 @@ let saves = 0;
 
 // the selected elements, each named by its tag and its classes of the deck, apart from those that
 // the Image pane writes
-const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...el.classList].filter((c) => !c.startsWith('beeson-') && !['visible', 'current-fragment', 'paper', 'invert'].includes(c)).join('.'))`);
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...el.classList].filter((c) => !c.startsWith('beeson-') && !['visible', 'current-fragment', 'white-figure', 'invert'].includes(c)).join('.'))`);
 const rectOf = (page, selector) => page.evaluate(`(() => {
   const r = [...document.querySelectorAll(${js(selector)})].map((e) => e.getBoundingClientRect()).find((r) => r.width);
   return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
@@ -181,7 +181,7 @@ async function pick(page, from, first = 1) {
     await click(page, IMG);
     await frames(page);
   }
-  assert.deepEqual(await selected(page), [from === 'figure' ? 'figure.zone' : page.parts.pic], `the ${from} is not selected by its clicks`);
+  assert.deepEqual(await selected(page), [from === 'figure' ? 'figure.figure-box' : page.parts.pic], `the ${from} is not selected by its clicks`);
 }
 
 // the text after an edit is in the scope rule wherever the text before it is
@@ -302,7 +302,7 @@ for (const combo of COMBOS) {
     const page = await load(t, platform, mode, n);
     await click(page, IMG);
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'the first click on the picture does not select its figure');
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'the first click on the picture does not select its figure');
     const shown = await shownFrames(page);
     assert.equal(shown.length, 1, `the figure is drawn with ${shown.length} frames`);
     const pic = await pictureOf(page);
@@ -319,7 +319,7 @@ for (const combo of COMBOS) {
     assert.ok((await tabs(page)).includes('Image'), 'the picture does not have the Image pane');
     await press(page, 'Escape');
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'Esc on the picture does not select its figure');
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'Esc on the picture does not select its figure');
     await press(page, 'Escape');
     assert.deepEqual(await selected(page), []);
     // a click on the caption puts the caret in it, also with the picture selected, and Esc then
@@ -329,7 +329,7 @@ for (const combo of COMBOS) {
     assert.equal(await page.evaluate(`!!document.activeElement?.matches('figcaption')`), true, 'a click on the caption does not put the caret in it');
     await press(page, 'Escape');
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'Esc in the caption does not select its figure');
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'Esc in the caption does not select its figure');
     await click(page, IMG);
     await click(page, CAPTION);
     await frames(page);
@@ -354,11 +354,11 @@ for (const combo of COMBOS) {
       const now = await pictureOf(page);
       assert.ok(now.left < rest.left - 40, 'the picture is not moved by the drag');
       assert.ok(near(now.dx, rest.dx) && near(now.dy, rest.dy), `the caption is at ${js([now.dx, now.dy])} from the picture, not at ${js([rest.dx, rest.dy])}`);
-    }, moved(/^<figure class="zone" style="translate: -\d+px \d+px">$/));
-    await check(page, 'a nudge', () => press(page, 'ArrowRight'), moved(/^<figure class="zone" style="translate: 1px 0px">$/));
-    await check(page, 'a nudge by 10', () => press(page, 'Shift+ArrowDown'), moved(/^<figure class="zone" style="translate: 0px 10px">$/));
-    await check(page, 'a typed X', async () => typeField(page, 'x', (await fieldValue(page, 'x')) + 50), moved(/^<figure class="zone" style="translate: 50px 0px">$/));
-    const last = await check(page, 'a typed Y', async () => typeField(page, 'y', (await fieldValue(page, 'y')) - 30), moved(/^<figure class="zone" style="translate: 0px -30px">$/));
+    }, moved(/^<figure class="figure-box" style="translate: -\d+px \d+px">$/));
+    await check(page, 'a nudge', () => press(page, 'ArrowRight'), moved(/^<figure class="figure-box" style="translate: 1px 0px">$/));
+    await check(page, 'a nudge by 10', () => press(page, 'Shift+ArrowDown'), moved(/^<figure class="figure-box" style="translate: 0px 10px">$/));
+    await check(page, 'a typed X', async () => typeField(page, 'x', (await fieldValue(page, 'x')) + 50), moved(/^<figure class="figure-box" style="translate: 50px 0px">$/));
+    const last = await check(page, 'a typed Y', async () => typeField(page, 'y', (await fieldValue(page, 'y')) - 30), moved(/^<figure class="figure-box" style="translate: 0px -30px">$/));
     await saved(page, last);
   });
 
@@ -408,7 +408,7 @@ for (const combo of COMBOS) {
     for (const [order, want] of [['front', up], ['forward', up], ['backward', down], ['back', file]]) {
       last = await check(page, order, () => press(page, keys[order]), (edited) => {
         assert.deepEqual(orderOf(edited, n), want, `${order} puts the figure at ${js(orderOf(edited, n))}`);
-        if (order === 'back') assert.deepEqual(changedTags(page.source, edited), { [page.parts.fig]: '<figure class="zone" style="z-index: -1">' });
+        if (order === 'back') assert.deepEqual(changedTags(page.source, edited), { [page.parts.fig]: '<figure class="figure-box" style="z-index: -1">' });
       });
     }
     await saved(page, last);
@@ -424,7 +424,7 @@ for (const combo of COMBOS) {
       await press(page, keys.lock);
       await frames(page);
       const locked = await render(page);
-      assert.deepEqual(changedTags(page.source, locked), { [fig]: '<figure class="zone" data-locked>' }, `Lock from the ${from} does not lock the figure`);
+      assert.deepEqual(changedTags(page.source, locked), { [fig]: '<figure class="figure-box" data-locked>' }, `Lock from the ${from} does not lock the figure`);
       assert.deepEqual(await selected(page), was);
       inScope(locked, page.source);
       await drag(page, await pictureOf(page), { dx: 60, dy: 30 });
@@ -450,15 +450,15 @@ for (const combo of COMBOS) {
       await click(page, OVER, { modifiers: 'Shift' });
       await press(page, keys.group);
       await frames(page);
-      assert.deepEqual(await selected(page), ['figure.zone', 'p'], 'Group does not select the figure and the paragraph');
+      assert.deepEqual(await selected(page), ['figure.figure-box', 'p'], 'Group does not select the figure and the paragraph');
       return false;
-    }, (edited) => assert.deepEqual(changedTags(page.source, edited), { [fig]: '<figure class="zone" data-group="g1">', [over]: '<p style="translate: 0px 80px" data-group="g1">' }));
+    }, (edited) => assert.deepEqual(changedTags(page.source, edited), { [fig]: '<figure class="figure-box" data-group="g1">', [over]: '<p style="translate: 0px 80px" data-group="g1">' }));
     await saved(page, grouped);
     // a figure in a group is selected by itself at the second click, and its picture at the third
     const last = await check(page, 'Ungroup', async () => {
       await press(page, keys.ungroup);
       await frames(page);
-      assert.deepEqual(await selected(page), ['figure.zone', 'p'], 'Ungroup does not select the figure and the paragraph');
+      assert.deepEqual(await selected(page), ['figure.figure-box', 'p'], 'Ungroup does not select the figure and the paragraph');
       return false;
     }, (edited) => assert.equal(edited, SOURCE), { first: 2 });
     await saved(page, last);
@@ -485,18 +485,18 @@ for (const combo of COMBOS) {
       assert.equal(copies.length, 2, `the slide holds ${copies.length} figures`);
       const original = page.source.slice(f.at, f.end);
       assert.equal(copies[0], original);
-      assert.equal(copies[1], original.replace('<figure class="zone">', '<figure class="zone" style="translate: 20px 20px">'));
+      assert.equal(copies[1], original.replace('<figure class="figure-box">', '<figure class="figure-box" style="translate: 20px 20px">'));
     };
     const pasted = await check(page, 'Copy and Paste', async () => {
       await exec(page, 'edit.copy');
       await exec(page, 'edit.paste');
-      assert.deepEqual(await selected(page), ['figure.zone'], 'the copy is not selected');
+      assert.deepEqual(await selected(page), ['figure.figure-box'], 'the copy is not selected');
       return false;
     }, copied);
     const last = await check(page, 'Duplicate', async () => {
       await press(page, keys.duplicate);
       await frames(page);
-      assert.deepEqual(await selected(page), ['figure.zone'], 'the copy is not selected');
+      assert.deepEqual(await selected(page), ['figure.figure-box'], 'the copy is not selected');
       return false;
     }, (edited) => {
       copied(edited);
@@ -610,7 +610,7 @@ for (const combo of COMBOS) {
       await frames(page);
       assert.equal(await page.evaluate(`!!document.querySelector('${BAR}[open]')`), false, 'Enter does not close Edit Mask');
     }, styled(/clip-path: inset\(/), picture);
-    // Replace, Paper, and the alt text are written on the shown image alone, whose file they name
+    // Replace, White Figure, and the alt text are written on the shown image alone, whose file they name
     const shownOnly = (re) => (edited) => {
       const c = changedTags(page.source, edited);
       assert.deepEqual(Object.keys(c), [imgs[0]], `the edit changes ${js(c)}`);
@@ -623,10 +623,10 @@ for (const combo of COMBOS) {
       // the second file of the same name is written under a name of its own, e.g. replaced-2.png
       same: (text) => text.replace(/media\/replaced(-\d+)?\.png/g, 'media/replaced.png'),
     });
-    await check(page, 'Paper', async () => {
+    await check(page, 'White Figure', async () => {
       assert.ok((await tabs(page)).includes('Image'), 'the Image pane is not shown');
-      await exec(page, 'figure.paper');
-    }, shownOnly(/class="[^"]*\bpaper\b/));
+      await exec(page, 'figure.whiteFigure');
+    }, shownOnly(/class="[^"]*\bwhite-figure\b/));
     const last = await check(page, 'an alt text', () => exec(page, 'figure.alt', { value: 'A new alt text' }), shownOnly(/ alt="A new alt text"/));
     await saved(page, last);
   });

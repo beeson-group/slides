@@ -7,7 +7,7 @@
 // menu of the first. while the toolbar is wider than the window, its last groups are put into a
 // menu » at its right end, as in Keynote, first those after Present and then those before it.
 // the labels are hidden only while the toolbar does not fit with them. the toolbar has one tab stop, and the arrow keys move in it. the
-// View button at its left shows and hides the navigator, and its arrow lists the Chapters Table,
+// View button at its left shows and hides the navigator, and its arrow lists the Slide Sorter,
 // the rulers, and the gridlines. the Zoom popup beside it is as in Keynote, with Fit, Actual Size,
 // Zoom to Selection, and the levels, showing the zoom on its face. the items of the toolbar and whether it shows icons, labels, or both are set in the sheet
 // Customize Toolbar of the View menu, as in Keynote, and kept in the storage of the browser for

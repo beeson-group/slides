@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
-import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { click, drag, press, previewFrames, recordPreview, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
@@ -38,7 +38,7 @@ after(async () => {
 
 // the editor on a deck served over HTTP, opened with text, on the slide of the element matched by
 // at, with the Format tab or the Steps tab shown
-async function open(t, platform, { deck = 'index.html', text = readFileSync(deck, 'utf8'), at = 'pre > code', tab = 'format', width = 1600, height = 1000 } = {}) {
+async function open(t, platform, { deck = 'test-deck.html', text = readFileSync(deck, 'utf8'), at = 'pre > code', tab = 'format', width = 1600, height = 1000 } = {}) {
   const page = await browser.newPage({ width, height });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
@@ -128,7 +128,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`Small keeps the other declarations of the pre, and off gives its tag back byte for byte on ${platform}`, async (t) => {
-    const text = readFileSync('index.html', 'utf8').replace('<pre><code class="language-python"', '<pre style="translate: 0px 12px;"><code class="language-python"');
+    const text = readFileSync('test-deck.html', 'utf8').replace('<pre><code class="language-python"', '<pre style="translate: 0px 12px;"><code class="language-python"');
     const page = await open(t, platform, { text });
     await selectCode(page);
     await click(page, SMALL);
@@ -290,7 +290,8 @@ const LINES = 'data-line-numbers="1-3|4|5-7|8-9"';
 const lineRows = async (page) => (await rows(page)).filter((r) => r.meta.startsWith('Line')).map((r) => `${r.step} ${r.meta.split(' · ')[0]}`);
 
 // the number of lines of the code box dimmed by the highlight of the editor, or 0 without it
-const dimmed = (page) => page.evaluate(`CSS.highlights.get('beeson-code-dim')?.size ?? 0`);
+const DIMMED = `(CSS.highlights.get('beeson-code-dim')?.size ?? 0)`;
+const dimmed = (page) => page.evaluate(DIMMED);
 
 for (const platform of PLATFORMS) {
   test(`the line steps of a code box are rows of the Steps tab, kept in sync with its Code pane on ${platform}`, async (t) => {
@@ -343,14 +344,14 @@ for (const platform of PLATFORMS) {
   });
 
   test(`the line steps of a code box move with the other steps, and are not split on ${platform}`, async (t) => {
-    const text = readFileSync('index.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
+    const text = readFileSync('test-deck.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
     const page = await open(t, platform, { text, tab: 'steps' });
     assert.deepEqual(await lineRows(page), ['1 Line 4', '2 Lines 5–7', '3 Lines 8–9']);
     assert.equal((await rows(page)).find((r) => r.text.startsWith('Copy-paste')).step, '0');
     // the paragraph dragged under the last card is shown after the lines, and the index of the
     // code puts its line steps before it, as the highlight plugin numbers its copies of the code
     const from = await rowPart(page, 'Copy-paste', '.body');
-    const to = await page.evaluate(`(() => { const c = [...document.querySelectorAll('${SIDE} .rows .card.step')].at(-1).getBoundingClientRect(); return c.bottom + 2; })()`);
+    const to = await page.evaluate(`(() => { const c = [...document.querySelectorAll('${SIDE} .rows .step:not(.plain)')].at(-1).getBoundingClientRect(); return c.bottom + 2; })()`);
     await drag(page, from, { dy: to - from.y, steps: 12 });
     await frames(page);
     const moved = await rendered(page);
@@ -378,7 +379,7 @@ for (const platform of PLATFORMS) {
 
   test(`Play From plays the steps of the slide in place from the chosen step on ${platform}`, async (t) => {
     // the deck is served with the paragraph as a fragment, since the preview plays the page
-    const text = readFileSync('index.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
+    const text = readFileSync('test-deck.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
     const deck = `.play-from-${process.pid}-${platform}.html`;
     writeFileSync(deck, text);
     t.after(() => rmSync(deck, { force: true }));
@@ -390,18 +391,16 @@ for (const platform of PLATFORMS) {
     await click(page, await rowPart(page, 'if len(members)'));
     await frames(page);
     assert.equal(await label(), 'Play From');
+    // each frame of the preview is recorded in the page as it is drawn, since a read of its first
+    // step came a step late on a slow runner
+    const state = `({ para: !document.querySelector('.reveal section.present p.fragment').classList.contains('beeson-pv-off'), dimmed: ${DIMMED}, label: document.querySelector(${js(play)}).textContent })`;
+    await recordPreview(page, state);
     await click(page, play);
-    await frames(page);
-    // the slide starts at the step before the chosen one: the paragraph and line 4 are shown
-    const state = () => page.evaluate(`({ step: document.documentElement.dataset.previewStep, playing: document.documentElement.classList.contains('beeson-previewing'), para: !document.querySelector('.reveal section.present p.fragment').classList.contains('beeson-pv-off') })`);
-    assert.deepEqual(await state(), { step: '2', playing: true, para: true });
-    assert.equal(await dimmed(page), 8);
-    assert.equal(await label(), 'Stop');
-    await page.waitFor(`document.documentElement.dataset.previewStep === '3'`, 3000);
-    assert.equal(await dimmed(page), 6);
-    await page.waitFor(`document.documentElement.dataset.previewStep === '4'`, 3000);
-    assert.equal(await dimmed(page), 7);
-    await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 4000);
+    // the slide starts at the step before the chosen one: the paragraph and line 4 are shown. the
+    // last frame is the last step again, with the dimmed lines restored
+    const played = await previewFrames(page);
+    assert.deepEqual(played[0], { step: '2', playing: true, read: { para: true, dimmed: 8, label: 'Stop' } });
+    assert.deepEqual(played.map((f) => [f.step, f.playing, f.read.dimmed]), [['2', true, 8], ['3', true, 6], ['4', true, 7], ['4', true, 0]]);
     assert.equal(await dimmed(page), 0);
     assert.equal(await label(), 'Play From');
     // the chip menu of a row ends with Play From its step, before the delivery of a list, and a
@@ -413,12 +412,14 @@ for (const platform of PLATFORMS) {
     await click(page, await rowPart(page, 'members.append', '.chip'));
     await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
     assert.deepEqual(await menuLabels(page), ['Play From Step 4']);
+    await recordPreview(page, state);
     await choose(page, 'Play From Step 4');
-    assert.deepEqual(await state(), { step: '3', playing: true, para: true });
+    await page.waitFor('window.__preview.length > 0');
+    assert.deepEqual(await page.evaluate('window.__preview[0]'), { step: '3', playing: true, read: { para: true, dimmed: 6, label: 'Stop' } });
     // Esc stops the preview, and the file is not changed
     await press(page, 'Escape');
     await frames(page);
-    assert.equal((await state()).playing, false);
+    assert.equal(await page.evaluate(`document.documentElement.classList.contains('beeson-previewing')`), false);
     assert.equal(await dimmed(page), 0);
     // a row shown with the slide has Play From dimmed
     await click(page, await rowPart(page, 'Code boxes', '.chip'));

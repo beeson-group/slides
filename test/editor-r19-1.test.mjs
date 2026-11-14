@@ -34,10 +34,10 @@ const pendings = (page) => page.evaluate(`document.querySelectorAll('.reveal .sl
 
 // the editor on slide n of the demo deck, served over HTTP, with a record of the slides shown
 async function load(t, platform, n = 0) {
-  const text = readFileSync('index.html', 'utf8');
+  const text = readFileSync('test-deck.html', 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
@@ -72,7 +72,7 @@ for (const platform of PLATFORMS) {
       const page = await load(t, platform, n);
       const at = `on slide ${n + 1} with a pause of ${pause} ms`;
       await emptied(page, pause);
-      const target = n === 0 ? 'section.present .block h1' : 'section.present h2';
+      const target = n === 0 ? 'section.present .title-text h1' : 'section.present h2';
       await click(page, target);
       await sleep(700);
       assert.deepEqual(await page.evaluate(`(() => { const t = document.querySelector(${js(target)}); const a = getSelection().anchorNode; return { slide: Reveal.getIndices().h, caret: !!a && t.contains(a) }; })()`), { slide: n, caret: true }, `the click does not leave the caret in the text ${at}`);
@@ -106,7 +106,8 @@ for (const platform of PLATFORMS) {
 }
 
 // D2 of review part 2 of round 7: a new text box left empty after an undo of its first letter left
-// the first letter on the redo stack, whose redo wrote a box without an insert under it
+// the first letter on the redo stack, whose redo wrote a box without an insert under it. the box
+// left empty is written as an empty paragraph in the entry of its insert
 for (const platform of PLATFORMS) {
   test(`a text box left empty after an undo of its first letter leaves nothing to redo (${platform})`, async (t) => {
     for (const leaveBy of ['Escape', 'click']) {
@@ -128,12 +129,15 @@ for (const platform of PLATFORMS) {
         await press(page, 'Escape');
       } else await click(page, { x: 1580, y: 600 });
       await sleep(300);
-      assert.equal(await pendings(page), 0, `the box is kept after ${leaveBy}`);
-      assert.equal(await render(page), older);
+      assert.equal(await pendings(page), 0, `the box is held outside the file after ${leaveBy}`);
+      const left = await render(page);
+      assert.equal(left.match(/<p( [^>]*)?><\/p>/g)?.length, 1, `the empty box is not written after ${leaveBy}`);
       const l = await labels(page);
-      assert.deepEqual({ redo: l.redoOn, undo: l.undo }, { redo: false, undo: 'Undo Typing' }, `the history after the box is left by ${leaveBy}: ${js(l)}`);
+      assert.deepEqual({ redo: l.redoOn, undo: l.undo }, { redo: false, undo: 'Undo Insert Text Box' }, `the history after the box is left by ${leaveBy}: ${js(l)}`);
       await redo(page);
-      assert.equal(await render(page), older, `a redo after the box is left by ${leaveBy} changes the file`);
+      assert.equal(await render(page), left, `a redo after the box is left by ${leaveBy} changes the file`);
+      await undo(page);
+      assert.equal(await render(page), older);
       await undo(page);
       await byteExact(page);
       assert.deepEqual(errors(page), []);

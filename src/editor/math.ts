@@ -1,7 +1,7 @@
 // the formulas of the page, read from MathJax: the TeX of each mjx-container with its delimiters,
 // and the typesetting of a host again after a formula in it was changed
 
-import { fileIndexes, notePlaced } from './layers.ts';
+import { fileIndexes, notePlaced } from './shown-steps.ts';
 
 export type MathInfo = { tex: string; open: string; close: string; display: boolean };
 export type MathLookup = (el: Element) => MathInfo | null;
@@ -91,7 +91,7 @@ export const mathReady = (): Promise<unknown> => window.MathJax?.startup?.promis
 
 // the content of host as HTML with each formula as its TeX between its delimiters, i.e. as the
 // file has it, and host set to such a content and typeset again. the pair is used by the history
-// to put a block back, since the formulas of a block cannot be restored from its HTML
+// to put a text element back, since the formulas of a text element cannot be restored from its HTML
 export function contentWithTex(host: Element, replace?: ReadonlyMap<Element, string>): string {
   return withTex(host, replace).innerHTML;
 }
@@ -148,7 +148,7 @@ export function contentWithInline(host: Element, range: Range, tex: string): { c
   const copy = withTex(host, undefined, (_root, at) => {
     const start = at(sn);
     const end = at(en);
-    if (!start || !end) throw new Error('the caret is not in the text of the block');
+    if (!start || !end) throw new Error('the caret is not in a text element');
     const r = document.createRange();
     r.setStart(start, so);
     r.setEnd(end, eo);

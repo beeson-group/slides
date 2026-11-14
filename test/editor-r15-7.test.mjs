@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 const PLATFORMS = ['mac', 'other'];
@@ -103,7 +103,7 @@ const state = (page) => page.evaluate(`(() => {
   const a = document.activeElement;
   return {
     slides: document.querySelectorAll('.reveal .slides > section').length,
-    blocks: Reveal.getCurrentSlide().children.length,
+    children: Reveal.getCurrentSlide().children.length,
     selected: window.BeesonEditor.selection().map((el) => el.tagName.toLowerCase()),
     focus: a === document.body ? 'body' : a.tagName.toLowerCase() + (a.isContentEditable ? ' editable' : ''),
     words: getSelection().toString(),
@@ -173,18 +173,18 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+D');
     await settle(page);
     assert.equal(await prevented(page, 'd'), true, 'the browser does not get Mod+D');
-    assert.equal((await state(page)).slides, 15, 'Mod+D in a text does not duplicate the slide');
+    assert.equal((await state(page)).slides, 13, 'Mod+D in a text does not duplicate the slide');
     assert.equal(await render(page), copied, 'Mod+D in a text does not duplicate the block of the caret');
     assert.equal(await undoLabel(page), 'Undo Duplicate');
     await checkEdit(page, `r15-7-duplicate-${platform}.html`);
     await caret();
     await press(page, 'Mod+Shift+A');
     await settle(page);
-    assert.deepEqual(await state(page), { slides: 15, blocks: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
     assert.equal(await prevented(page, 'a'), true);
     await caret();
     await choose(page, 'Edit', 'Deselect');
-    assert.deepEqual(await state(page), { slides: 15, blocks: 7, selected: [], focus: 'body', words: '' });
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: [], focus: 'body', words: '' });
     // Esc in a text still selects its block
     await caret();
     await press(page, 'Escape');
@@ -208,7 +208,7 @@ for (const platform of PLATFORMS) {
     await press(page, K.press);
     await settle(page);
     const s = await state(page);
-    assert.equal(s.slides, 15);
+    assert.equal(s.slides, 13);
     assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelector(':scope > p').textContent.includes('matplotlib')`), false);
     await checkEdit(page, `r15-7-delete-${platform}.html`);
     assert.deepEqual(errors(page), []);
@@ -220,7 +220,7 @@ for (const platform of PLATFORMS) {
     await watchKeys(page);
     await newFormula(page);
     const inserted = await render(page);
-    assert.deepEqual(await state(page), { slides: 15, blocks: 7, selected: ['div'], focus: 'div editable', words: '' });
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: ['div'], focus: 'div editable', words: '' });
     assert.deepEqual(await itemsIn(page, 'Edit', ['Duplicate', 'Deselect', 'Delete']), {
       Duplicate: { keys: K.duplicate, dimmed: false },
       Deselect: { keys: K.deselect, dimmed: false },
@@ -229,7 +229,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+D');
     await settle(page);
     const s = await state(page);
-    assert.equal(s.slides, 15, 'Mod+D does not duplicate the slide');
+    assert.equal(s.slides, 13, 'Mod+D does not duplicate the slide');
     assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelectorAll(':scope > div.math').length`), 2);
     assert.equal(await prevented(page, 'd'), true);
     await checkEdit(page, `r15-7-formula-${platform}.html`, inserted);
@@ -298,7 +298,7 @@ for (const platform of PLATFORMS) {
     await click(page, row);
     await press(page, K.press);
     await settle(page);
-    assert.equal((await state(page)).slides, 14);
+    assert.equal((await state(page)).slides, 12);
     assert.equal(await undoLabel(page), 'Undo Delete Slide');
     await undo(page);
     await settle(page);
@@ -358,7 +358,7 @@ for (const platform of PLATFORMS) {
     await click(page, await rect(page, `document.querySelectorAll('.beeson-edit-nav .row')[3]`));
     await settle(page);
     await choose(page, 'Edit', 'Delete');
-    assert.equal((await state(page)).slides, 14);
+    assert.equal((await state(page)).slides, 12);
     assert.equal(await undoLabel(page), 'Undo Delete Slide');
     assert.equal(await firstEditItem(page), 'Undo Delete Slide');
     await undo(page);
@@ -378,7 +378,7 @@ for (const platform of PLATFORMS) {
     await click(page, await below(page));
     await settle(page);
     await choose(page, 'Edit', 'Duplicate');
-    assert.equal((await state(page)).slides, 16);
+    assert.equal((await state(page)).slides, 14);
     assert.equal(await undoLabel(page), 'Undo Duplicate Slide');
     await checkEdit(page, `r15-7-duplicate-slide-${platform}.html`);
     assert.deepEqual(errors(page), []);
@@ -407,8 +407,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-const card = (page, name) => page.evaluate(`(() => { const d = document.querySelector('dialog.beeson-edit-card.${name}'); return d && !d.hidden && d.open ? { text: d.textContent, code: d.querySelector('code')?.textContent ?? null, buttons: [...d.querySelectorAll('.row button')].map((b) => b.textContent) } : null; })()`);
-const cardButton = (page, name, label) => rect(page, `[...document.querySelectorAll('dialog.beeson-edit-card.${name} .row button')].find((b) => b.textContent === ${js(label)})`);
+const card = (page, name) => page.evaluate(`(() => { const d = document.querySelector('dialog.beeson-edit-dialog.${name}'); return d && !d.hidden && d.open ? { text: d.textContent, code: d.querySelector('code')?.textContent ?? null, buttons: [...d.querySelectorAll('.row button')].map((b) => b.textContent) } : null; })()`);
+const cardButton = (page, name, label) => rect(page, `[...document.querySelectorAll('dialog.beeson-edit-dialog.${name} .row button')].find((b) => b.textContent === ${js(label)})`);
 
 // File > Export To > PowerPoint… opens the item of the submenu Export To of the File menu
 async function exportPowerPoint(page) {
@@ -430,13 +430,13 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await exportPowerPoint(page), ['PDF…', 'HTML…', 'PowerPoint…']);
     const shown = await card(page, 'pptx');
     assert.ok(shown, 'the card of PowerPoint… is not open');
-    assert.equal(shown.code, 'npm run pptx');
-    assert.match(shown.text, /saved index\.html/);
+    assert.equal(shown.code, 'npm run pptx -- test-deck.html');
+    assert.match(shown.text, /saved test-deck\.html/);
     assert.deepEqual(shown.buttons, ['Copy Command', 'Close']);
     await page.evaluate(`navigator.clipboard.writeText('nothing').then(() => true)`);
     await click(page, await cardButton(page, 'pptx', 'Copy Command'));
     await settle(page);
-    assert.equal(await page.evaluate('navigator.clipboard.readText()'), 'npm run pptx');
+    assert.equal(await page.evaluate('navigator.clipboard.readText()'), 'npm run pptx -- test-deck.html');
     assert.ok(await card(page, 'pptx'), 'Copy Command closes the card');
     await press(page, 'Escape');
     await settle(page);
@@ -469,7 +469,7 @@ for (const platform of PLATFORMS) {
     await exportPowerPoint(page);
     await click(page, await cardButton(page, 'ask', 'Export the saved file'));
     await settle(page);
-    assert.equal((await card(page, 'pptx'))?.code, 'npm run pptx');
+    assert.equal((await card(page, 'pptx'))?.code, 'npm run pptx -- test-deck.html');
     await press(page, 'Escape');
     await settle(page);
     assert.equal(await render(page), edited, 'the edits are not kept');

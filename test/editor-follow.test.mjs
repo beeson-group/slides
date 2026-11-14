@@ -1,6 +1,6 @@
 // the file of the deck followed while the editor is open, on a copy of the demo deck that a test
 // changes on disk, as an agent or a git pull does: the page is loaded again after a change without
-// unsaved edits, a save merges the edits into a changed file, a card asks at a conflict, and the
+// unsaved edits, a save merges the edits into a changed file, a dialog asks at a conflict, and the
 // file is written again without a picker after a reload of the editor
 
 import assert from 'node:assert/strict';
@@ -11,11 +11,11 @@ import { test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 
-const deckText = readFileSync('index.html', 'utf8');
+const deckText = readFileSync('test-deck.html', 'utf8');
 const ready = 'window.BeesonEditor && window.BeesonEditor.ready.then(() => true)';
 // the page after a reload of its own, which a test marks before with window.__before. the editor is
 // ready once the message and the marks of the reload are shown, after its file is read again
-const reloaded = '!window.__before && !!window.BeesonEditor && window.BeesonEditor.ready.then(() => window.BeesonEditor.status().blocks > 0)';
+const reloaded = '!window.__before && !!window.BeesonEditor && window.BeesonEditor.ready.then(() => window.BeesonEditor.status().texts > 0)';
 
 function replaced(oldText, newText) {
   assert.equal(deckText.split(oldText).length, 2, `${oldText} is not unique in index.html`);
@@ -54,7 +54,7 @@ async function servedCopy(t) {
   await page.goto(`${server.origin}/index.html?edit&still`);
   await page.waitFor(deckSettled);
   await page.waitFor(ready);
-  await page.waitFor('window.BeesonEditor.status().blocks > 0');
+  await page.waitFor('window.BeesonEditor.status().texts > 0');
   const edit = (from, to) => writeFileSync(file, readFileSync(file, 'utf8').replace(from, to));
   return { page, file, edit, disk: () => readFileSync(file, 'utf8') };
 }
@@ -122,8 +122,8 @@ test('a save of a text that the file changed too asks which to keep, and Cancel 
   edit('<h2>Equations are first class citizens</h2>', '<h2>Equations, by an agent</h2>');
   const both = disk();
   await until(page, 'window.BeesonEditor.status().stale !== null');
-  const card = `(() => { const c = document.querySelector('dialog.beeson-edit-card.conflict'); return c && c.open ? { head: c.querySelector('h3').textContent, text: c.querySelector('p').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent) } : null; })()`;
-  const press = (label) => page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-card.conflict button')].find((b) => b.textContent === ${JSON.stringify(label)}).click()`);
+  const card = `(() => { const c = document.querySelector('dialog.beeson-edit-dialog.conflict'); return c && c.open ? { head: c.querySelector('h3').textContent, text: c.querySelector('p').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent) } : null; })()`;
+  const press = (label) => page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-dialog.conflict button')].find((b) => b.textContent === ${JSON.stringify(label)}).click()`);
   void page.evaluate('window.BeesonEditor.save()');
   await until(page, `${card} !== null`);
   const shown = await page.evaluate(card);

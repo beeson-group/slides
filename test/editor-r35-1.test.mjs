@@ -96,11 +96,11 @@ async function chooseLayout(page, layout) {
 for (const platform of PLATFORMS) {
   test(`the Slide pane after Mod+A in the navigator is the pane built for every slide (${platform})`, async () => {
     const page = await open(platform);
-    for (const n of [4, 15, 5]) {
+    for (const n of [4, 13, 5]) {
       await row(page, n);
       await press(page, 'Mod+A');
       await sleep(100);
-      assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row[aria-selected="true"]').length`), 15, `Mod+A on slide ${n} selects every slide`);
+      assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row[aria-selected="true"]').length`), 13, `Mod+A on slide ${n} selects every slide`);
       assert.equal(await current(page), n);
       const built = await same(page, `Mod+A on slide ${n}`);
       assert.deepEqual(built.sections, ['Appearance'], `Mod+A on slide ${n}`);
@@ -129,7 +129,7 @@ for (const platform of PLATFORMS) {
     const page = await open(platform);
     for (const [a, b, layout, sections] of [
       [6, 7, 'section', ['Backdrop', 'Appearance', '(untitled)']],
-      [14, 15, 'closing', ['Backdrop', 'Appearance']],
+      [12, 13, 'closing', ['Backdrop', 'Appearance']],
     ]) {
       await row(page, a);
       await row(page, b, 'Mod');
