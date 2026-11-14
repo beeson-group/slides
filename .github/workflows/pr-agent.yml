@@ -18,13 +18,6 @@ permissions:
   issues: write
   pull-requests: write
 
-# a new push to a pull request cancels the review of the commit before it, since it would describe
-# and review a head that no longer exists. The issue number of a pull request is its number, hence
-# a run that a comment started shares the group with the runs of the same pull request
-concurrency:
-  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   pr_agent_job:
     # a bot does not review the work of a bot. Anyone can comment on a pull request of a public
@@ -40,6 +33,15 @@ jobs:
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # a new push to a pull request cancels the review of the commit before it, since it would
+    # describe and review a head that no longer exists. The issue number of a pull request is
+    # its number, hence a run that a comment started shares the group with the runs of the same
+    # pull request. The group sits on the job and not on the workflow, since the workflow gives
+    # it to every run that is started, also to one whose job a comment without a command skips,
+    # and such a run would cancel the review that is running
+    concurrency:
+      group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+      cancel-in-progress: true
     steps:
       # the association of a comment and the role of the sender say nothing about their access to
       # this repository, hence the effective permission is checked before the step that holds the
@@ -61,12 +63,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GLM-5.3 reviews, and Qwen3.8-Flash-Next takes a call that fails. The gateway takes the
           # reasoning of a model out of the answer, hence the commands receive clean JSON. A
-          # prompt is fitted into 64k tokens, and a call may think for up to five minutes
+          # prompt is fitted into 64k tokens, and a call may think for up to ten minutes
           config.model: "openai/glm-5"
           config.fallback_models: '["openai/qwen3"]'
           config.custom_model_max_tokens: "1000000"
           config.max_model_tokens: "64000"
-          config.ai_timeout: "300"
+          config.ai_timeout: "600"
           OPENAI.API_BASE: "https://ellm.nrp-nautilus.io/v1"
           OPENAI.KEY: ${{ secrets.NRP_API_KEY }}
           github_action_config.auto_describe: "true"
