@@ -322,17 +322,17 @@ test('Beeson.remount, Beeson.preview, and Beeson.fitWindow draw a backdrop for t
   await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
   const out = await page.evaluate(`(async () => {
-    const el = document.querySelector('.backdrop[data-backdrop="nest"]');
+    const el = document.querySelector('.backdrop[data-backdrop="tubes"][data-cx="0.97"]');
     const { h, v } = Reveal.getIndices(el.closest('section'));
     Reveal.slide(h, v);
     const before = Beeson.backdrops.find((b) => b.el === el).trajectories.length;
-    el.dataset.backdrop = 'tubes';
+    el.dataset.backdrop = 'wideRibbon';
     const o = Beeson.remount(el);
     await o.ready;
     const after = Beeson.backdrops.filter((b) => b.el === el);
     const div = document.createElement('div');
     div.style.cssText = 'position: fixed; left: 0; top: 0; width: 192px; height: 108px';
-    div.dataset.backdrop = 'nest';
+    div.dataset.backdrop = 'tubes';
     div.dataset.half = '0.5';
     div.dataset.cx = '0.97';
     document.body.append(div);
@@ -346,7 +346,7 @@ test('Beeson.remount, Beeson.preview, and Beeson.fitWindow draw a backdrop for t
   })()`);
   assert.equal(out.entries, 1);
   assert.equal(out.same, true);
-  assert.ok(out.trajectories > out.before, `${out.trajectories} trajectories of tubes, ${out.before} of nest`);
+  assert.ok(out.trajectories > out.before, `${out.trajectories} trajectories of wideRibbon, ${out.before} of tubes`);
   assert.equal(out.done, true);
   assert.equal(out.canvases, 2);
   assert.equal(out.previewIn, false);

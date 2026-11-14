@@ -25,25 +25,19 @@ const hooks = (): Hooks => (window as unknown as { Beeson?: Hooks }).Beeson ?? {
 export const DRAWING = ['data-backdrop', 'data-trajectories', 'data-trajectories-select', 'data-trajectories-color', 'data-trajectories-ramp', 'data-trajectories-colormap', 'data-trajectories-shade', 'data-heads'];
 // the names of the drawings in the list of Media > Backdrop… and wherever a drawing is named, for the
 // owner to confirm. a drawing of a file is named by its file, and a drawing of demo/broucke-sample.js
-// by the numbers of the Broucke families it selects, which are chosen in the entry Broucke Families
+// by its pick of the Family, Frame, and Branch popups of the entry Broucke Families
 export const NAMES = {
-  nest: 'Lyapunov Families',
   tubes: 'Cislunar Manifolds',
   wideRibbon: 'Earth Manifolds',
   logo: 'Beeson Logo',
   logoPart: 'Part of the Beeson Logo',
   broucke: 'Broucke Families',
-  family: (numbers: string[]) => `${numbers.length === 1 ? 'Family' : 'Families'} ${numbers.length > 1 ? `${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}` : numbers[0]}`,
-  inertial: 'Inertial',
-  both: 'Both Frames',
-  none: 'No Trajectories',
+  custom: 'Custom',
 };
-export const BUILT_IN: Record<string, string> = { nest: NAMES.nest, tubes: NAMES.tubes, wideRibbon: NAMES.wideRibbon };
-// the files of the template that the list draws from, and the families of demo/broucke-sample.js
+export const BUILT_IN: Record<string, string> = { tubes: NAMES.tubes, wideRibbon: NAMES.wideRibbon };
+// the files of the template that the list draws from
 const LOGO_FILE = 'brand/transfer.js';
 const BROUCKE_FILE = 'demo/broucke-sample.js';
-const BROUCKE_FAMILIES = ['7', '11'];
-const FRAMES = ['pulsating', 'inertial'];
 // the attributes of the motion of a drawing in the demo deck, which an entry of the list writes
 const MOTION = ['data-duration', 'data-stagger'];
 // the labels of a built-in backdrop, with the text and the offsets of the demo deck
@@ -97,60 +91,33 @@ const valueOf = (arg: unknown) => (arg as { value?: unknown } | undefined)?.valu
 
 const isFile = (path: string, file: string) => path === file || path.endsWith(`/${file}`);
 
+// a pick of the Family, Frame, and Branch popups of a Broucke drawing. branch is set for family 7 alone
+export type Pick = { family: string; frame: string; branch?: string };
+export const FAMILIES = ['7', '11', '7/11'];
+export const FRAMES = ['Rotating', 'Inertial'];
+export const BRANCHES = ['Periapsis', 'Apoapsis'];
+// the selection written by each pick. Rotating is the rotating-pulsating frame, apart from 7A, which is
+// drawn in the plain rotating frame, and Inertial is centered on m2 for family 7 and on the barycenter
+// for the others
+const SPECS: Record<string, string> = {
+  '7 Rotating Periapsis': 'family=7,branch=periapsis,frame=pulsating',
+  '7 Rotating Apoapsis': 'family=7,branch=apoapsis,frame=rotating',
+  '7 Inertial Periapsis': 'family=7,branch=periapsis,frame=inertial-m2',
+  '7 Inertial Apoapsis': 'family=7,branch=apoapsis,frame=inertial-m2',
+  '11 Rotating': 'family=11,frame=pulsating',
+  '11 Inertial': 'family=11,frame=inertial',
+  '7/11 Rotating': 'frame=pulsating',
+  '7/11 Inertial': 'frame=inertial',
+};
+const keyOf = (p: Pick) => [p.family, p.frame, p.branch].filter(Boolean).join(' ');
+
 // a term of data-trajectories-select, as the theme reads it in src/trajectories.ts
 const TERM = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/;
-const OPS: Record<string, string> = { '=': '', '<': 'Below', '<=': 'at Most', '>': 'Above', '>=': 'at Least' };
-const title = (w: string) => (w.length > 1 ? w[0].toUpperCase() + w.slice(1) : w);
-const valuesOf = (v: string) => [...new Set(v.split('|').map((s) => s.trim()))].sort();
-
-// the groups of spec, a value of data-trajectories-select, each as the pairs of a family and a frame of
-// demo/broucke-sample.js that it selects and its other terms sorted. groups with the same other terms
-// are merged, and a group without a pair is left out, thus two values that draw the same trajectories by
-// family and frame have the same groups
-function groupsOf(spec: string | null): { pairs: string[]; rest: string[] }[] {
-  const merged = new Map<string, Set<string>>();
-  for (const group of spec?.trim() ? spec.split(';') : ['']) {
-    let fams = BROUCKE_FAMILIES, frames = FRAMES;
-    const rest = new Set<string>();
-    for (const t of group.split(',').filter((t) => t.trim())) {
-      const m = TERM.exec(t);
-      if (m && m[2] === '=' && m[1] === 'family') fams = fams.filter((f) => valuesOf(m[3]).includes(f));
-      else if (m && m[2] === '=' && m[1] === 'frame') frames = frames.filter((f) => valuesOf(m[3]).includes(f));
-      else rest.add(m ? `${m[1]}${m[2]}${m[2] === '=' ? valuesOf(m[3]).join('|') : m[3]}` : t.trim());
-    }
-    const key = [...rest].sort().join(',');
-    const pairs = merged.get(key) ?? new Set<string>();
-    for (const f of fams) for (const fr of frames) pairs.add(`${f} ${fr}`);
-    merged.set(key, pairs);
-  }
-  return [...merged].filter(([, p]) => p.size).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([key, p]) => ({ pairs: [...p].sort(), rest: key ? key.split(',') : [] }));
-}
-
-// a term of data-trajectories-select in words, e.g. Thin 1 for thin=1
-function termWords(term: string): string {
-  const m = TERM.exec(term);
-  if (!m) return term;
-  return [title(m[1]), OPS[m[2]], m[2] === '=' ? m[3].split('|').map(title).join(' or ') : m[3]].filter(Boolean).join(' ');
-}
-
-// the name of the Broucke families that spec, a value of data-trajectories-select, selects, in the Family
-// popup of the Backdrop pane: the families of each set of frames, followed by the frames and the
-// other terms in words, e.g. Family 7 and Family 11 (Inertial). two values get one name only when
-// sameSelection holds for them
-export function familyName(spec: string | null): string {
-  const groups = groupsOf(spec).map(({ pairs, rest }) => {
-    const parts = new Map<string, string[]>();
-    for (const f of BROUCKE_FAMILIES) {
-      const frames = FRAMES.filter((fr) => pairs.includes(`${f} ${fr}`)).join('|');
-      if (frames) parts.set(frames, [...(parts.get(frames) ?? []), f]);
-    }
-    return [...parts].map(([frames, numbers]) => {
-      const words = [frames === 'inertial' ? NAMES.inertial : frames === 'pulsating' ? '' : NAMES.both, ...rest.map(termWords)].filter(Boolean);
-      return `${NAMES.family(numbers)}${words.length ? ` (${words.join(', ')})` : ''}`;
-    }).join(' and ');
-  });
-  return groups.join(' or ') || NAMES.none;
-}
+// spec with its groups, the terms of each group, and the values of each term sorted
+const normal = (spec: string | null): string => (spec ?? '').split(';').map((g) => g.split(',').map((t) => {
+  const m = TERM.exec(t);
+  return m ? `${m[1]}${m[2]}${m[2] === '=' ? [...new Set(m[3].split('|').map((v) => v.trim()))].sort().join('|') : m[3]}` : t.trim();
+}).filter(Boolean).sort().join(',')).filter(Boolean).sort().join(';');
 
 // the trajectories of the file of the Broucke drawing el as the theme read them, or null before the file
 // is loaded or when it is missing. they are kept by the URL of the file for a backdrop drawn again
@@ -174,37 +141,39 @@ function drawn(fileTrajectories: TrajectoryData[], spec: string | null): Set<Tra
 const sameSet = <T>(a: Set<T>, b: Set<T>) => a.size === b.size && [...a].every((x) => b.has(x));
 
 // true when the values a and b of data-trajectories-select draw the same trajectories of the file of el, or
-// without its trajectories, the same trajectories of demo/broucke-sample.js by family and frame with the same
-// other terms
-export function sameSelection(a: string | null, b: string | null, el?: Element | null): boolean {
+// without its trajectories, when they have the same terms. two values that draw nothing are the same only
+// when they have the same terms
+function sameSelection(a: string | null, b: string | null, el?: Element | null): boolean {
   const fileTrajectories = fileTrajectoriesOf(el);
-  return fileTrajectories ? sameSet(drawn(fileTrajectories, a), drawn(fileTrajectories, b)) : JSON.stringify(groupsOf(a)) === JSON.stringify(groupsOf(b));
+  if (!fileTrajectories) return normal(a) === normal(b);
+  const x = drawn(fileTrajectories, a);
+  return sameSet(x, drawn(fileTrajectories, b)) && (x.size > 0 || normal(a) === normal(b));
 }
 
-// the name of spec, a value of data-trajectories-select, for the backdrop el: No Trajectories when it draws no
-// trajectory of the file of el, and the name of the families and frames of the trajectories it draws when it
-// draws every trajectory of these, whatever its terms. thus two values that draw the same trajectories get one
-// name, and two that draw others never do
-export function selectionName(spec: string | null, el?: Element | null): string {
-  const fileTrajectories = fileTrajectoriesOf(el);
-  if (!fileTrajectories) return familyName(spec);
-  const chosen = drawn(fileTrajectories, spec);
-  if (!chosen.size) return NAMES.none;
-  const pairs = [...new Set([...chosen].map((r) => `family=${String(r.family)},frame=${String(r.frame)}`))];
-  const whole = pairs.join(';');
-  const known = groupsOf(whole)[0]?.pairs.length === pairs.length;
-  return known && sameSet(drawn(fileTrajectories, whole), chosen) ? familyName(whole) : familyName(spec);
+// the pick of spec, a value of data-trajectories-select of the Broucke drawing el, or null for a selection
+// that draws other trajectories than every pick, which is shown as Custom
+function pickOf(spec: string | null, el?: Element | null): Pick | null {
+  const key = Object.keys(SPECS).find((k) => sameSelection(SPECS[k], spec, el));
+  if (!key) return null;
+  const [family, frame, branch] = key.split(' ');
+  return { family, frame, branch };
 }
+
+// the pick of the Broucke drawing el, or null for Custom or another drawing
+export const brouckePick = (el: Element | null): Pick | null => (el && isBroucke(el) ? pickOf(el.getAttribute('data-trajectories-select'), el) : null);
 
 // the name of a drawing of the attributes attrs: the name of its built-in backdrop, of the logo, or of the
-// Broucke families it selects, or else the name of its file
+// pick of a Broucke drawing, e.g. Broucke 7 (Rotating, Apoapsis), or else the name of its file
 function nameOf(attrs: Record<string, string | undefined>, el?: Element): string {
   const builtIn = attrs['data-backdrop'];
   if (builtIn !== undefined) return BUILT_IN[builtIn] ?? builtIn;
   const file = attrs['data-trajectories'] ?? '';
   const spec = attrs['data-trajectories-select'] ?? '';
   if (isFile(file, LOGO_FILE)) return spec.trim() ? NAMES.logoPart : NAMES.logo;
-  if (isFile(file, BROUCKE_FILE)) return `Broucke ${selectionName(spec, el)}`;
+  if (isFile(file, BROUCKE_FILE)) {
+    const p = pickOf(spec, el);
+    return p ? `Broucke ${p.family} (${[p.frame, p.branch].filter(Boolean).join(', ')})` : `Broucke (${NAMES.custom})`;
+  }
   return file.split('/').pop()?.replace(/\.(js|json)$/, '') || 'Backdrop';
 }
 
@@ -274,52 +243,27 @@ const drawingEdit = (attrs: Record<string, string>): Record<string, string | nul
 // for a drawing of the deck whose file is not found
 type Entry = { key: string; name: string; attrs: Record<string, string>; motion: Record<string, string>; view: View | null; size: [number, number] | null; missing?: boolean };
 
-// the families of demo/broucke-sample.js in both of its frames, as values of data-trajectories-select
-const FAMILY_SPECS = BROUCKE_FAMILIES.flatMap((n) => [`frame=pulsating,family=${n}`, `frame=inertial,family=${n}`]);
-// the fixed choices of the Family popup: each family in each frame, then all the families of each
-// frame, written as the backdrop of the demo deck writes them
-const FIXED_SPECS = [...FAMILY_SPECS, ...FRAMES.map((fr) => `frame=${fr}`)];
-
 // the drawings of the demo deck, with their windows and the size of their boxes, and the entry
-// Broucke Families, which draws the first family with the colors and the motion of the backdrop of
-// the demo deck, fitted to its box as it is. its file is the one of the first Broucke drawing of the
-// deck whose file is found, if any, so that a deck in another folder finds it
+// Broucke Families, which draws family 7 on its periapsis branch in the pulsating frame with the colors
+// and the motion of the Broucke backdrops of the demo deck, fitted to its box as it is. its file is the
+// one of the first Broucke drawing of the deck whose file is found, if any, so that a deck in another
+// folder finds it
 function builtIn(app: App): Entry[] {
   const file = brouckeFiles(app).find((f) => found.get(urlOf(f)) !== false) ?? BROUCKE_FILE;
   return [
     { key: 'logo', name: NAMES.logo, attrs: { 'data-trajectories': LOGO_FILE }, motion: { 'data-duration': '20' }, view: { cx: -0.84, cy: 0, half: 1.128 }, size: [1920, 1080] },
-    { key: 'nest', name: NAMES.nest, attrs: { 'data-backdrop': 'nest' }, motion: {}, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
     { key: 'tubes', name: NAMES.tubes, attrs: { 'data-backdrop': 'tubes' }, motion: {}, view: { cx: 0.42, cy: 0, half: 0.6 }, size: [1920, 1080] },
     { key: 'wideRibbon', name: NAMES.wideRibbon, attrs: { 'data-backdrop': 'wideRibbon' }, motion: {}, view: { cx: 0.2, cy: 0, half: 1.3 }, size: [1920, 1080] },
     {
       key: 'broucke', name: NAMES.broucke, view: null, size: null, motion: { 'data-duration': '3', 'data-stagger': '0.6' },
-      attrs: { 'data-trajectories': file, 'data-trajectories-select': FAMILY_SPECS[0], 'data-trajectories-color': 'family', 'data-trajectories-ramp': 'e', 'data-trajectories-colormap': 'viridis' },
+      attrs: { 'data-trajectories': file, 'data-trajectories-select': SPECS['7 Rotating Periapsis'], 'data-trajectories-color': 'family', 'data-trajectories-ramp': 'e', 'data-trajectories-colormap': 'viridis' },
     },
   ];
 }
 
-// true when the backdrop el is drawn by entry, which for Broucke Families is any of its families
+// true when the backdrop el is drawn by entry, which for Broucke Families is any Broucke drawing
 export const drawnBy = (entry: Entry, el: Element): boolean =>
   entry.key === 'broucke' ? isBroucke(el) : Object.entries(entry.attrs).every(([k, v]) => el.getAttribute(k) === v);
-
-// the choices of the Family popup of el, as values of data-trajectories-select with their names: the
-// fixed choices, which are listed whatever the deck draws, then each other selection of the file in
-// the deck, once per drawing. a choice is the value whose own terms give its name, e.g. frame=pulsating before begin=ray
-export function families(app: App, el: Element): { spec: string | null; name: string }[] {
-  const out: { spec: string | null; name: string }[] = [];
-  const add = (spec: string | null) => {
-    const name = selectionName(spec, el);
-    const same = out.find((f) => sameSelection(f.spec, spec, el));
-    if (!same) out.push({ spec, name });
-    else if (familyName(same.spec) !== same.name && familyName(spec) === same.name) same.spec = spec;
-  };
-  FIXED_SPECS.forEach(add);
-  for (const b of app.slides().querySelectorAll<HTMLElement>('.backdrop')) {
-    if (open(app, b) && isBroucke(b)) add(app.doc.tagState(b).attrs['data-trajectories-select'] ?? null);
-  }
-  if (isBroucke(el)) add(el.getAttribute('data-trajectories-select'));
-  return out;
-}
 
 // the files of the Broucke drawings of the deck, in the order of the deck, then each file of one that
 // an earlier call saw, so that the entry Broucke Families keeps its file once no drawing has it
@@ -670,6 +614,28 @@ export function commands(): Command[] {
       writeWindow(app, el, { half: Number((o.view.half * by).toPrecision(4)) });
     },
   });
+  // arg { value, el }: a value of the Family, Frame, or Branch popup of a Broucke drawing, which replaces
+  // its whole selection. a family is picked in the frame of the drawing, and family 7 on its periapsis
+  // branch. Frame and Branch are not picked on a Custom selection
+  const pick = (id: 'family' | 'frame' | 'branch', label: string): Command => ({
+    id: `backdrop.${id}`,
+    label: `Backdrop ${label}`,
+    undoable: true,
+    undo: label,
+    enabled: (app) => isBroucke(targetOf(app, undefined)),
+    run: (app, arg) => {
+      const el = targetOf(app, arg);
+      const v = String(valueOf(arg));
+      if (!el || !isBroucke(el)) return;
+      const now = brouckePick(el);
+      if (now?.[id] === v) return;
+      const next = id === 'family' ? { family: v, frame: now?.frame ?? 'Rotating', branch: v === '7' ? 'Periapsis' : undefined } : now && { ...now, [id]: v };
+      const spec = next && SPECS[keyOf(next)];
+      if (!spec) return;
+      endPreview();
+      app.doc.setTag(el, { attrs: { 'data-trajectories-select': spec } }, 'drawing');
+    },
+  });
   return [
     field('cx', 'Center X', 'cx'),
     field('cy', 'Center Y', 'cy'),
@@ -730,7 +696,7 @@ export function commands(): Command[] {
       // backdrops, which are drawn in one frame, the window, the labels, and the motion are kept. a
       // drawing of a file is drawn in a frame of its own, hence where the old or the new drawing is
       // drawn from a file, the window and the motion of the entry are written as its tile in the
-      // gallery writes them. Broucke Families on a backdrop of a family keeps its family
+      // gallery writes them. Broucke Families on a Broucke drawing keeps its selection
       id: 'backdrop.builtIn',
       label: 'Backdrop Drawing',
       undoable: true,
@@ -750,23 +716,9 @@ export function commands(): Command[] {
         app.doc.setTag(el, { attrs: Object.fromEntries(changed) }, 'drawing');
       },
     },
-    {
-      // arg { value, el }: a value of data-trajectories-select of the Family popup, or null for every
-      // trajectory of the file
-      id: 'backdrop.family',
-      label: 'Backdrop Family',
-      undoable: true,
-      undo: 'Family',
-      enabled: (app) => isBroucke(targetOf(app, undefined)),
-      run: (app, arg) => {
-        const el = targetOf(app, arg);
-        const v = valueOf(arg);
-        const value = typeof v === 'string' ? v : null;
-        if (!el || !isBroucke(el) || !families(app, el).some((f) => f.spec === value)) return;
-        endPreview();
-        if (!sameSelection(el.getAttribute('data-trajectories-select'), value, el)) app.doc.setTag(el, { attrs: { 'data-trajectories-select': value } }, 'drawing');
-      },
-    },
+    pick('family', 'Family'),
+    pick('frame', 'Frame'),
+    pick('branch', 'Branch'),
     {
       // arg { value, el }: a colormap of the trajectories of a file, or null for the palette
       id: 'backdrop.colormap',

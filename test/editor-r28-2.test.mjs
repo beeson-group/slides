@@ -1,6 +1,7 @@
-// the list of backdrops of R28.2 on both platforms: the names of the Family popup, one per drawing
-// of the records of the file and never a value of data-trajectories-select, and the entry Broucke
-// Families taken from the first drawing of demo/broucke-sample.js in the deck whose file is found
+// the Family, Frame, and Branch popups of a drawing of demo/broucke-sample.js on both platforms: the
+// eight picks, recognized by the records they draw, the selection each writes as one entry of the
+// history, Custom for any other selection, and the entry Broucke Families taken from the first drawing
+// of demo/broucke-sample.js in the deck whose file is found
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -9,23 +10,43 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
-// a deck of selections of demo/broucke-sample.js, and a deck whose first such drawing is missing
-const NAMES = 'test/pages/editor-r28-2.html';
+// a deck of the eight picks and of three Custom selections, and a deck whose first drawing of
+// demo/broucke-sample.js is missing
+const PICKS = 'test/pages/editor-r28-2.html';
 const MISSING = 'test/pages/editor-r28-2-missing.html';
-// a deck of selections that draw the same records by terms other than family and frame
-const SAME = 'test/pages/editor-r28-2-same.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
 const TILES = '.beeson-backdrop-gallery [data-tile]';
 const MENU = '.beeson-edit-menu.select';
-const FAMILIES = ['Family 7', 'Family 7 (Inertial)', 'Family 11', 'Family 11 (Inertial)'];
-// the names of the Family popup on the deck NAMES, one per drawing
-const ITEMS = [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)', 'Families 7 and 11 (Both Frames)', 'Family 7 and Family 11 (Inertial)', 'Families 7 and 11 (Thin 1)'];
-// the name of the drawing of each slide of the deck NAMES in the Family popup
-const CHECKED = ['Families 7 and 11 (Both Frames)', 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Families 7 and 11 (Both Frames)', 'Family 7 and Family 11 (Inertial)', 'Families 7 and 11 (Thin 1)', 'Families 7 and 11'];
-// the names of the Family popup on the deck SAME, and the name of the drawing of each of its slides
-const SAME_ITEMS = [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)', 'Families 7 and 11 (Both Frames)', 'No Trajectories'];
-const SAME_CHECKED = ['Families 7 and 11 (Both Frames)', 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Families 7 and 11', 'Families 7 and 11', 'No Trajectories', 'No Trajectories'];
+// the Family, Frame, and Branch popups of each slide of the deck PICKS, null for a popup not shown
+const SHOWN = [
+  ['7', 'Rotating', 'Periapsis'],
+  ['7', 'Rotating', 'Apoapsis'],
+  ['7', 'Inertial', 'Periapsis'],
+  ['7', 'Inertial', 'Apoapsis'],
+  ['11', 'Rotating', null],
+  ['11', 'Inertial', null],
+  ['7/11', 'Rotating', null],
+  ['7/11', 'Inertial', null],
+  ['Custom', 'Custom', null],
+  ['Custom', 'Custom', null],
+  ['Custom', 'Custom', null],
+];
+// the name of the drawing of each slide of the deck PICKS in the object list
+const ROWS = [
+  'Broucke 7 (Rotating, Periapsis)',
+  'Broucke 7 (Rotating, Apoapsis)',
+  'Broucke 7 (Inertial, Periapsis)',
+  'Broucke 7 (Inertial, Apoapsis)',
+  'Broucke 11 (Rotating)',
+  'Broucke 11 (Inertial)',
+  'Broucke 7/11 (Rotating)',
+  'Broucke 7/11 (Inertial)',
+  'Broucke (Custom)',
+  'Broucke (Custom)',
+  'Broucke (Custom)',
+].map((name) => `Backdrop: ${name}`);
+const ITEMS = { Family: ['7', '11', '7/11'], Frame: ['Rotating', 'Inertial'], Branch: ['Periapsis', 'Apoapsis'] };
 
 let browser;
 let server;
@@ -76,6 +97,7 @@ const popupText = (page, label) => page.evaluate(`(() => {
   const b = document.querySelector('${PANEL} [aria-label="${label}"]');
   return b && b.getClientRects().length ? b.textContent : null;
 })()`);
+const popupDisabled = (page, label) => page.evaluate(`document.querySelector('${PANEL} [aria-label="${label}"]').disabled`);
 
 // the items of the popup of the pane named label, opened by a click, as [name, checked]
 async function popupItems(page, label) {
@@ -90,6 +112,12 @@ async function choose(page, name, text) {
   await click(page, `${MENU} .item[data-pick]`);
   if (text !== undefined) await page.waitFor(`window.BeesonEditor.render() !== ${js(text)}`);
   await frames(page);
+}
+
+// the item called name of the popup of the pane named label picked, after which the file differs from text
+async function pickItem(page, label, name, text) {
+  await popupItems(page, label);
+  await choose(page, name, text);
 }
 
 // the list of Media > Backdrop…, as [key, name] per entry, once count entries are drawn
@@ -123,82 +151,92 @@ async function rowNames(page, ns) {
 const tagOf = (text, heading) => text.match(new RegExp(`${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?(<div class="backdrop"[^>]*>)`))[1];
 
 for (const platform of PLATFORMS) {
-  // item 1
-  test(`the Family popup names each drawing once in words, without a value of data-trajectories-select or empty parentheses (${platform})`, async (t) => {
-    const page = await load(t, platform, NAMES, 0);
-    for (const [n, name] of CHECKED.entries()) {
+  test(`the Family, Frame, and Branch popups show the pick of each drawing by the records it draws, and Custom for any other selection (${platform})`, async (t) => {
+    const page = await load(t, platform, PICKS, 0);
+    for (const [n, shown] of SHOWN.entries()) {
       await page.evaluate(`Reveal.slide(${n})`);
       await frames(page);
       await selectBackdrop(page);
-      assert.equal(await popupText(page, 'Family'), name, `slide ${n}`);
-      const items = await popupItems(page, 'Family');
-      const names = items.map((i) => i[0]);
-      assert.deepEqual(names, ITEMS, `slide ${n}`);
-      for (const s of names) assert.doesNotMatch(s, /[=|<>;]|\(\s*\)/, s);
-      assert.deepEqual(items.filter((i) => i[1]).map((i) => i[0]), [name], `slide ${n}`);
-      await press(page, 'Escape');
+      for (const [i, label] of ['Family', 'Frame', 'Branch'].entries()) {
+        assert.equal(await popupText(page, label), shown[i], `${label} on slide ${n}`);
+        if (shown[i] === null) continue;
+        if (shown[i] === 'Custom' && label === 'Frame') {
+          assert.equal(await popupDisabled(page, label), true, `Frame on slide ${n}`);
+          continue;
+        }
+        const items = await popupItems(page, label);
+        assert.deepEqual(items.map((x) => x[0]), ITEMS[label], `${label} on slide ${n}`);
+        assert.deepEqual(items.filter((x) => x[1]).map((x) => x[0]), shown[i] === 'Custom' ? [] : [shown[i]], `${label} on slide ${n}`);
+        await press(page, 'Escape');
+      }
     }
+    assert.deepEqual(await rowNames(page, SHOWN.map((_, n) => n)), ROWS);
   });
 
-  test(`a Family item that draws the records of the backdrop changes nothing, and another is one entry of the history (${platform})`, async (t) => {
-    const page = await load(t, platform, NAMES, 1);
+  test(`each pick replaces the whole selection with one of the eight as one entry of the history, keeping the frame, and keeping the branch in Frame (${platform})`, async (t) => {
+    const page = await load(t, platform, PICKS, 0);
     await selectBackdrop(page);
-    // every family in both frames draws what both frames draw
-    await popupItems(page, 'Family');
-    await choose(page, 'Families 7 and 11 (Both Frames)');
+    const tag = (select) => `<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="${select}" data-trajectories-color="family" data-trajectories-ramp="e">`;
+    // the family of the drawing picked again changes nothing
+    await pickItem(page, 'Family', '7');
     assert.equal(await render(page), page.source);
-    await popupItems(page, 'Family');
-    await choose(page, 'Family 7 and Family 11 (Inertial)', page.source);
+    const steps = [
+      ['Branch', 'Apoapsis', 'family=7,branch=apoapsis,frame=rotating', ['7', 'Rotating', 'Apoapsis']],
+      ['Frame', 'Inertial', 'family=7,branch=apoapsis,frame=inertial-m2', ['7', 'Inertial', 'Apoapsis']],
+      ['Branch', 'Periapsis', 'family=7,branch=periapsis,frame=inertial-m2', ['7', 'Inertial', 'Periapsis']],
+      ['Family', '11', 'family=11,frame=inertial', ['11', 'Inertial', null]],
+      ['Frame', 'Rotating', 'family=11,frame=pulsating', ['11', 'Rotating', null]],
+      ['Family', '7/11', 'frame=pulsating', ['7/11', 'Rotating', null]],
+      ['Frame', 'Inertial', 'frame=inertial', ['7/11', 'Inertial', null]],
+      ['Family', '7', 'family=7,branch=periapsis,frame=inertial-m2', ['7', 'Inertial', 'Periapsis']],
+      ['Branch', 'Apoapsis', 'family=7,branch=apoapsis,frame=inertial-m2', ['7', 'Inertial', 'Apoapsis']],
+      // a family is picked on the periapsis branch
+      ['Family', '7/11', 'frame=inertial', ['7/11', 'Inertial', null]],
+      ['Frame', 'Rotating', 'frame=pulsating', ['7/11', 'Rotating', null]],
+      ['Family', '7', 'family=7,branch=periapsis,frame=pulsating', ['7', 'Rotating', 'Periapsis']],
+    ];
+    const texts = [page.source];
+    for (const [label, name, select, shown] of steps) {
+      await pickItem(page, label, name, texts.at(-1));
+      const text = await render(page);
+      assert.equal(tagOf(text, '<h2>Seven rotating periapsis'), tag(select), `${label} ${name}`);
+      assert.equal(text.replace(tag(select), ''), page.source.replace(tag('family=7,branch=periapsis,frame=pulsating'), ''), `${label} ${name}`);
+      assert.equal((await state(page, 'edit.undo')).label, `Undo ${label}`);
+      for (const [i, l] of ['Family', 'Frame', 'Branch'].entries()) assert.equal(await popupText(page, l), shown[i], `${l} after ${label} ${name}`);
+      texts.push(text);
+    }
+    for (let i = texts.length - 2; i >= 0; i--) {
+      await undo(page);
+      assert.equal(await render(page), texts[i], `undo ${i}`);
+    }
+    await redo(page);
+    assert.equal(await render(page), texts[1]);
+    assert.equal((await saveAndReopen(page)).text, texts[1]);
+  });
+
+  test(`on a Custom selection Frame and Branch are not picked, and a family replaces the selection in the rotating frame (${platform})`, async (t) => {
+    const page = await load(t, platform, PICKS, 9);
+    await selectBackdrop(page);
+    assert.equal(await popupText(page, 'Family'), 'Custom');
+    assert.equal(await popupText(page, 'Branch'), null);
+    await exec(page, 'backdrop.frame', { value: 'Rotating' });
+    await exec(page, 'backdrop.branch', { value: 'Apoapsis' });
+    assert.equal(await render(page), page.source);
+    await pickItem(page, 'Family', '7', page.source);
     const text = await render(page);
-    assert.equal(tagOf(text, '<h2>Both frames'), '<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="family=7,frame=pulsating;family=11,frame=inertial" data-trajectories-color="family" data-trajectories-ramp="e">');
+    assert.equal(tagOf(text, '<h2>Seven about the barycenter'), '<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="family=7,branch=periapsis,frame=pulsating" data-trajectories-color="family" data-trajectories-ramp="e">');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Family');
-    assert.equal(await popupText(page, 'Family'), 'Family 7 and Family 11 (Inertial)');
+    assert.deepEqual([await popupText(page, 'Family'), await popupText(page, 'Frame'), await popupText(page, 'Branch')], ['7', 'Rotating', 'Periapsis']);
     await undo(page);
     assert.equal(await render(page), page.source);
-    assert.equal(await popupText(page, 'Family'), 'Families 7 and 11 (Both Frames)');
-    await redo(page);
-    assert.equal(await render(page), text);
-    assert.equal((await saveAndReopen(page)).text, text);
-  });
-
-  test(`selections that draw the same records by other terms are one Family item, named by the records they draw (${platform})`, async (t) => {
-    const page = await load(t, platform, SAME, 0);
-    for (const [n, name] of SAME_CHECKED.entries()) {
-      await page.evaluate(`Reveal.slide(${n})`);
-      await frames(page);
-      await selectBackdrop(page);
-      assert.equal(await popupText(page, 'Family'), name, `slide ${n}`);
-      const items = await popupItems(page, 'Family');
-      assert.deepEqual(items.map((i) => i[0]), SAME_ITEMS, `slide ${n}`);
-      assert.deepEqual(items.filter((i) => i[1]).map((i) => i[0]), [name], `slide ${n}`);
-      await press(page, 'Escape');
-    }
-    assert.deepEqual(await rowNames(page, [0, 2, 5]), ['Backdrop: Broucke Families 7 and 11 (Both Frames)', 'Backdrop: Broucke Families 7 and 11', 'Backdrop: Broucke No Trajectories']);
-  });
-
-  test(`a Family item of the records that thin=0|1 draws changes nothing, and Families 7 and 11 writes frame=pulsating (${platform})`, async (t) => {
-    const page = await load(t, platform, SAME, 0);
-    await selectBackdrop(page);
-    await popupItems(page, 'Family');
-    await choose(page, 'Families 7 and 11 (Both Frames)');
-    assert.equal(await render(page), page.source);
-    await popupItems(page, 'Family');
-    await choose(page, 'Families 7 and 11', page.source);
-    const text = await render(page);
-    assert.equal(tagOf(text, '<h2>Either thin'), '<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="frame=pulsating" data-trajectories-color="family" data-trajectories-ramp="e">');
-    assert.equal((await state(page, 'edit.undo')).label, 'Undo Family');
-    await undo(page);
-    assert.equal(await render(page), page.source);
-    await redo(page);
-    assert.equal(await render(page), text);
-    assert.equal((await saveAndReopen(page)).text, text);
-    // a selection without a record is the item No Records
-    await page.evaluate('Reveal.slide(5)');
+    assert.equal(await popupText(page, 'Frame'), 'Custom');
+    // a selection of every record is replaced by a pick as well
+    await page.evaluate('Reveal.slide(8)');
     await frames(page);
     await selectBackdrop(page);
-    await popupItems(page, 'Family');
-    await choose(page, 'No Trajectories');
-    assert.equal(await render(page), text);
+    await pickItem(page, 'Family', '11', page.source);
+    // a new attribute is written after the others
+    assert.equal(tagOf(await render(page), '<h2>Every record'), '<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-color="family" data-trajectories-ramp="e" data-trajectories-select="family=11,frame=pulsating">');
   });
 
   // item 2
@@ -213,6 +251,7 @@ for (const platform of PLATFORMS) {
     await pick(page, 'Broucke Families', page.source);
     const tag = tagOf(await render(page), '<h2>A scene');
     assert.match(tag, /data-trajectories="\.\.\/\.\.\/demo\/broucke-sample\.js"/);
+    assert.match(tag, /data-trajectories-select="family=7,branch=periapsis,frame=pulsating"/);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Replace Backdrop');
     await undo(page);
     assert.equal(await render(page), page.source);

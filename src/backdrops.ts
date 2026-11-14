@@ -1,7 +1,7 @@
 // the built-in backdrops selected with the data-backdrop attribute of a `.backdrop`, computed on first use and
 // cached
 
-import { MU, closed, droFamily, lagrange, lyapunovFamily, open, propagate, ramp, spaced, step } from './orbits.ts';
+import { MU, closed, lagrange, lyapunovFamily, open, propagate, step } from './orbits.ts';
 import type { Member, Trajectory, Tone } from './orbits.ts';
 
 // the integration step, nondimensional
@@ -122,7 +122,6 @@ function ribbon(A: number, phases: number, crossings: number, alpha: number, kic
 }
 
 const BUILT_IN = {
-  nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
   tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
   wideRibbon: () => ribbon(0.016, 120, 3, 0.12),
 } satisfies Record<string, () => Trajectory[]>;

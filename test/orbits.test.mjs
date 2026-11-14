@@ -2,15 +2,14 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lagrange, lyapunovFamily, pathOf, pointOn, spaced, toCrossing, trace } from '../src/orbits.ts';
+import { lagrange, lyapunovFamily, pathOf, pointOn, toCrossing, trace } from '../src/orbits.ts';
 import { BUILT_IN_NAMES, builtIn } from '../src/backdrops.ts';
 
 const H = 0.004;
-// the smallest number of trajectories expected in each built-in backdrop. the L2 family of nest is ended after 7 of
-// its 12 members
-const FEWEST = { nest: 24, tubes: 114, wideRibbon: 241 };
-// the built-in backdrops with trajectories that are not periodic orbits
-const FLIGHTS = ['tubes', 'wideRibbon'];
+// the smallest number of trajectories expected in each built-in backdrop
+const FEWEST = { tubes: 114, wideRibbon: 241 };
+// count values from a to b, crowded toward a with the exponent p
+const spaced = (a, b, count, p) => Array.from({ length: count }, (_, i) => a + (b - a) * Math.pow(i / (count - 1), p));
 
 test('the collinear points L1 and L2 are at the Earth–Moon values', () => {
   assert.ok(Math.abs(lagrange(1) - 0.8369) < 5e-4);
@@ -23,11 +22,12 @@ test('every scene is computed with the expected number of trajectories', () => {
 });
 
 test('each periodic trajectory is closed on its first point', () => {
-  for (const name of BUILT_IN_NAMES.filter((n) => !FLIGHTS.includes(n))) {
-    for (const s of builtIn(name)) {
-      const n = s.pts.length;
-      assert.ok(Math.hypot(s.pts[0] - s.pts[n - 2], s.pts[1] - s.pts[n - 1]) < 1e-5, name);
-    }
+  // the Lyapunov orbits of L1 and L2 in tubes, drawn in the tone text
+  const orbits = builtIn('tubes').filter((s) => s.tone === 'text');
+  assert.equal(orbits.length, 2);
+  for (const s of orbits) {
+    const n = s.pts.length;
+    assert.ok(Math.hypot(s.pts[0] - s.pts[n - 2], s.pts[1] - s.pts[n - 1]) < 1e-5);
   }
 });
 
@@ -82,7 +82,7 @@ test('a scene is computed in under 150 ms', { skip: process.env.CI ? 'the timing
   // a fresh module instance, so that the cache of the built-in backdrops above is empty
   const fresh = await import(`../src/backdrops.ts?fresh=${Date.now()}`);
   const t = performance.now();
-  fresh.builtIn('nest');
+  fresh.builtIn('tubes');
   assert.ok(performance.now() - t < 150);
 });
 

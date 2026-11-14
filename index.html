@@ -55,12 +55,8 @@ try {
     <li class="fragment" data-fragment-index="2">Steps are numbered. “With the slide” corresponds to step number 0.</li>
     <li class="fragment" data-fragment-index="3">When exporting to PDF or PPTX, you will get one slide per step.</li>
   </ol>
-  <div class="backdrop" data-backdrop="nest" data-cx="0.97" data-cy="0" data-half="0.5">
-    <span class="label" data-at="L1" data-dy="-34">\(\mathcal{L}_1\)</span>
-    <span class="label" data-at="L2" data-dy="-34">\(\mathcal{L}_2\)</span>
-    <span class="label" data-at="moon" data-dy="36">Moon</span>
-  </div>
-  <div class="foot">Slides can also have backdrops, like the Lyapunov families on this slide. These always appear at step 0. Preview the backdrop animation by clicking the “Preview” button.</div>
+  <div class="backdrop" data-trajectories="demo/broucke-sample.js" data-trajectories-select="family=7,branch=apoapsis,frame=rotating" data-trajectories-color="family" data-trajectories-ramp="e" data-trajectories-colormap="viridis" data-duration="3" data-stagger="0.6" data-cx="0.16" data-cy="0" data-half="2.9"></div>
+  <div class="foot">Slides can also have backdrops, like the Broucke family 7 on this slide. These always appear at step 0. Preview the backdrop animation by clicking the “Preview” button.</div>
   <aside class="notes">A new element is faded in, and the earlier ones are dimmed to 45 percent. The last element is first shown alone, and every element is restored to full opacity at one more step, which is added by the theme. At this step, data-complete is set on the section.</aside>
 </section>
 

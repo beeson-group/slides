@@ -1,11 +1,11 @@
 // the pane Backdrop of the inspector, for a selected backdrop: its drawing, chosen from a popup or
-// from the gallery of Choose…, the family and the colormap of a drawing of a file, its window, i.e.
-// its center and its half height, the labels of the points of a built-in backdrop, and its motion, with the
-// Lock button of the Arrange pane. each control runs a command of commands/backdrop.ts, whose writes
-// the theme draws again
+// from the gallery of Choose…, the family, the frame, and the branch of a Broucke drawing, the colormap
+// of a drawing of a file, its window, i.e. its center and its half height, the labels of the points of a
+// built-in backdrop, and its motion, with the Lock button of the Arrange pane. each control runs a
+// command of commands/backdrop.ts, whose writes the theme draws again
 
 import type { App } from '../app.ts';
-import { COLORMAPS, LABELS, colormapName, drawnBy, entryName, families, isBroucke, library, liveOf, probeLibrary, sameSelection, selectedBackdrop } from '../commands/backdrop.ts';
+import { BRANCHES, COLORMAPS, FAMILIES, FRAMES, LABELS, NAMES, brouckePick, colormapName, drawnBy, entryName, isBroucke, library, liveOf, probeLibrary, selectedBackdrop, type Pick } from '../commands/backdrop.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { make } from '../ui/dom.ts';
 import { button, checkbox, glyph, keepFocus, note, numberField, row, section, type Control, type Run } from './controls.ts';
@@ -74,16 +74,23 @@ export function backdropPane(app: App, run: Run): Control[] {
     disabled: !!e.missing,
     run: () => run('backdrop.builtIn', { value: e.key, el }),
   })), on, () => probeLibrary(app));
+  // a popup of a Broucke drawing, which shows Custom for a selection that is not a pick. Frame and
+  // Branch are picked only from a pick
+  const brouckePopup = (label: string, key: keyof Pick, values: string[]) => popup(app, label, () => brouckePick(el)?.[key] ?? NAMES.custom, () => values.map((v) => ({
+    label: v,
+    checked: brouckePick(el)?.[key] === v,
+    run: () => run(`backdrop.${key}`, { value: v, el }),
+  })), () => on() && (key === 'family' || !!brouckePick(el)));
   const parts: Control[] = [
     section('Drawing', [
       drawing,
       row([button(app, run, { command: 'backdrop.choose', text: 'Choose…' })]),
       when(file, [
-        when(() => isBroucke(el), [popup(app, 'Family', () => (el && isBroucke(el) ? families(app, el).find((f) => sameSelection(f.spec, el.getAttribute('data-trajectories-select'), el))?.name ?? '' : ''), () => (el ? families(app, el) : []).map((f) => ({
-          label: f.name,
-          checked: sameSelection(el?.getAttribute('data-trajectories-select') ?? null, f.spec, el),
-          run: () => run('backdrop.family', { value: f.spec, el }),
-        })), on)]),
+        when(() => isBroucke(el), [
+          brouckePopup('Family', 'family', FAMILIES),
+          brouckePopup('Frame', 'frame', FRAMES),
+          when(() => brouckePick(el)?.family === '7', [brouckePopup('Branch', 'branch', BRANCHES)]),
+        ]),
         popup(app, 'Colormap', () => colormapName(el?.getAttribute('data-trajectories-colormap') ?? null), () => [null, ...COLORMAPS].map((c) => ({
           label: colormapName(c),
           checked: (el?.getAttribute('data-trajectories-colormap') ?? null) === c,

@@ -103,7 +103,6 @@
     return [toned(first, "text"), ...out];
   }
   var BUILT_IN = {
-    nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
     tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
     wideRibbon: () => ribbon(0.016, 120, 3, 0.12)
   };
@@ -677,11 +676,6 @@
     for (let x = a; x < b; x *= factor) out.push(x);
     return out;
   }
-  function spaced(a, b, count, p) {
-    const out = [];
-    for (let i = 0; i < count; i++) out.push(a + (b - a) * Math.pow(i / (count - 1), p));
-    return out;
-  }
   function lagrange(n, mu = MU) {
     let x = n === 1 ? 1 - mu - Math.cbrt(mu / 3) : n === 2 ? 1 - mu + Math.cbrt(mu / 3) : -1 - 5 * mu / 12;
     for (let i = 0; i < 30; i++) {
@@ -707,22 +701,6 @@
     const lead = ramp(start4, amplitudes[0], 1.2);
     const values = lead.concat(amplitudes).map((A) => xL + sign * A);
     return family(guess, 0, values, [4], [3], h, () => 0.3, () => 6, lead.length);
-  }
-  function droFamily(distances, h) {
-    const guess = (x0) => {
-      const d = 1 - MU - x0;
-      const s = new Float64Array(6);
-      s[0] = x0;
-      s[4] = Math.sqrt(MU / d) + d;
-      return s;
-    };
-    const tmin = (x0) => {
-      const d = 1 - MU - x0;
-      return 0.4 * Math.PI / (Math.sqrt(MU / (d * d * d)) + 1);
-    };
-    const lead = ramp(0.02, distances[0], 1.12);
-    const values = lead.concat(distances).map((d) => 1 - MU - d);
-    return family(guess, 0, values, [4], [3], h, tmin, (x0) => 10 * tmin(x0), lead.length);
   }
   function closed(m) {
     const n = m.times.length, T = m.t, N = 2 * n - 1;

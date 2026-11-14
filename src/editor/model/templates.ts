@@ -105,7 +105,7 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
     case 'shape':
       return ['<div class="shape rounded" style="width: 240px; height: 240px"></div>'];
     case 'backdrop':
-      return [`<div class="backdrop" data-backdrop="${attr(o.backdrop ?? 'nest')}" data-cx="0.97" data-cy="0" data-half="0.5"></div>`];
+      return [`<div class="backdrop" data-backdrop="${attr(o.backdrop ?? 'tubes')}" data-cx="0.42" data-cy="0" data-half="0.6"></div>`];
   }
 }
 
