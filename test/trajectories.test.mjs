@@ -38,12 +38,19 @@ const keys = (fileTrajectories) => {
 const alongE = (trajectories, fileTrajectories) =>
   fileTrajectories.map((r, i) => [r.family, r.e, trajectories[i]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , s]) => [s.ink.pair, +s.ink.at.toFixed(3), s.ink.shade]);
 
-test('the sample is parsed into eight members of each of families 7 and 11 in two frames, with their bodies', () => {
-  assert.equal(sample.families.length, 32);
+test('the sample is parsed into the members of families 7 and 11 in four frames, with a clock t and their bodies', () => {
+  assert.equal(sample.families.length, 60);
   assert.deepEqual([...new Set(sample.families.map((r) => r.family))], [7, 11]);
-  assert.deepEqual([...new Set(sample.families.map((r) => r.frame))], ['pulsating', 'inertial']);
-  for (const r of sample.families) assert.equal(r.points.length, r.theta.length);
-  assert.equal(sample.bodies.length, 16);
+  assert.deepEqual([...new Set(sample.families.map((r) => r.branch))], ['periapsis', 'apoapsis']);
+  assert.deepEqual([...new Set(sample.families.map((r) => r.frame))], ['pulsating', 'inertial', 'inertial-m2', 'rotating']);
+  const count = (spec) => select(sample.families, spec).length;
+  assert.deepEqual(['family=7,branch=periapsis', 'family=7,branch=apoapsis,frame=rotating', 'family=7,branch=apoapsis,frame=inertial-m2', 'family=11'].map(count), [24, 10, 10, 16]);
+  for (const r of sample.families) {
+    assert.equal(r.points.length, r.t.length);
+    assert.equal(r.theta, undefined);
+  }
+  // one entry per member, and the members of 7A at e = 0.975 in two frames are one member
+  assert.equal(sample.bodies.length, 35);
 });
 
 test('a malformed file is rejected with the reason', () => {
@@ -95,35 +102,35 @@ test('a malformed file is rejected with the reason', () => {
 
 test('records are selected by equal values, alternatives, bounds, and groups', () => {
   const all = sample.families;
-  assert.equal(select(all, undefined).length, 32);
-  assert.equal(select(all, ' ').length, 32);
+  assert.equal(select(all, undefined).length, 60);
+  assert.equal(select(all, ' ').length, 60);
   assert.deepEqual(keys(select(all, 'family=7, frame=pulsating')), [
     '7 pulsating 0',
-    '7 pulsating 0.09',
-    '7 pulsating 0.135',
-    '7 pulsating 0.225',
-    '7 pulsating 0.275',
-    '7 pulsating 0.365',
-    '7 pulsating 0.41',
+    '7 pulsating 0.07',
+    '7 pulsating 0.145',
+    '7 pulsating 0.215',
+    '7 pulsating 0.285',
+    '7 pulsating 0.355',
+    '7 pulsating 0.43',
     '7 pulsating 0.5',
   ]);
   assert.equal(select(all, 'family=7|11,frame=inertial').length, 16);
   assert.deepEqual(keys(select(all, 'frame=pulsating,e>0.2,e<=0.453')), [
-    '7 pulsating 0.225',
-    '7 pulsating 0.275',
-    '7 pulsating 0.365',
-    '7 pulsating 0.41',
-    '11 pulsating 0.205',
-    '11 pulsating 0.245',
-    '11 pulsating 0.33',
-    '11 pulsating 0.37',
+    '7 pulsating 0.215',
+    '7 pulsating 0.285',
+    '7 pulsating 0.355',
+    '7 pulsating 0.43',
+    '11 pulsating 0.26',
+    '11 pulsating 0.325',
+    '11 pulsating 0.39',
     '11 pulsating 0.453',
   ]);
   assert.deepEqual(keys(select(all, 'family=7,frame=pulsating,e<0.1; family=11,frame=pulsating,e>=0.45')), [
     '7 pulsating 0',
-    '7 pulsating 0.09',
+    '7 pulsating 0.07',
     '11 pulsating 0.453',
   ]);
+  assert.deepEqual(keys(select(all, 'branch=apoapsis,frame=rotating,e>0.85')), ['7 rotating 0.8825', '7 rotating 0.93', '7 rotating 0.975']);
   assert.equal(select(all, 'family=8').length, 0);
   assert.equal(select(all, 'branch>1').length, 0);
   assert.throws(() => select(all, 'family'), /"family" is not a term/);
@@ -143,7 +150,7 @@ test('a trajectory is colored by the pair of its family and the ramp along e', (
   const eleven = trajectoriesOf(sample, chosen, 'family', 'e');
   assert.deepEqual(
     alongE(eleven, chosen),
-    [0, 0.177, 0.276, 0.453, 0.541, 0.728, 0.817, 1].map((at) => [1, at, undefined]),
+    [0, 0.143, 0.287, 0.43, 0.574, 0.717, 0.861, 1].map((at) => [1, at, undefined]),
   );
   assert.ok(eleven.every((s) => s.ink.shade === undefined));
   assert.ok(eleven.every((s) => s.alpha > 0 && s.alpha < 1));
@@ -160,8 +167,8 @@ test('a trajectory is drawn in a shade of the first color of its pair along e, l
   const shaded = trajectoriesOf(sample, chosen, 'family', undefined, 'e');
   assert.deepEqual(
     alongE(shaded, chosen),
-    [0, 0.18, 0.27, 0.45, 0.55, 0.73, 0.82, 1].map((at) => [0, at, true]).concat(
-      [0, 0.177, 0.276, 0.453, 0.541, 0.728, 0.817, 1].map((at) => [1, at, true]),
+    [0, 0.14, 0.29, 0.43, 0.57, 0.71, 0.86, 1].map((at) => [0, at, true]).concat(
+      [0, 0.143, 0.287, 0.43, 0.574, 0.717, 0.861, 1].map((at) => [1, at, true]),
     ),
   );
   // the middle shade is the color itself, and the ends differ in OKLCH lightness alone
@@ -290,8 +297,8 @@ test('a trajectory is colored from a colormap along e within the group of its fa
   const grouped = trajectoriesOf(sample, chosen, 'family', 'e', 'e', viridis);
   assert.deepEqual(
     alongE(grouped, chosen),
-    [0, 0.18, 0.27, 0.45, 0.55, 0.73, 0.82, 1].map((at) => [0, at, undefined]).concat(
-      [0, 0.177, 0.276, 0.453, 0.541, 0.728, 0.817, 1].map((at) => [1, at, undefined]),
+    [0, 0.14, 0.29, 0.43, 0.57, 0.71, 0.86, 1].map((at) => [0, at, undefined]).concat(
+      [0, 0.143, 0.287, 0.43, 0.574, 0.717, 0.861, 1].map((at) => [1, at, undefined]),
     ),
   );
   assert.ok(grouped.every((s) => s.ink.map === viridis && s.alpha === MAP_ALPHA));
@@ -299,7 +306,7 @@ test('a trajectory is colored from a colormap along e within the group of its fa
   const whole = trajectoriesOf(sample, chosen, undefined, 'e', undefined, viridis);
   assert.deepEqual(
     alongE(whole, chosen),
-    [0, 0.18, 0.27, 0.45, 0.55, 0.73, 0.82, 1].concat([0, 0.16, 0.25, 0.41, 0.49, 0.66, 0.74, 0.906]).map((at) => [0, at, undefined]),
+    [0, 0.14, 0.29, 0.43, 0.57, 0.71, 0.86, 1].concat([0, 0.13, 0.26, 0.39, 0.52, 0.65, 0.78, 0.906]).map((at) => [0, at, undefined]),
   );
 });
 
@@ -411,11 +418,16 @@ test('a fitted window holds the fill of tubes, and keeps the drawing clear of an
 
 test('the bodies are drawn only when every chosen member puts them at the same positions', () => {
   const at = (spec) => bodiesOf(sample, select(sample.families, spec)).map((d) => `${d.x} ${d.mass}`);
-  assert.deepEqual(at('family=7,frame=pulsating'), ['-0.01215 0.987845', '0.98784 0.012155']);
+  assert.deepEqual(at('family=7,frame=pulsating'), ['-0.0122 0.987845', '0.9878 0.012155']);
   assert.deepEqual(at('family=11,frame=pulsating'), ['-0.5 0.5', '0.5 0.5']);
-  // the members of two mass ratios disagree on the bodies, and the bodies move in the inertial frame
+  // the members of two mass ratios disagree on the bodies, and the bodies move in the inertial frames
   assert.deepEqual(at('frame=pulsating'), []);
   assert.deepEqual(at('frame=inertial'), []);
+  assert.deepEqual(at('family=7,frame=inertial-m2'), []);
+  // in the rotating frame the separation of the bodies is set by the start of each member, hence one
+  // member has its bodies and the members together do not
+  assert.deepEqual(at('family=7,branch=apoapsis,frame=rotating,e=0.5575'), ['-0.0188 0.987845', '1.5284 0.012155']);
+  assert.deepEqual(at('family=7,branch=apoapsis,frame=rotating'), []);
   // positions within 1e-4 are one position, and a member without bodies disagrees with one that has them
   const file = (bodies) => ({ families: [], bodies });
   const fileTrajectories = [{ points: [], family: 1 }, { points: [], family: 2 }];
