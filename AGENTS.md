@@ -74,7 +74,7 @@ In a talk, `npm run check`, `npm run pdf`, and `npm run pptx` need only Node.js 
 
 PR-Agent reviews every pull request in the workflow `pr-agent`, and it reads this file as its review context, this section included.
 
-- Treat the hard invariants above as the review criteria, and name the invariant that a finding breaks. A change that breaks one is a finding that blocks the pull request, not a suggestion.
+- Treat the hard invariants above as the review criteria, and name the invariant that a finding breaks. A change that breaks one is a finding to fix before the pull request is merged, not a suggestion.
 - Do not suggest a change in `theme/vendor/`, which is vendored with its license, or in `theme/beeson.js` or `theme/editor.js`, which are compiled and committed on purpose.
 - Read the section of `REFERENCE.md` on an element before you question it, since most of what looks unusual there is the design of the theme.
 
