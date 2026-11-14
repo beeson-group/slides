@@ -272,6 +272,34 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  // on a slow runner, the browser leaves full screen for the speaker view more than 2 s after S.
+  // this is forced here by holding back the change of full screen for 2.5 s
+  test(`in the show in place, the show goes on when the speaker view leaves full screen late (${platform})`, async (t) => {
+    const page = await present(t, platform);
+    await page.waitFor(fullStage, 5000);
+    await page.evaluate(`(() => {
+      const late = (ev) => {
+        if (document.fullscreenElement || !ev.isTrusted) return;
+        ev.stopImmediatePropagation();
+        window.removeEventListener('fullscreenchange', late, true);
+        setTimeout(() => {
+          document.dispatchEvent(new Event('fullscreenchange'));
+          setTimeout(() => (window.__late = !!document.querySelector('.beeson-edit-show')), 300);
+        }, 2500);
+      };
+      window.addEventListener('fullscreenchange', late, true);
+      return true;
+    })()`);
+    await page.evaluate(inShow(`(() => { const real = w.open; w.open = function (...a) { const v = real.apply(w, a); w.__speaker = v; return v; }; return true; })()`));
+    await press(page, 's');
+    await page.waitFor(`window.__late !== undefined`, 15000);
+    const up = await page.evaluate('window.__late');
+    // the frame of the show is gone with the show
+    await page.evaluate(inShow('(w.__speaker?.close(), true)')).catch(() => {});
+    assert.equal(up, true, 'the show ends when the speaker view leaves full screen late');
+    assert.deepEqual(errors(page), []);
+  });
+
   test(`in the show in place, the scrubber opens near the bottom edge, and a click on a tick shows its slide (${platform})`, async (t) => {
     const page = await present(t, platform);
     const move = (x, y) => page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
