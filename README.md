@@ -29,7 +29,14 @@ PRE-RELEASE: The template is currently still in beta. View the most up to date v
 
 This tool was built with agents.
 
-To create custom backdrops, animations, or other effects you want in your slides, ask your favorite agent. This repo contains an [AGENTS.md](/AGENTS.md) for this purpose. Collaboration with agents is encouraged to unleash the full expressive power of HTML. We also have a few useful skills (found at [/.agents/skills/](/.agents/skills/)) which your agent will automatically find and load if it thinks it appropriate. If you don't have access to a coding agent, however, do not worry: you will be able to do everything you know how to do in PowerPoint/Keynote from our editor mode, including creating new slides, modifying, moving, and resizing text boxes or titles, setting up steps to determine the order of appearance of your slide elements in the presentation, and a lot more. You will also be able to accomplish what other slide editor apps do NOT enable you to do: edit LaTeX boxes directly from the slide they appear on (which compile with one click), edit and animate code in code boxes the same way, set up custom QR codes with ease, and, again, a lot more.
+To create custom backdrops, animations, or other effects you want in your slides, ask your favorite agent. This repo contains an [AGENTS.md](/AGENTS.md) for this purpose.
+
+Collaboration with agents is encouraged to unleash the full expressive power of HTML.  
+We also have a few useful skills (found at [/.agents/skills/](/.agents/skills/)) which your agent will automatically find and load if it thinks it appropriate.
+
+If you don't have access to a coding agent, however, do not worry: you will be able to do everything you know how to do in PowerPoint/Keynote from our editor mode, including creating new slides, modifying, moving, and resizing text boxes or titles, setting up steps to determine the order of appearance of your slide elements in the presentation, and a lot more.
+
+You will also be able to accomplish what other slide editor apps do NOT enable you to do: edit LaTeX boxes directly from the slide they appear on (which compile with one click), edit and animate code in code boxes the same way, set up custom QR codes with ease, and, again, a lot more.
 
 ## Presenting
 
