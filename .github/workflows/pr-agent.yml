@@ -24,9 +24,14 @@ jobs:
     # repository, hence a run is started by a comment only on a pull request, only when it opens
     # with a command, and only from an owner, a member, or a collaborator, since the action reads
     # the number of an issue as the number of a pull request. A comment without a command starts
-    # nothing, hence it does not cancel the review that is running either
+    # nothing, hence it does not cancel the review that is running either. A pull request from a
+    # fork is skipped here, since its token is read-only and it carries no secret, and only a
+    # command of a person with write access reviews it, with the token and the secrets of this
+    # repository
     if: >-
       ${{ github.event.sender.type != 'Bot' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository) &&
       (github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/') &&
