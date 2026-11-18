@@ -600,10 +600,12 @@ test('a deck of 200 slides with three people typing finds the slides of each ope
     await ana.waitFor(`(() => { const row = ${C}.app.nav.rowOf(Reveal.getSlides()[${n - 1}]); return row.classList.contains('changed') && row.querySelector('.no').title === 'Changed by ${name} since you last saw it.'; })()`);
   }
   // a read of the slides of an operation is bound by a tenth of one parse of the same deck, taken
-  // in the same page, and measured again before the test fails
+  // in the same page, and measured again before the test fails. each of the three texts differs
+  // from the one before it by a line break at its end, since slidesAt keeps the parse of its last
+  // text
   const parse = () => ana.evaluate(`(() => {
-    const c = ${C}, text = c.port.text(), t = performance.now();
-    for (let i = 0; i < 3; i++) c.shell.slidesAt(text, [{ start: 0, end: 1, text: '' }]);
+    const c = ${C}, text = c.port.text(), texts = [1, 2, 3].map((i) => text + '\\n'.repeat(i)), t = performance.now();
+    for (const x of texts) c.shell.slidesAt(x, [{ start: 0, end: 1, text: '' }]);
     return (performance.now() - t) / 3;
   })()`);
   const read = () => ana.evaluate(`(() => {
