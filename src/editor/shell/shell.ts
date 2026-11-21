@@ -360,7 +360,8 @@ export function install(app: App): void {
     ev.preventDefault();
     ev.stopPropagation();
     if (!app.selection.has(el)) app.selection.set('elements', [el]);
-    openContextMenu(app, 'element', el, { x: ev.clientX, y: ev.clientY }, picks(ev.clientX, ev.clientY));
+    const here: MenuItem = { command: 'backdrop.addLabel', arg: { el, x: ev.clientX, y: ev.clientY }, label: 'Add Label Here' };
+    openContextMenu(app, 'element', el, { x: ev.clientX, y: ev.clientY }, [here, ...picks(ev.clientX, ev.clientY)]);
   }, true);
   document.addEventListener('contextmenu', (ev) => {
     const place = placeOf(ev.target instanceof Element ? ev.target : null);

@@ -1,6 +1,7 @@
 import type { App } from '../app.ts';
 import { mathIn, type MathLookup } from '../math.ts';
 import { injectStyle } from '../ui/dom.ts';
+import { isLabel, typesetLabel } from './labels.ts';
 
 const CSS = `
 html.beeson-editing .reveal [contenteditable="true"] mjx-container.beeson-math-selected { background: Highlight; }
@@ -98,7 +99,8 @@ async function typesetAgain(app: App, host: HTMLElement): Promise<void> {
     const units = unitsOf(host, mathIn(host));
     ends = [texOffset(units, s!.anchorNode!, s!.anchorOffset), texOffset(units, s!.focusNode!, s!.focusOffset)];
   }
-  try {
+  if (isLabel(host)) await typesetLabel(host);
+  else try {
     if (!mj.typeset) throw new Error('MathJax does not typeset at once');
     mj.typeset([host]);
   } catch {
@@ -122,7 +124,7 @@ export function install(app: App): void {
     const n = s?.isCollapsed ? s.focusNode : null;
     const o = s?.focusOffset ?? 0;
     if (n instanceof Text && host.contains(n) && typesetIn(n) && n.data[o - 1] === '\\' && /[()]/.test(n.data[o] ?? '')) s!.collapse(n, back ? o - 1 : o + 1);
-    const held = host.isConnected && document.activeElement === host && !!s?.rangeCount && host.contains(s.anchorNode) && host.contains(s.focusNode) && (inTex(host, s.anchorNode!, s.anchorOffset) || inTex(host, s.focusNode!, s.focusOffset));
+    const held = host.isConnected && document.activeElement === host && !!s?.rangeCount && host.contains(s.anchorNode) && host.contains(s.focusNode) && (isLabel(host) || inTex(host, s.anchorNode!, s.anchorOffset) || inTex(host, s.focusNode!, s.focusOffset));
     if (!held) void typesetAgain(app, host).catch((e) => app.fail(e));
   };
   document.addEventListener('selectionchange', () => {
@@ -138,6 +140,10 @@ export function install(app: App): void {
     for (const m of selected) m.classList.add('beeson-math-selected');
   });
   document.addEventListener('focusout', () => setTimeout(check, 0));
+  document.addEventListener('focusin', (ev) => {
+    const face = ev.target instanceof Element && isLabel(ev.target) ? ev.target.querySelector(':scope > mjx-container') : null;
+    if (face) showTex(app, face, 'end');
+  });
   document.addEventListener('keyup', check);
   document.addEventListener('mouseup', check);
 }

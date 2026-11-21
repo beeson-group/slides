@@ -179,8 +179,10 @@ function freshIds(app: App, text: string): string {
 }
 
 export function columnOf(slide: Element): Element {
-  return slide.querySelector(':scope > .text-column, :scope > .title-text, :scope > .sec') ?? slide;
+  const col = slide.querySelector(':scope > .text-column, :scope > .title-text, :scope > .sec') ?? slide;
+  return col.querySelector(':scope > .r-stack > :not(.beeson-off)') ?? col;
 }
+
 
 function regroup(app: App, copies: Element[]): void {
   copiedGroups(copies, (taken) => freshGroup(app, taken)).forEach((g, i) => {

@@ -46,8 +46,8 @@ html.beeson-editor .beeson-edit-canvas > .spacer { width: 1px; height: 1px; poin
 html.beeson-editor .reveal:not(.beeson-peek) { position: fixed !important; inset: auto !important; left: var(--ed-slide-x, 0px) !important; top: var(--ed-slide-y, 0px) !important; width: var(--ed-slide-w, 100%) !important; height: var(--ed-slide-h, 100%) !important; margin: 0 !important; z-index: 1; overflow: visible; background: var(--bg); box-shadow: 0 0 0 1px var(--ed-edge), 0 2px 6px rgba(0, 0, 0, 0.16), 0 12px 32px rgba(0, 0, 0, 0.18); clip-path: var(--ed-clip, none); }
 html.beeson-editor .beeson-badges { clip-path: var(--ed-cell-clip, none) !important; }
 html.beeson-editor .reveal .progress, html.beeson-editor .reveal .scrub, html.beeson-editor .reveal .slide-number, html.beeson-editor .theme-switch { display: none !important; }
-html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
-html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
+html.beeson-editing .reveal .slides section :is(.fragment, .r-stack > *) { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+html.beeson-editing .reveal .slides section :is(.fragment, .r-stack > *).beeson-off { visibility: hidden !important; }
 html.beeson-editing .reveal .slides section > .refs[data-generated] { pointer-events: none; }
 `;
 

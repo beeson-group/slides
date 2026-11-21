@@ -8,7 +8,7 @@ import { injectStyle } from '../ui/dom.ts';
 import { columnOf } from './clipboard.ts';
 import { onCaptionBox } from './figure.ts';
 import { docOf } from './slide.ts';
-import { freePlace, placeNew, titlePlace, translateOf } from './place.ts';
+import { FLOW_KIDS, freePlace, placeNew, titlePlace, translateOf } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
 import { overShapes } from './order.ts';
 import { deckKinds } from './text.ts';
@@ -130,7 +130,7 @@ export function freeFigureBox(app: App, slide: Element, el: Element): Box | null
   probe.remove();
   if (figureBox.right - figureBox.left < 1 || figureBox.bottom - figureBox.top < 1) return null;
   const columns = '.col, .text-column, .title-text';
-  for (const other of slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *')) {
+  for (const other of slide.querySelectorAll(FLOW_KIDS)) {
     if (other === el || other.contains(el) || other.matches('aside.notes, .foot, .run, [data-generated]')) continue;
     const box = other.matches(columns) && !(other instanceof HTMLElement && other.style.translate) ? inkBox(app, other) : takenBox(app, other);
     if (box && meets(figureBox, box)) return null;
@@ -192,7 +192,7 @@ function centerOffset(app: App, el: HTMLElement): { x: number; y: number } | nul
   if (!slide) return null;
   const w = slide.offsetWidth || 1920, h = slide.offsetHeight || 1080;
   const b = slideBox(app, el);
-  const prompts = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *')].filter((o) => o !== el && !o.matches('.foot') && !o.textContent?.trim()).map((o) => (o.getClientRects().length ? promptBox(app, o) : null)).filter((p): p is Box => !!p);
+  const prompts = [...slide.querySelectorAll(FLOW_KIDS)].filter((o) => o !== el && !o.matches('.foot') && !o.textContent?.trim()).map((o) => (o.getClientRects().length ? promptBox(app, o) : null)).filter((p): p is Box => !!p);
   const feet = [...[...slide.querySelectorAll('.foot')].filter((f) => f !== el && f.getClientRects().length).map((f) => slideBox(app, f)), ...prompts];
   if (b.top >= 0 && b.right <= w && b.bottom <= h - MARGIN && !feet.some((f) => meets(b, f))) return null;
   const v = app.stage?.viewport ?? new DOMRect(0, 0, innerWidth, innerHeight);

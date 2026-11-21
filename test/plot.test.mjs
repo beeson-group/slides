@@ -248,12 +248,13 @@ test('at the restart of a loop, the held frame is faded out while the next pass 
 });
 
 const state = `(() => {
+  const textOf = (el) => el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? el.textContent;
   const view = Beeson.plots.find((p) => p.el.dataset.plot === 'data');
   return {
     playing: view.playing,
     frame: view.frame,
     hidden: [...view.el.querySelectorAll('.plot-panel')].map((g) => g.classList.contains('plot-hidden')),
-    tab: view.el.querySelector('[aria-selected="true"]').textContent,
+    tab: textOf(view.el.querySelector('[aria-selected="true"]')),
     ghosts: view.el.querySelectorAll('.plot-ghost').length,
     traces: view.el.querySelectorAll('.plot-trace').length,
   };
@@ -417,7 +418,7 @@ test('a plot is printed at its last frame, with the panels and the tab of each s
 
   const pages = await page.evaluate(`[...document.querySelectorAll('.pdf-page [data-plot="data"]')].map((el) => ({
     hidden: [...el.querySelectorAll('.plot-panel')].map((g) => g.classList.contains('plot-hidden')),
-    tab: el.querySelector('[aria-selected="true"]').textContent,
+    tab: el.querySelector('[aria-selected="true"] [aria-label]').getAttribute('aria-label'),
     value: el.querySelector('.plot-value').textContent,
   }))`);
   assert.deepEqual(pages, [
@@ -429,16 +430,17 @@ test('a plot is printed at its last frame, with the panels and the tab of each s
 });
 
 const reveals = (id) => `(() => {
+  const textOf = (el) => el.querySelector('[aria-label]')?.getAttribute('aria-label') ?? el.textContent;
   const view = Beeson.plots.find((p) => p.el.id === '${id}');
   const buttons = [...view.el.querySelectorAll('.plot-tabs button')];
   const panels = [...view.el.querySelectorAll('.plot-panel')];
-  const label = (text) => [...view.el.querySelectorAll('.plot-label')].find((l) => l.textContent === text);
+  const label = (text) => [...view.el.querySelectorAll('.plot-label')].find((l) => textOf(l) === text);
   return {
     playing: view.playing,
     frame: view.frame,
     panels: panels.length,
-    tabs: buttons.map((b) => [b.textContent, b.disabled, b.classList.contains('plot-hidden')]),
-    tab: buttons.find((b) => b.getAttribute('aria-selected') === 'true')?.textContent ?? null,
+    tabs: buttons.map((b) => [textOf(b), b.disabled, b.classList.contains('plot-hidden')]),
+    tab: buttons.find((b) => b.getAttribute('aria-selected') === 'true')?.querySelector('[aria-label]')?.getAttribute('aria-label') ?? null,
     title: [...view.el.querySelectorAll('.plot-title')].map((t) => t.querySelector('[data-latex]')?.getAttribute('data-latex') ?? t.textContent),
     ticks: [...view.el.querySelectorAll('.plot-tick-mark')].map((t) => t.style.background),
     dimmed: ['a', 'b'].map((t) => label(t)?.classList.contains('plot-off') ?? null),

@@ -37,6 +37,9 @@ const CSS = `
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1px solid #444; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .beeson-frame.locked { opacity: 0.45; }
 .beeson-grip.square { border-radius: 0; }
+.beeson-grip.cut:is([data-handle=w], [data-handle=e]) { height: 26px; margin-top: -14px; border-radius: 4px; }
+.beeson-grip.cut:is([data-handle=n], [data-handle=s]) { width: 26px; margin-left: -14px; border-radius: 4px; }
+.beeson-grip.cut::after { content: ""; position: absolute; inset: -9px; }
 .beeson-rotor { position: fixed; width: 14px; height: 14px; margin: -7px 0 0 -7px; box-sizing: border-box; border-radius: 50%; border: 1px solid #444; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: #444; font: 600 10px/12px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
 .beeson-rotor-stem { position: fixed; width: 1px; height: 11px; margin-left: -0.5px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); transform-origin: 50% 0; }
 html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user-select: none !important; }

@@ -4,6 +4,7 @@ import * as textElements from '../text/elements.ts';
 import * as carry from '../text/carry.ts';
 import * as inline from '../text/inline.ts';
 import * as flow from '../text/flow.ts';
+import { renameSection } from '../text/outline.ts';
 import { openLink, applyLink, type LinkKind } from '../text/link.ts';
 import { isSmart, setSmart, type Smart } from '../text/substitute.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -244,6 +245,7 @@ export function install(app: App): void {
       },
       run: (a) => setCenter(a, align === 'center'),
     }));
+  define({ id: 'text.renameSection', label: 'Rename Section', undoable: true, enabled: (a) => !!a.pairing, run: (a, arg) => renameSection(a, arg) });
   define({ id: 'text.list.start', label: 'Start At', in: TEXT, undoable: true, enabled: (a) => !!textElements.startList(a), run: (a, arg) => textElements.setStart(a, Number((arg as { start?: unknown } | undefined)?.start)) });
   define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Tab', 'Mod+]'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => textElements.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, true)) });
   define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Shift+Tab', 'Mod+['] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => textElements.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, false)) });

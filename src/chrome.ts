@@ -10,11 +10,12 @@ function sourceText(el: Element): string {
   return copy.textContent ?? '';
 }
 
-export const heading = (slide: HTMLElement): string => {
-  if (slide.dataset.run !== undefined) return slide.dataset.run;
+const title = (slide: HTMLElement): string => {
   const h = slide.querySelector('h2') ?? slide.querySelector('h1');
   return h ? sourceText(h).trim() : '';
 };
+
+export const heading = (slide: HTMLElement): string => slide.dataset.run ?? title(slide);
 
 const APPENDIX = 'Appendix slides';
 
@@ -58,9 +59,9 @@ function fill(): void {
     slide.append(run);
     fresh.push(run);
   }
-  for (const list of document.querySelectorAll<HTMLElement>('.reveal ul.outline[data-auto]')) {
+  const names = sections.map(title);
+  for (const list of document.querySelectorAll<HTMLElement>('.reveal :is(ul, ol).outline[data-auto]')) {
     const home = list.closest('section');
-    const names = sections.map(heading);
     const items = [...list.children];
     const same = items.length === names.length && items.every((li, k) => made.get(li) === names[k]);
     if (same) {

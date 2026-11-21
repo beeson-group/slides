@@ -55,7 +55,7 @@ export function addRestoreSteps(root: ParentNode): void {
       : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
     const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
     const dimsBox = [...boxes].some((box) => !last.some((f) => f.parentElement === box && isCopy(f)));
-    if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f) && !holdsVideo(f))) continue;
+    if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f) && !holdsVideo(f) && !f.matches('.r-stack > *'))) continue;
     if (last.some(delayed)) {
       slide.setAttribute(MOVES_ON, '');
       continue;

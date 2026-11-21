@@ -82,11 +82,17 @@ export function showStep(host: HTMLElement, slide: Element, k: number): void {
   applySteps(clone);
   (frags as HTMLElement[]).forEach((f, i) => {
     const seen = i >= steps.length || seenAt(kinds[i], steps[i], k) || f.classList.contains('play');
-    const dim = seen && k < n && steps[i] < k - 1 && kinds[i] !== 'dim' && !f.matches('.backdrop, [data-held], .faint, video, :has(video)') && !f.parentElement?.closest('.fragment.visible');
+    const dim = seen && k < n && steps[i] < k - 1 && kinds[i] !== 'dim' && !f.matches('.backdrop, [data-held], .faint, video, :has(video), .r-stack > *') && !f.parentElement?.closest('.fragment.visible');
     f.classList.toggle('beeson-off', !seen);
     const ghost = kinds[i] === 'dim' && steps[i] < k && !f.matches('[data-held]');
     f.style.setProperty('opacity', dim ? '0.45' : ghost ? '0.25' : '', dim || ghost ? 'important' : '');
   });
+  for (const child of clone.querySelectorAll('.r-stack > *')) {
+    const kin = [...child.parentElement!.children];
+    const hidden = kin.slice(kin.indexOf(child) + 1).some((c) => c.matches('.fragment.visible:not(.beeson-off)'));
+    if (hidden) child.classList.add('beeson-off');
+    else if (!child.classList.contains('fragment')) child.classList.remove('beeson-off');
+  }
 }
 
 const TIMINGS_KEY = 'beeson-use-timings';

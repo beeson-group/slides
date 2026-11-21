@@ -405,6 +405,15 @@ describe('a backdrop selected, moved, and deleted', () => {
       await exec(page, 'backdrop.half', { value: 0.1 });
       await frames(page);
       assert.ok((await marks()) > 0, 'a cut edge is not marked');
+      const grips = await page.evaluate(`[...document.querySelectorAll('.beeson-backdrop-cuts .beeson-mask-cut')].map((m) => {
+        const g = document.querySelector('.beeson-overlay .beeson-grip[data-handle=' + { left: 'w', right: 'e', top: 'n', bottom: 's' }[m.dataset.edge] + ']');
+        const r = g.getBoundingClientRect();
+        const n = m.querySelector('span').getBoundingClientRect();
+        const apart = r.right < n.left || n.right < r.left || r.bottom < n.top || n.bottom < r.top;
+        const z = (el) => Number(getComputedStyle(el).zIndex);
+        return { edge: m.dataset.edge, top: z(g.closest('.beeson-overlay')) > z(m.closest('.beeson-backdrop-cuts')), long: Math.max(r.width, r.height), apart };
+      })`);
+      for (const g of grips) assert.deepEqual({ top: g.top, long: g.long >= 24, apart: g.apart }, { top: true, long: true, apart: true }, `the grip of the cut edge is hard to see or to grab: ${JSON.stringify(g)}`);
       await leave(page);
       await frames(page);
       assert.equal(await marks(), 0, 'a cut edge is marked without the backdrop selected');
@@ -1124,7 +1133,7 @@ describe('Broucke Families and the names of colormaps', () => {
       const page = await load(t, platform, DEMO, 2);
       await selectBackdrop(page);
       const builtIn = { secs: ['Drawing', 'Window', 'Labels', 'Motion'], colormap: false, family: false, note: false };
-      const file = { secs: ['Drawing', 'Window', 'Motion'], colormap: true, family: false, note: true };
+      const file = { secs: ['Drawing', 'Window', 'Labels', 'Motion'], colormap: true, family: false, note: true };
       assert.deepEqual(await sections(page), builtIn);
       await openList(page, LIST.length);
       await pick(page, 'Beeson Logo', page.source);

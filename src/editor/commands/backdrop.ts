@@ -5,6 +5,7 @@ import type { Handle } from '../canvas/snap.ts';
 import { setPreview, view as frameView } from '../canvas/frames.ts';
 import { begin, editing, markCuts, orbitOf, syncBackdrops, windowAttrs } from '../canvas/mask.ts';
 import { injectStyle, make } from '../ui/dom.ts';
+import { selectIn } from '../text/elements.ts';
 import { select, type TrajectoryData } from '../../trajectories.ts';
 
 type View = { cx: number; cy: number; half: number };
@@ -54,6 +55,14 @@ export function slideBackdrop(app: App): HTMLElement | null {
 export function backdropAt(app: App, target: Element): HTMLElement | null {
   const el = target.closest<HTMLElement>('.backdrop');
   return el && !target.closest('.label') && app.current()?.contains(el) && open(app, el) ? el : null;
+}
+
+export function labelAt(el: HTMLElement, view: View, clientX?: number, clientY?: number): [number, number] {
+  const r = el.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight;
+  const s = w ? r.width / w : 1, k = h / 2 / view.half;
+  const px = clientX === undefined ? w / 2 : (clientX - r.left) / s, py = clientY === undefined ? h / 2 : (clientY - r.top) / s;
+  const digits = Math.max(0, Math.ceil(Math.log10(k)));
+  return [view.cx + (px - w / 2) / k, view.cy - (py - h / 2) / k].map((v) => Number(v.toFixed(digits)) || 0) as [number, number];
 }
 
 export const liveOf = (el: Element | null): Live | null => (el ? ((orbitOf(el) as unknown as Live | null) ?? null) : null);
@@ -321,7 +330,7 @@ const CSS = `
 .beeson-backdrop-gallery .tile canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 .beeson-backdrop-gallery .name { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .beeson-backdrop-gallery .reason { margin-top: -4px; font-size: 11px; }
-.beeson-backdrop-cuts { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
+.beeson-backdrop-cuts { position: fixed; inset: 0; z-index: 50; pointer-events: none; }
 html.beeson-masking .beeson-backdrop-cuts { display: none; }
 `;
 
@@ -646,6 +655,24 @@ export function commands(): Command[] {
       },
     },
     {
+      id: 'backdrop.addLabel',
+      label: 'Add Label',
+      undoable: true,
+      undo: 'Add Label',
+      enabled: (app) => !!liveOf(targetOf(app, undefined)) && !locked(targetOf(app, undefined)!),
+      run: async (app, arg) => {
+        const el = targetOf(app, arg);
+        const o = liveOf(el);
+        if (!el || !o) return;
+        endPreview();
+        const point = (arg as { x?: number; y?: number } | undefined) ?? {};
+        const [x, y] = labelAt(el, o.view, point.x, point.y);
+        const [lab] = await app.doc.insert(`<span class="label" data-at="${x} ${y}">Label</span>`, el, null, 'label');
+        app.selection.set('text', [lab]);
+        selectIn(lab, 0, 'Label'.length);
+      },
+    },
+    {
       id: 'backdrop.live',
       label: 'Live',
       undoable: true,
@@ -725,17 +752,24 @@ function cuts(app: App): void {
   const layer = make('div', 'beeson-backdrop-cuts');
   document.body.append(layer);
   let marks: HTMLElement[] = [];
+  const HANDLE: Record<string, string> = { left: 'w', right: 'e', top: 'n', bottom: 's' };
+  const grips = () => {
+    const cut = new Set(marks.map((m) => HANDLE[m.dataset.edge ?? '']));
+    for (const g of document.querySelectorAll<HTMLElement>('.beeson-overlay .beeson-grip')) g.classList.toggle('cut', cut.has(g.dataset.handle ?? ''));
+  };
   const draw = () => {
     const el = selectedBackdrop(app);
     const o = liveOf(el);
     if (!el || !o || editing()) {
       for (const m of marks) m.remove();
       marks = [];
+      grips();
       return;
     }
     const v = app.stage?.viewport;
     if (v) layer.style.clipPath = `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`;
     marks = markCuts(app, el, o.view, o.extent, layer, marks);
+    grips();
   };
   app.selection.listen(draw);
   app.onRefresh(['layout', 'slide', 'content'], draw);

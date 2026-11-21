@@ -23,6 +23,7 @@ Hard invariants are never traded away for other goals. When a change would break
 - Read the section of `REFERENCE.md` on an element before you write one. Every class and attribute of the theme is described there.
 - Use one `h2` per slide, and an `h1` on title slides. Keep lines of text columns under 66 characters.
 - Design the complete slide first. Assign its steps afterward.
+- Write content that replaces other content in the same place, e.g. the next form of an equation, as a stack, described under Stacks in `REFERENCE.md`. Give it one child `div` per version, and make each child but the first a fragment with a `data-fragment-index`, in increasing steps. Do not write `current-visible`, `fade-out`, or `fade-in-then-out` on elements replaced in place.
 - Take every color from a tone of the theme. Do not add title bars, rules under headings, all-caps labels, or eyebrows. None of them is part of the theme.
 - Set widths in px in a `style` only on headings, paragraphs, lists, `math` divs, captions, and cells in the top row of tables. Pictures, QR codes, TyCHO viewers, shapes, and backdrops may take widths as well.
 - Set heights in px in a `style` only on shapes, backdrops, table rows, and images, videos, or TyCHO viewers that have a width.

@@ -106,8 +106,8 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-peek { position: fixed; left: 248px; z-index: 57; width: 320px; overflow: hidden; border-radius: 6px; outline: 1px solid var(--line, #555); background: var(--bg, #000); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); pointer-events: none; }
 .beeson-edit-peek[hidden] { display: none; }
 .beeson-edit-peek .reveal { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; }
-.beeson-edit-peek .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
-.beeson-edit-peek .fragment.beeson-off { visibility: hidden !important; }
+.beeson-edit-peek :is(.fragment, .r-stack > *) { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+.beeson-edit-peek :is(.fragment, .r-stack > *).beeson-off { visibility: hidden !important; }
 `;
 
 type Row = { el: HTMLButtonElement; no: HTMLElement; pic: HTMLElement; dots: HTMLElement; trans: HTMLElement; num: HTMLElement; title: HTMLElement; kind: HTMLElement };

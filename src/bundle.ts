@@ -1,4 +1,5 @@
 import type * as Three from 'three';
+import { typesetLabels } from './drawn-text.ts';
 import { LINE_FRAGMENT, LINE_VERTEX, clamp, dragToTurn, ease, lerp, mix3, num, renderer, rgb } from './surface.ts';
 import type { RGB, Surface } from './surface.ts';
 
@@ -174,6 +175,7 @@ export class Bundle {
     el.prepend(this.canvas);
     el.setAttribute('data-prevent-swipe', '');
     this.labels = [...el.querySelectorAll<HTMLElement>('.label')];
+    typesetLabels(this.labels);
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);

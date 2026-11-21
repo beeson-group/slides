@@ -17,18 +17,19 @@ const texts = (root) => `[...${root}.querySelectorAll('.plot-label, .plot-readou
   faults: el.querySelectorAll('mjx-merror, [data-mjx-error], [fill="red"]').length,
 }))`;
 
-test('the formulas in the texts of a plot are typeset by MathJax with the macros of the deck before the deck is settled', { timeout: 60000 }, async (t) => {
+test('each text of a plot is typeset by MathJax as one formula, its words in \\text, with the macros of the deck before the deck is settled', { timeout: 60000 }, async (t) => {
   const page = await browser.newPage();
   t.after(() => page.close());
   await page.goto(deckUrl('test/pages/plot-math.html', '', '/1'));
   await page.waitFor(deckSettled);
   const shown = await page.evaluate(texts('document'));
   const find = (tex) => shown.find((s) => s.tex.includes(tex));
-  assert.deepEqual(find('\\delta x'), { words: ' in km', tex: ['\\delta x'], focusable: false, faults: 0 });
-  assert.deepEqual(find('\\sat'), { words: 'the | family', tex: ['\\sat'], focusable: false, faults: 0 });
+  assert.deepEqual(find('\\delta x\\text{ in km}'), { words: '', tex: ['\\delta x\\text{ in km}'], focusable: false, faults: 0 });
+  assert.deepEqual(find('\\text{the }\\sat\\text{ family}'), { words: '', tex: ['\\text{the }\\sat\\text{ family}'], focusable: false, faults: 0 });
+  assert.ok(find('-\\text{1}'), JSON.stringify(shown));
   assert.deepEqual(find('\\vb{r}'), { words: '', tex: ['\\vb{r}'], focusable: false, faults: 0 });
   for (const tex of ['\\LL{1}', '\\alpha = -2.932', '\\alpha = \\pm 2.334\\,i']) assert.ok(find(tex), `${tex} in ${JSON.stringify(shown)}`);
-  assert.ok(shown.every((s) => !s.words.includes('$') && s.faults === 0), JSON.stringify(shown));
+  assert.ok(shown.every((s) => s.words === '' && s.tex.length === 1 && s.faults === 0), JSON.stringify(shown));
   assert.deepEqual(page.errors, []);
 });
 

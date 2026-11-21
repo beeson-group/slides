@@ -3,7 +3,7 @@ import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
 import { stepViewers } from '../viewers.ts';
-import { OFF, fragmentIndex, fragmentsOf, type ShownSteps, itemsOf, planOf, remapKeep, showRange, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './shown-steps.ts';
+import { CHILD, OFF, childrenOf, fragmentIndex, fragmentsOf, type ShownSteps, itemsOf, planOf, remapKeep, showRange, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './shown-steps.ts';
 import { setPreview } from './canvas/frames.ts';
 import { twinOf } from './canvas/hit.ts';
 import { media as store } from './media/store.ts';
@@ -26,7 +26,7 @@ export type Ctx = {
   changed(): void;
 };
 
-const CANDIDATES = 'h1, h2, h3, p, li, ul.fragment, ol.fragment, table, pre, blockquote, div.math, figure, .figure-box, .plate, .qr, .tikz, tycho-viewer, .caption, .foot, img, video, svg.line, .shape';
+const CANDIDATES = '.r-stack > *, h1, h2, h3, p, li, ul.fragment, ol.fragment, table, pre, blockquote, div.math, figure, .figure-box, .plate, .qr, .tikz, tycho-viewer, .caption, .foot, img, video, svg.line, .shape';
 export const WITH_SLIDE = 'h1, h2, h3, .foot';
 const OUTSIDE = 'aside.notes, .backdrop';
 
@@ -293,7 +293,7 @@ export function effectEdit(state: TagState, effect: Effect): TagEdit {
   return out;
 }
 
-const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['td, th', 'Table cell'], ['cite', 'Citation'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab], [data-plot-hide]', 'Plot step'], ['[data-surface-state]', 'Surface step'], ['.tikz > [data-part]', 'Figure step'], ['.tikz', 'TikZ figure'], ['img, figure, .figure-box, .plate', 'Figure'], ['svg.line', 'Line'], ['.shape', 'Shape']];
+const KINDS: [string, string][] = [['.r-stack > *', 'Tab'], ['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['td, th', 'Table cell'], ['cite', 'Citation'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab], [data-plot-hide]', 'Plot step'], ['[data-surface-state]', 'Surface step'], ['.tikz > [data-part]', 'Figure step'], ['.tikz', 'TikZ figure'], ['img, figure, .figure-box, .plate', 'Figure'], ['svg.line', 'Line'], ['.shape', 'Shape']];
 
 function textOf(el: Element, tex: Ctx['tex']): string {
   let out = '';
@@ -481,6 +481,7 @@ ${P} .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; fon
 ${P} .text:empty::before { content: "Empty"; color: var(--ed-faint); }
 ${P} .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ed-muted); font-size: 11px; }
 ${P} .rows .row.selected .meta, ${P} .rows .list-head.selected .meta { color: inherit; opacity: 0.82; }
+${P} .row.tab .grip { visibility: hidden; }
 ${P} .drop-line { position: absolute; left: 6px; right: 10px; height: 2px; margin-top: -1px; border-radius: 1px; background: var(--ed-select); pointer-events: none; }
 ${P} .drop-line::before { content: ""; position: absolute; left: -5px; top: -3px; width: 4px; height: 4px; border: 2px solid var(--ed-select); border-radius: 50%; background: var(--ed-panel); }
 ${P} .slide-zone { border-radius: 8px; }
@@ -508,7 +509,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--ed-guide, #
 html.beeson-previewing .beeson-badges, html.beeson-previewing .beeson-overlay, html.beeson-previewing .beeson-frame, html.beeson-previewing .beeson-handle { visibility: hidden !important; }
 html.beeson-editing.beeson-previewing .reveal .slides section .fragment { transition: opacity 400ms ease-out !important; }
 html.beeson-editing.beeson-previewing .reveal .slides section .fragment.beeson-pv-dim { opacity: 0.45 !important; }
-html.beeson-editing.beeson-previewing .reveal .slides section .fragment.beeson-pv-off { opacity: 0 !important; }
+html.beeson-editing.beeson-previewing .reveal .slides section :is(.fragment, .r-stack > *).beeson-pv-off { opacity: 0 !important; }
 html.beeson-editing.beeson-previewing .reveal .slides section .fragment.beeson-pv-ghost { opacity: 0.25 !important; }
 @media (prefers-reduced-motion: reduce) { html.beeson-editing.beeson-previewing .reveal .slides section .fragment { transition: none !important; } }
 `;
@@ -775,6 +776,7 @@ export class Steps {
       const locked = m.locked[i] && !line;
       const r = make('div', `row${start === 'with' ? ' with' : ''}${step < 0 ? ' slide' : ''}${locked ? ' locked' : ''}${line ? ' line' : ''}`);
       r.tabIndex = -1;
+      if (el.matches(CHILD)) r.classList.add('tab');
       r.dataset.doc = String(i);
       r.dataset.step = step < 0 ? '' : String(step);
       const chip = make('button', 'chip');
@@ -1105,7 +1107,7 @@ export class Steps {
       return;
     }
     this.select(r);
-    if (!this.model.lines[r.i]) this.drag(ev, r);
+    if (!this.model.lines[r.i] && !r.el.matches(CHILD)) this.drag(ev, r);
   }
 
   private drag(ev: PointerEvent, r: Row): void {
@@ -1241,11 +1243,17 @@ export class Steps {
     const raw = fragmentsOf(slide);
     const m = this.app ? modelOf(this.app, slide) : null;
     const at = raw.map((f) => {
+      if (!f.el.classList.contains('fragment')) return f.step;
       const i = m ? indexIn(m, f.el) : -1;
       return m && i >= 0 && stepAt(m.plan, i) >= 0 ? stepAt(m.plan, i) + 1 : null;
     });
     const byModel = !!m && at.every((k) => k !== null);
-    const frags = byModel ? raw.map((f, j) => ({ ...f, step: at[j] as number })) : raw;
+    const stepped = byModel ? raw.map((f, j) => ({ ...f, step: at[j] as number })) : raw;
+    const nextOf = (el: Element) => {
+      const kin = childrenOf(el.parentElement as Element);
+      return kin[kin.indexOf(el) + 1];
+    };
+    const frags = stepped.map((f) => (f.kind === 'span' && f.end !== Infinity ? { ...f, end: stepped.find((g) => g.el === nextOf(f.el))?.step ?? f.end } : f));
     const lines = byModel && m ? m.lines.flatMap((l, i) => (l ? [{ ...l, step: stepAt(m.plan, i) + 1 }] : [])) : [];
     if (!frags.length && !lines.length) return Promise.resolve();
     const html = document.documentElement;

@@ -114,9 +114,13 @@ export interface Pane {
   refresh(): void;
 }
 
+export type TabPick = { child: Element | null; i: number };
+
 export interface ShownStepsSwitch {
   refresh(): void;
   reveal(el: Element): void;
+  shown(slide: Element): TabPick;
+  show(slide: Element, pick: TabPick): void;
 }
 
 const detectPlatform = (): Platform => {
@@ -184,7 +188,14 @@ export class App {
       changed: () => this.selection?.changed() ?? (() => {}),
       view: () => {
         const slide = this.current();
-        return slide ? () => void (slide.isConnected && this.showSlide(slide)) : null;
+        const pick = slide ? this.shownSteps?.shown(slide) : null;
+        return slide
+          ? () => {
+              if (!slide.isConnected) return;
+              this.showSlide(slide);
+              if (pick) this.shownSteps.show(slide, pick);
+            }
+          : null;
       },
     });
     this.commands = new Commands(this);

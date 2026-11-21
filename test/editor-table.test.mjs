@@ -6,7 +6,7 @@ import { columnName, emptyRows, grow, isNumeric, layoutCells, numericColumns, pa
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, clickText, drag, editorPage, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
+import { byteExact, center, click, clickText, drag, editorPage, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
 const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
 const TABLES_DECK = 'test/pages/editor-tables.html';
@@ -1446,7 +1446,7 @@ describe('a table selected as an object', () => {
       await press(page, 'Escape');
       await frames(page);
       let s = await isObject(page, 'after two Esc');
-      assert.deepEqual(Object.keys(s.grips).sort(), ['e', 'w'], 'a table selected as an object does not have grips at its left and right edges only');
+      assert.deepEqual(Object.keys(s.grips).sort(), ['e', 'n', 'ne', 'nw', 's', 'se', 'sw', 'w'], 'a table selected as an object does not have a grip at each corner and edge');
       const right = middle(s.grips.e);
       const left = middle(s.grips.w);
       const mid = (s.box.top + s.box.bottom) / 2;
@@ -1477,7 +1477,148 @@ describe('a table selected as an object', () => {
       await roundTrip(page);
       assert.deepEqual(page.errors, []);
     });
+
+    test(`a drag anywhere on a table selected as an object moves it, and a click puts the caret into the cell (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: 2 });
+      await newTable(page);
+      await press(page, 'Escape');
+      await press(page, 'Escape');
+      await frames(page);
+      let s = await isObject(page, 'after two Esc');
+      const was = s.box;
+      await drag(page, await center(page, cellOf(1, 1)), { dx: 60, dy: 40, steps: 12 });
+      await frames(page);
+      s = await isObject(page, 'after a drag on a cell');
+      assert.ok(Math.abs(s.box.left - was.left - 60) < 10 && Math.abs(s.box.top - was.top - 40) < 10, `a drag of (60, 40) on a cell moves the table by (${s.box.left - was.left}, ${s.box.top - was.top})`);
+      await roundTrip(page);
+
+      await click(page, cellOf(0, 0));
+      await press(page, 'Escape');
+      await press(page, 'Escape');
+      await frames(page);
+      await isObject(page, 'after a click on a cell and two Esc');
+      await click(page, cellOf(1, 2));
+      await frames(page);
+      assert.ok(await page.evaluate(`document.querySelector(${js(cellOf(1, 2))}).contains(getSelection().focusNode)`), 'a click on a cell of the table selected as an object does not put the caret into the cell');
+      assert.equal(await render(page), page.source, 'a click on a cell of the table selected as an object edits the file');
+      assert.deepEqual(page.errors, []);
+    });
+
+    test(`the grips at the corners and edges of a table selected as an object scale its columns and rows, and Shift keeps its proportions (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: 2 });
+      await newTable(page);
+      await press(page, 'Escape');
+      await press(page, 'Escape');
+      await frames(page);
+      let s = await isObject(page, 'after two Esc');
+      let was = s.box;
+      await drag(page, middle(s.grips.se), { dx: 80, dy: 60, steps: 12 });
+      await frames(page);
+      s = await isObject(page, 'after a drag of the lower right grip');
+      assert.ok(Math.abs(s.box.right - was.right - 80) < 4, `the right edge is moved by ${s.box.right - was.right} px for a drag of 80 px`);
+      assert.ok(Math.abs(s.box.bottom - was.bottom - 60) < 4, `the bottom edge is moved by ${s.box.bottom - was.bottom} px for a drag of 60 px`);
+      assert.ok(Math.abs(s.box.left - was.left) < 2 && Math.abs(s.box.top - was.top) < 2, 'the upper left corner is moved by a drag of the lower right grip');
+      assert.equal((await state(page, 'edit.undo')).label, 'Undo Resize Table');
+      const text = await render(page);
+      const widths = [...text.matchAll(/<th style="width: (\d+)px">/g)].map((m) => Number(m[1]));
+      const heights = [...text.matchAll(/<tr style="height: (\d+)px">/g)].map((m) => Number(m[1]));
+      assert.equal(widths.length, 3, 'the widths are not written into the cells of the first row');
+      assert.equal(heights.length, 3, 'the heights are not written into the rows');
+      assert.ok(Math.max(...heights) - Math.min(...heights) <= 1, `the rows are not heightened alike: ${heights}`);
+      await roundTrip(page);
+
+      await click(page, cellOf(0, 0));
+      await press(page, 'Escape');
+      await press(page, 'Escape');
+      await frames(page);
+      s = await isObject(page, 'after the open of the saved text and two Esc');
+      was = s.box;
+      await drag(page, middle(s.grips.nw), { dx: -40, dy: -30, steps: 12 });
+      await frames(page);
+      s = await isObject(page, 'after a drag of the upper left grip');
+      assert.ok(Math.abs(was.left - s.box.left - 40) < 4 && Math.abs(was.top - s.box.top - 30) < 4, `the upper left corner is moved by (${s.box.left - was.left}, ${s.box.top - was.top}) for a drag of (-40, -30)`);
+      assert.ok(Math.abs(s.box.right - was.right) < 3 && Math.abs(s.box.bottom - was.bottom) < 3, 'the lower right corner is moved by a drag of the upper left grip');
+      await roundTrip(page);
+
+      await click(page, cellOf(0, 0));
+      await press(page, 'Escape');
+      await press(page, 'Escape');
+      await frames(page);
+      s = await isObject(page, 'before a drag with Shift');
+      was = s.box;
+      await drag(page, middle(s.grips.se), { dx: 120, dy: 0, steps: 12, modifiers: 'Shift' });
+      await frames(page);
+      s = await isObject(page, 'after a drag of the lower right grip with Shift');
+      const ratio = (b) => (b.right - b.left) / (b.bottom - b.top);
+      assert.ok(s.box.right - was.right > 100, 'a drag with Shift does not widen the table');
+      assert.ok(Math.abs(ratio(s.box) / ratio(was) - 1) < 0.03, `a drag with Shift changes the proportions of the table from ${ratio(was)} to ${ratio(s.box)}`);
+      await roundTrip(page);
+      assert.deepEqual(page.errors, []);
+    });
+
+    test(`a drag of the line between two rows or two columns inside a table sets the height of the row or the widths of the columns (${platform})`, async (t) => {
+      const page = await load(t, platform, { deck: 'test/pages/editor-tables.html', n: 1 });
+      await click(page, cellOf(1, 0));
+      await frames(page);
+      const rowBox = (r) => page.evaluate(`(() => { const b = document.querySelectorAll('.reveal section.present table tr')[${r}].getBoundingClientRect(); return { top: b.top, bottom: b.bottom }; })()`);
+      const cellBox = (r, c) => page.evaluate(`(() => { const b = document.querySelector(${js(cellOf(r, c))}).getBoundingClientRect(); return { left: b.left, right: b.right, top: b.top, bottom: b.bottom }; })()`);
+      const [r1, r2] = [await rowBox(1), await rowBox(2)];
+      const b = await cellBox(1, 1);
+      await drag(page, { x: (b.left + b.right) / 2, y: r1.bottom }, { dy: 40, steps: 10 });
+      await frames(page);
+      const [n1, n2] = [await rowBox(1), await rowBox(2)];
+      assert.ok(Math.abs(n1.bottom - n1.top - (r1.bottom - r1.top) - 40) < 3, `the row above the line is ${n1.bottom - n1.top - (r1.bottom - r1.top)} px higher for a drag of 40 px`);
+      assert.ok(Math.abs(n2.bottom - n2.top - (r2.bottom - r2.top)) < 1, 'the row below the line changes its height');
+      assert.equal((await state(page, 'edit.undo')).label, 'Undo Resize Row');
+      assert.equal([...(await render(page)).matchAll(/<tr style="height: \d+px">/g)].length, 1, 'the height is not written into the one row');
+      await roundTrip(page);
+
+      await click(page, cellOf(1, 0));
+      await frames(page);
+      const [a, c] = [await cellBox(2, 1), await cellBox(2, 2)];
+      await drag(page, { x: c.right - 2, y: (c.top + c.bottom) / 2 }, { dx: 50, steps: 10 });
+      await frames(page);
+      const [a2, c2] = [await cellBox(2, 1), await cellBox(2, 2)];
+      assert.ok(Math.abs(c2.right - c.right - 50) < 4, `the line after the last column is moved by ${c2.right - c.right} px for a drag of 50 px`);
+      assert.ok(Math.abs(a2.right - a.right) < 2, 'the line before the last column is moved by a drag of the line after it');
+      assert.equal((await state(page, 'edit.undo')).label, 'Undo Resize Column');
+      await roundTrip(page);
+      assert.deepEqual(page.errors, []);
+    });
   }
+
+  test('on a phone, a touch drag on a table selected as an object moves it', async (t) => {
+    const page = await browser.newPage({ width: 390, height: 844, mobile: true });
+    t.after(() => page.close().catch(() => {}));
+    const deck = 'test/pages/editor-tables.html';
+    await page.goto(`${server.origin}/${deck}?edit&still`);
+    await page.waitFor(deckSettled);
+    await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+    page.source = readFileSync(deck, 'utf8');
+    assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`)).problems, []);
+    await page.evaluate('Reveal.slide(1)');
+    await frames(page);
+    const tap = async (at) => {
+      await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, radiusX: 4, radiusY: 4, force: 1, id: 1 }] });
+      await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await frames(page);
+    };
+    await tap(await center(page, cellOf(1, 0)));
+    await page.waitFor(`document.querySelector('.beeson-table-bars .round[title="Select Table"]')?.getClientRects().length > 0`);
+    await tap(await center(page, '.beeson-table-bars .round[title="Select Table"]'));
+    await isObject(page, 'after a tap on Select Table');
+    const was = (await page.evaluate(TABLE)).box;
+    const at = await center(page, cellOf(2, 1));
+    const touch = (k) => [{ x: at.x + 3 * k, y: at.y + 2 * k, radiusX: 4, radiusY: 4, force: 1, id: 1 }];
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: touch(0) });
+    for (let k = 1; k <= 10; k++) await page.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: touch(k) });
+    await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await frames(page);
+    const s = await isObject(page, 'after a touch drag on a cell');
+    assert.ok(Math.abs(s.box.left - was.left - 30) < 10 && Math.abs(s.box.top - was.top - 20) < 10, `a touch drag of (30, 20) moves the table by (${s.box.left - was.left}, ${s.box.top - was.top})`);
+    assert.match(await render(page), /<table style="translate: [-\d.]+px [-\d.]+px">/);
+    assert.deepEqual(page.errors, []);
+  });
 
   const MENU = `(() => {
   const m = [...document.querySelectorAll('.beeson-edit-menu')].find((el) => el.getClientRects().length);

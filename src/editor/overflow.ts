@@ -96,7 +96,7 @@ export function install(app: App): void {
       const now = new Map<Element, string>();
       const at = (el: Element) => now.get(el) ?? now.set(el, placeOf(el, slide)).get(el);
       const checked = (t: Element, f: Element) => live.some((c) => c.seen.get(t) === at(t) && c.seen.get(f) === at(f) && (!c.scope || c.scope.contains(t) || c.scope.contains(f)));
-      const figures = [...slide.querySelectorAll(FIGURE)].filter((f) => !f.closest('.plate, .backdrop, .surface') && !f.parentElement?.closest('.plot') && !f.matches('pre.beeson-pending'))
+      const figures = [...slide.querySelectorAll(FIGURE)].filter((f) => !f.closest('.plate, .backdrop, .surface, .beeson-off') && !f.parentElement?.closest('.plot') && !f.matches('pre.beeson-pending'))
         .map((f) => ({ el: f, part: partOf(f), r: f.getBoundingClientRect(), q: turnedOf(f, slide) })).filter((f) => f.r.width > 0 && f.r.height > 0);
       const lines = (el: Element) => {
         const range = document.createRange();
@@ -111,7 +111,7 @@ export function install(app: App): void {
       const footLines = foot ? lines(foot) : [];
       const intoFoot = (r: DOMRect) => footLines.some((l) => meets(r, l));
       for (const el of slide.querySelectorAll(HOST)) {
-        if (el.closest('aside.notes, .backdrop') || (el.matches('.beeson-pending') && !el.textContent)) {
+        if (el.closest('aside.notes, .backdrop, .beeson-off') || (el.matches('.beeson-pending') && !el.textContent)) {
           el.classList.remove('beeson-overflow');
           continue;
         }

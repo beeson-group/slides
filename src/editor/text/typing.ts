@@ -3,6 +3,7 @@ import { mathReady, setContentWithTex } from '../math.ts';
 import { hasTex } from '../typeset.ts';
 import { fromPoint } from './flow.ts';
 import { showTex } from './shown-tex.ts';
+import { isLabel } from './labels.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -349,6 +350,11 @@ export function install(app: App): void {
     if (type === 'insertFromPaste' && pastesItems(app, host, ev.dataTransfer?.getData('text/plain') ?? '')) {
       ev.preventDefault();
       void pasteItems(app, ev.dataTransfer?.getData('text/plain') ?? '').catch((e) => app.fail(e));
+      return;
+    }
+    if ((type === 'insertParagraph' || type === 'insertLineBreak') && isLabel(host)) {
+      ev.preventDefault();
+      void app.commands.run('selection.leaveText').catch((e) => app.fail(e));
       return;
     }
     if (type === 'insertParagraph' || type === 'insertLineBreak') history.break();

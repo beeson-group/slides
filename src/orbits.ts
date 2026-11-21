@@ -1,4 +1,5 @@
 import { builtIn } from './backdrops.ts';
+import { typesetLabels } from './drawn-text.ts';
 import { colormapColor, fitView, load, mix, shadeOf, trajectoriesFor } from './trajectories.ts';
 import type { Colormap, Dot, TrajectoryData } from './trajectories.ts';
 
@@ -317,6 +318,12 @@ export const POINTS = {
 type Point = keyof typeof POINTS;
 const isPoint = (v: string | undefined): v is Point => v !== undefined && v in POINTS;
 
+export function labelPoint(at: string | undefined): [number, number] | null {
+  if (isPoint(at)) return POINTS[at]();
+  const xy = (at ?? '').trim().split(/\s+/).map(Number);
+  return xy.length === 2 && xy.every(Number.isFinite) ? [xy[0], xy[1]] : null;
+}
+
 type Colors = { stroke: string; body: string; accent: string; violet: string; text: string; light: boolean };
 
 const CACHE = new WeakMap<HTMLElement, Orbits>();
@@ -396,6 +403,7 @@ export class Orbits {
     el.prepend(this.head);
     el.prepend(this.base);
     this.labels = [...el.querySelectorAll<HTMLElement>('.label')];
+    typesetLabels(this.labels);
     this.Tmax = Math.max(...this.trajectories.map((s) => s.T));
     this.idx = this.trajectories.map(() => 0);
     this.order();
@@ -592,9 +600,9 @@ export class Orbits {
     }
     const k = h / 2 / this.half;
     for (const lab of this.labels) {
-      const at = lab.dataset.at;
-      if (!isPoint(at)) continue;
-      const [x, y] = POINTS[at]();
+      const point = labelPoint(lab.dataset.at);
+      if (!point) continue;
+      const [x, y] = point;
       lab.style.left = `${w / 2 + (x - this.cx) * k + (+(lab.dataset.dx ?? 0) || 0)}px`;
       lab.style.top = `${h / 2 - (y - this.cy) * k + (+(lab.dataset.dy ?? 0) || 0)}px`;
     }

@@ -1,7 +1,7 @@
 import type { App } from '../app.ts';
 import { SHAPE_KINDS, kindOf as shapeKind } from '../commands/shape.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
-import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf, twinOf } from '../canvas/hit.ts';
+import { CONTAINER, LINE, STACKED_AWAY, hasText, linesOf, movablesOf, objectOf, twinOf } from '../canvas/hit.ts';
 import { locked } from '../canvas/drag.ts';
 import { canStep, drawnUnder, layerLimit, selectIn, stepLayer } from '../commands/order.ts';
 import { groupsOf } from '../model/groups.ts';
@@ -155,7 +155,7 @@ export function install(app: App): void {
 
   const objects = (): Element[] => {
     if (app.state !== 'loaded') return [];
-    const found = [...movablesOf(app), ...linesOf(app)];
+    const found = [...movablesOf(app, STACKED_AWAY), ...linesOf(app, STACKED_AWAY)];
     const els = found.filter((el) => !found.some((o) => o !== el && o.contains(el)));
     const ground = slideBackdrop(app);
     return [...els.sort((a, b) => (before(a, b) ? 1 : -1)), ...(ground ? [ground] : [])];

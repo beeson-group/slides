@@ -1,3 +1,5 @@
+import { plotTex, prefetch, setPlotText } from './drawn-text.ts';
+
 type Pair = [number, number];
 type Anchor = 'start' | 'middle' | 'end';
 type Kind = 'points' | 'trace' | 'label' | 'events';
@@ -23,6 +25,17 @@ export type Plot = { parameter: { label: string; digits: number }; duration: num
 const KINDS: Kind[] = ['points', 'trace', 'label', 'events'];
 const PATCH = ['x', 'y', 'title', 'regions', 'curves', 'labels'];
 const MARGIN: Margin = [52, 20, 84, 76];
+const WRITTEN = new WeakMap<object, string>();
+
+function written<T extends object>(o: T, path: string): T {
+  WRITTEN.set(o, path);
+  return o;
+}
+
+const pathOf = (o: object | undefined, key: string): string | null => {
+  const at = o ? WRITTEN.get(o) : undefined;
+  return at === undefined ? null : `${at}.${key}`;
+};
 
 function fail(path: string, what: string): never {
   throw new Error(`${path}: ${what}`);
@@ -87,9 +100,10 @@ function axis(v: unknown, path: string): Axis {
     if (typeof t === 'number') return { at: num(t, p), text: formatNumber(t) };
     if (!isObject(t)) fail(p, 'a number or a tick { at, text } is expected');
     const at = num(t.at, `${p}.at`);
-    return { at, text: str(t.text, `${p}.text`, formatNumber(at)) };
+    const tick = { at, text: str(t.text, `${p}.text`, formatNumber(at)) };
+    return t.text === undefined ? tick : written(tick, p);
   });
-  return { range, ticks, title: str(v.title, `${path}.title`, ''), scale, unit };
+  return written({ range, ticks, title: str(v.title, `${path}.title`, ''), scale, unit }, path);
 }
 
 export function scaled(a: Axis, v: number): number {
@@ -124,7 +138,7 @@ function labels(v: unknown, path: string): Label[] {
   return list(v, path, []).map((l, i) => {
     const p = `${path}[${i}]`;
     if (!isObject(l)) fail(p, 'a label is expected');
-    return { ...item(l, p, 'subtle'), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) };
+    return written({ ...item(l, p, 'subtle'), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) }, p);
   });
 }
 
@@ -138,7 +152,7 @@ function panel(v: unknown, path: string): Panel {
   }
   const size = num(v.size, `${path}.size`, 1);
   if (!(size > 0)) fail(`${path}.size`, 'a positive number is expected');
-  return {
+  return written({
     id: str(v.id, `${path}.id`),
     x: axis(v.x, `${path}.x`),
     y: axis(v.y, `${path}.y`),
@@ -150,7 +164,7 @@ function panel(v: unknown, path: string): Panel {
     labels: labels(v.labels, `${path}.labels`),
     size,
     margin,
-  };
+  }, path);
 }
 
 function patch(v: unknown, path: string): PanelPatch {
@@ -163,7 +177,7 @@ function patch(v: unknown, path: string): PanelPatch {
   if (v.regions !== undefined) out.regions = regions(v.regions, `${path}.regions`);
   if (v.curves !== undefined) out.curves = curves(v.curves, `${path}.curves`);
   if (v.labels !== undefined) out.labels = labels(v.labels, `${path}.labels`);
-  return out;
+  return written(out, path);
 }
 
 function markData(m: Mark, v: unknown, frames: number, path: string): MarkData {
@@ -187,17 +201,17 @@ function markData(m: Mark, v: unknown, frames: number, path: string): MarkData {
   if (m.kind === 'label') {
     if (!isObject(v)) fail(path, 'a label { at, text } is expected');
     const at = Array.isArray(v.at) && Array.isArray(v.at[0]) ? pairs(v.at, `${path}.at`) : [pair(v.at, `${path}.at`)];
-    const text = Array.isArray(v.text) ? v.text.map((t, i) => str(t, `${path}.text[${i}]`)) : [str(v.text, `${path}.text`)];
+    const text = Array.isArray(v.text) ? written(v.text.map((t, i) => str(t, `${path}.text[${i}]`)), `${path}.text`) : [str(v.text, `${path}.text`)];
     perFrame(at.length);
     perFrame(text.length);
-    return { at, text };
+    return written({ at, text }, path);
   }
   return list(v, path).map((e, i) => {
     const p = `${path}[${i}]`;
     if (!isObject(e)) fail(p, 'an event { frame, at, text } is expected');
     const frame = num(e.frame, `${p}.frame`);
     if (frame < 0 || frame > frames - 1) fail(`${p}.frame`, `a frame from 0 to ${frames - 1} is expected`);
-    return { frame, at: pair(e.at, `${p}.at`), text: str(e.text, `${p}.text`, '') };
+    return written({ frame, at: pair(e.at, `${p}.at`), text: str(e.text, `${p}.text`, '') }, p);
   });
 }
 
@@ -264,14 +278,14 @@ export function parsePlot(input: unknown): Plot {
       if (!ids.has(key)) fail(`${p}.panels.${key}`, `the panel ${key} is not declared`);
       patches[key] = patch(given[key], `${p}.panels.${key}`);
     }
-    return { name, label: str(t.label, `${p}.label`, name), values, times, data, active, panels: patches };
+    return written({ name, label: str(t.label, `${p}.label`, name), values, times, data, active, panels: patches }, p);
   });
   if (!tabs.length) fail('tabs', 'at least one tab is expected');
   const parameter = isObject(v.parameter) ? v.parameter : {};
   const layout = v.layout === undefined ? null : str(v.layout, 'layout');
   if (layout !== null && layout !== 'row' && layout !== 'column') fail('layout', 'row or column is expected');
   return {
-    parameter: { label: str(parameter.label, 'parameter.label', ''), digits: num(parameter.digits, 'parameter.digits', 3) },
+    parameter: written({ label: str(parameter.label, 'parameter.label', ''), digits: num(parameter.digits, 'parameter.digits', 3) }, 'parameter'),
     duration: num(v.duration, 'duration', 8),
     hold: num(v.hold, 'hold', 1),
     fade: num(v.fade, 'fade', 0.5),
@@ -359,59 +373,6 @@ export function formatNumber(x: number, digits?: number): string {
   return s.replace(/^-(?=.*[1-9])/, MINUS).replace(/^-/, '');
 }
 
-type Typesetter = { startup?: { promise?: Promise<unknown> }; tex2svgPromise?: (tex: string, options: { display: boolean }) => Promise<HTMLElement> };
-
-const mathjax = () => (globalThis as { MathJax?: Typesetter }).MathJax;
-
-const formulas = new Map<string, HTMLElement>();
-const queue: string[] = [];
-const waiting = new Map<HTMLElement, string>();
-let typesetting: Promise<void> | null = null;
-
-function untypeset(tex: string, reason: string): HTMLElement {
-  const span = document.createElement('span');
-  span.dataset.mjxError = reason;
-  span.textContent = `$${tex}$`;
-  return span;
-}
-
-async function typesetQueue(before: unknown): Promise<void> {
-  await Promise.resolve(before).catch(() => undefined);
-  let since = performance.now();
-  while (queue.length) {
-    const tex = queue[0];
-    const mj = mathjax();
-    const node = mj?.tex2svgPromise
-      ? await mj.tex2svgPromise(tex, { display: false }).catch((error: unknown) => untypeset(tex, error instanceof Error ? error.message : String(error)))
-      : untypeset(tex, 'MathJax is not loaded');
-    node.removeAttribute('tabindex');
-    formulas.set(tex, node);
-    queue.shift();
-    for (const [el, src] of waiting) if (fill(el, src)) waiting.delete(el);
-    if (performance.now() - since > 8) {
-      await new Promise((done) => setTimeout(done));
-      since = performance.now();
-    }
-  }
-  typesetting = null;
-}
-
-function request(tex: string): void {
-  if (formulas.has(tex) || queue.includes(tex)) return;
-  queue.push(tex);
-  if (typesetting) return;
-  const startup = mathjax()?.startup;
-  typesetting = typesetQueue(startup?.promise);
-  if (startup?.promise) startup.promise = typesetting;
-}
-
-function fill(el: HTMLElement, src: string): boolean {
-  const parts = src.split('$');
-  if (parts.some((part, k) => k % 2 === 1 && !formulas.has(part))) return false;
-  el.replaceChildren(...parts.flatMap((part, k): (string | Node)[] => (!part ? [] : k % 2 === 0 ? [part] : [formulas.get(part)!.cloneNode(true)])));
-  return true;
-}
-
 const panelTexts = (p: PanelPatch) => [p.title, p.x?.title, p.y?.title, ...[...(p.x?.ticks ?? []), ...(p.y?.ticks ?? []), ...(p.labels ?? [])].map((t) => t.text)];
 
 export function plotTexts(plot: Plot): string[] {
@@ -422,17 +383,6 @@ export function plotTexts(plot: Plot): string[] {
   });
   const texts = [plot.parameter.label, ...plot.panels.flatMap(panelTexts), ...plot.tabs.flatMap((t) => [t.label, ...Object.values(t.panels).flatMap(panelTexts), ...marks(t)])];
   return [...new Set(texts.filter((s): s is string => !!s))];
-}
-
-export function prefetch(texts: string[]): void {
-  for (const src of texts) src.split('$').forEach((part, k) => { if (k % 2 === 1) request(part); });
-}
-
-export function setText(el: HTMLElement, src: string): void {
-  waiting.delete(el);
-  if (fill(el, src)) return;
-  waiting.set(el, src);
-  prefetch([src]);
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -450,6 +400,11 @@ const circlePoints = ([cx, cy, r]: [number, number, number]): Pair[] =>
 const toneColor = (tone: string) => (/^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone);
 
 const words = (s: string | undefined | null) => (s ?? '').split(/\s+/).filter(Boolean);
+
+function mark(el: HTMLElement, from: string | null): void {
+  if (from) el.dataset.plotText = from;
+  else delete el.dataset.plotText;
+}
 
 type Box = { x: number; y: number; w: number; h: number; x0: number; y0: number; sx: number; sy: number; panel: Panel };
 
@@ -520,12 +475,18 @@ export class PlotView {
   }
 
   reload(text: string | null = null): void {
+    const tab = this.spec?.tabs[this.tab].name;
     this.pause();
     this.spec = null;
     this.W = this.H = 0;
     this.tabButtons = [];
-    this.stepTab = null;
     this.load(text);
+    if (!this.spec) return;
+    const kept = this.plot.tabs.findIndex((t) => t.name === tab);
+    if (this.offered.includes(kept)) this.tab = kept;
+    this.markTabs();
+    this.u = clamp(this.u, 0, this.frames - 1);
+    this.fit();
   }
 
   private load(text: string | null): void {
@@ -545,7 +506,7 @@ export class PlotView {
       console.error(message);
       return;
     }
-    prefetch(plotTexts(this.spec));
+    prefetch(plotTexts(this.spec).map(plotTex));
     const only = words(el.dataset.plotPanels);
     this.panels = only.length ? this.spec.panels.filter((p) => only.includes(p.id)) : this.spec.panels;
     const names = words(el.dataset.plotTabs);
@@ -589,7 +550,8 @@ export class PlotView {
         const b = document.createElement('button');
         b.type = 'button';
         b.setAttribute('role', 'tab');
-        setText(b, plot.tabs[i].label);
+        setPlotText(b, plot.tabs[i].label);
+        mark(b, pathOf(plot.tabs[i], 'label'));
         b.addEventListener('click', () => { b.blur(); this.setTab(i); });
         bar.append(b);
         return { b, i };
@@ -640,7 +602,8 @@ export class PlotView {
     readout.className = 'plot-readout';
     if (plot.parameter.label) {
       const name = document.createElement('span');
-      setText(name, plot.parameter.label);
+      setPlotText(name, plot.parameter.label);
+      mark(name, pathOf(plot.parameter, 'label'));
       readout.append(name, ' = ');
     }
     this.value = document.createElement('span');
@@ -678,7 +641,7 @@ export class PlotView {
 
   private panelsNow(): Panel[] {
     const patches = this.plot.tabs[this.tab].panels;
-    return this.panels.map((p) => ({ ...p, ...patches[p.id] }));
+    return this.panels.map((p) => written({ ...p, ...patches[p.id] }, WRITTEN.get(patches[p.id]?.title === undefined ? p : patches[p.id])!));
   }
 
   private layout(): void {
@@ -731,10 +694,11 @@ export class PlotView {
     return pts.map(([x, y], i) => `${i ? 'L' : 'M'}${this.XS(b, x).toFixed(1)} ${this.YS(b, y).toFixed(1)}`).join('');
   }
 
-  private label(text: string, left: number, top: number, a: Anchor, cls: string, names: string[], tone?: string): HTMLElement {
+  private label(text: string, from: string | null, left: number, top: number, a: Anchor, cls: string, names: string[], tone?: string): HTMLElement {
     const el = document.createElement('div');
     el.className = `plot-label ${cls}`.trim();
-    setText(el, text);
+    setPlotText(el, text);
+    mark(el, from);
     this.place(el, left, top, a);
     if (tone) el.style.color = toneColor(tone);
     this.overlay.append(el);
@@ -832,19 +796,19 @@ export class PlotView {
         for (const t of p.x.ticks) {
           const X = this.X(b, t.at);
           svg('path', { d: `M${X} ${b.y + b.h}v10` }, axes);
-          this.label(t.text, X, b.y + b.h + 32, 'middle', 'plot-tick', [p.id]);
+          this.label(t.text, pathOf(t, 'text'), X, b.y + b.h + 32, 'middle', 'plot-tick', [p.id]);
         }
         for (const t of p.y.ticks) {
           const Y = this.Y(b, t.at);
           svg('path', { d: `M${b.x} ${Y}h-10` }, axes);
-          this.label(t.text, b.x - 18, Y, 'end', 'plot-tick', [p.id]);
+          this.label(t.text, pathOf(t, 'text'), b.x - 18, Y, 'end', 'plot-tick', [p.id]);
         }
-        if (p.x.title) this.label(p.x.title, b.x + b.w / 2, b.y + b.h + 70, 'middle', 'plot-title', [p.id]);
-        if (p.y.title) this.label(p.y.title, b.x, b.y - 30, 'middle', 'plot-title', [p.id]);
+        if (p.x.title) this.label(p.x.title, pathOf(p.x, 'title'), b.x + b.w / 2, b.y + b.h + 70, 'middle', 'plot-title', [p.id]);
+        if (p.y.title) this.label(p.y.title, pathOf(p.y, 'title'), b.x, b.y - 30, 'middle', 'plot-title', [p.id]);
       }
-      if (p.title) this.label(p.title, b.x + b.w, b.y - 30, 'end', 'plot-title', [p.id]);
+      if (p.title) this.label(p.title, pathOf(p, 'title'), b.x + b.w, b.y - 30, 'end', 'plot-title', [p.id]);
       for (const l of p.labels) {
-        const node = this.label(l.text, this.X(b, l.at[0]) + l.dx, this.Y(b, l.at[1]) + l.dy, l.anchor, '', []);
+        const node = this.label(l.text, pathOf(l, 'text'), this.X(b, l.at[0]) + l.dx, this.Y(b, l.at[1]) + l.dy, l.anchor, '', []);
         this.styleItem(node, l, [p.id, l.id]);
       }
       svg('g', { class: 'plot-marks', 'data-panel': p.id, 'clip-path': `url(#plot-${this.uid}-${p.id}-marks)` }, g);
@@ -938,22 +902,26 @@ export class PlotView {
         }
       } else if (m.kind === 'label') {
         const d = data as LabelData, at = d.at.map((q) => this.toAxes(b, q));
-        const el = this.label(d.text[0], 0, 0, m.anchor, 'plot-mark', [m.panel, m.id], m.tone);
+        const fromFrame = (k: number) => (WRITTEN.has(d.text) ? `${WRITTEN.get(d.text)}[${k}]` : pathOf(d, 'text'));
+        const el = this.label(d.text[0], fromFrame(0), 0, 0, m.anchor, 'plot-mark', [m.panel, m.id], m.tone);
         el.classList.add(...m.cls);
         if (moving) this.fadeLabels.push(el);
-        let shown = d.text[0];
+        let shown = 0;
         this.drawers.push((u) => {
           const [x, y] = at.length === 1 ? at[0] : (framesAt(at, u) as Pair);
           this.place(el, this.XS(b, x) + m.dx, this.YS(b, y) + m.dy, m.anchor);
-          const text = nearest(d.text, u);
-          if (text !== shown) { setText(el, text); shown = text; }
+          const k = clamp(Math.round(u), 0, d.text.length - 1);
+          if (k === shown) return;
+          if (d.text[k] !== d.text[shown]) setPlotText(el, d.text[k]);
+          mark(el, fromFrame(k));
+          shown = k;
         });
       } else {
         const events = data as PlotEvent[];
         const nodes = events.map((e) => {
           const X = this.X(b, e.at[0]), Y = this.Y(b, e.at[1]);
           const ring = svg('circle', { class: 'plot-ring', cx: X, cy: Y, r: m.size / 2, 'stroke-width': m.width }, fader);
-          const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, 'plot-mark', [m.panel, m.id], m.tone) : null;
+          const text = e.text ? this.label(e.text, pathOf(e, 'text'), X + m.dx, Y + m.dy, m.anchor, 'plot-mark', [m.panel, m.id], m.tone) : null;
           text?.classList.add(...m.cls);
           if (text) this.fadeLabels.push(text);
           this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id], tone: m.tone });

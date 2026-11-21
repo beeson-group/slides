@@ -21,6 +21,7 @@ import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, types
 import { numberTheorems } from './theorems.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import { coverAll, initVideos } from './video.ts';
+import { typesetLabel } from './drawn-text.ts';
 import { initViewers } from './viewers.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
@@ -378,6 +379,7 @@ const Beeson = {
   remount: remountBackdrop,
   preview,
   fitWindow,
+  typesetLabel,
   refreshChrome: (): void => {
     refreshChrome();
     numberTheorems();

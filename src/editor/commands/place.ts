@@ -3,6 +3,9 @@ import { CONTAINER, snapBoxOf } from '../canvas/hit.ts';
 import { inkBox, meets, promptBox, slideBox, takenBox, type Box } from './insert.ts';
 import { keepPlaces } from '../canvas/drag.ts';
 
+const SHOWN_CHILD = '.r-stack > :not(.beeson-off, [data-generated])';
+export const FLOW_KIDS = [':scope > :not(.r-stack)', ':scope > .col > *', ':scope > .text-column > :not(.r-stack)', ':scope > .title-text > *', ':scope > .sec > *', `:scope > ${SHOWN_CHILD} > *`, `:scope > .text-column > ${SHOWN_CHILD} > *`].join(', ');
+
 const FIGURE = `${CONTAINER}, img, video, .qr, .tikz, .surface, .plot, tycho-viewer, svg.line`;
 const SKIP = 'aside.notes, script, style, .backdrop, .col, .text-column, .title-text, [data-generated]:not(.run)';
 const ROOM = 24;
@@ -76,7 +79,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
   const h = slide.offsetHeight || 1080;
   const others: { box: Box; text: boolean; ground: boolean }[] = [];
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .title-text > *'), ...(num ? [num] : [])]) {
+  for (const o of [...slide.querySelectorAll(FLOW_KIDS), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = boxOf(app, o);
     if (box && box.right - box.left > 1 && box.bottom - box.top > 1) {
@@ -145,7 +148,7 @@ export function piecesOf(app: App, el: Element): Pieces {
     if (o.matches('.run, .foot, .slide-number')) out.chrome.push(box);
   };
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .title-text > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
+  for (const o of [...slide.querySelectorAll(FLOW_KIDS), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = framed(o) ? slideBox(app, o) : boxOf(app, o, true);
     const all = o.matches('.plate') && o.getClientRects().length ? slideBox(app, o) : null;

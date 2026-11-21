@@ -95,10 +95,14 @@ export function backdropPane(app: App, run: Run): Control[] {
       note(() => 'Drag the drawing or use the arrow keys to pan it, and drag a handle to resize its box.'),
     ]),
   ];
-  parts.push(when(() => !file(), [section('Labels', [
-    row(LABELS.slice(0, 2).map((l) => labelBox(app, run, el, l.at, l.name))),
-    row(LABELS.slice(2).map((l) => labelBox(app, run, el, l.at, l.name))),
-  ])]));
+  parts.push(section('Labels', [
+    when(() => !file(), [
+      row(LABELS.slice(0, 2).map((l) => labelBox(app, run, el, l.at, l.name))),
+      row(LABELS.slice(2).map((l) => labelBox(app, run, el, l.at, l.name))),
+    ]),
+    row([button(app, run, { command: 'backdrop.addLabel', arg: { el }, text: 'Add Label' })]),
+    note(() => 'Add Label puts a label at the center of the window. Choose Add Label Here in the menu of the drawing to put one at a point, and drag a label to shift it.'),
+  ]));
   const traced = !!el?.closest('section')?.matches('.title, .section, .closing');
   parts.push(
     section('Motion', [

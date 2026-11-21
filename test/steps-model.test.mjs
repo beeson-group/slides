@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { itemsOf, moveTo, oneByOne, planOf, remapKeep, setFinal, setStart, setStep, shift, startOf, stepAt } from '../src/editor/shown-steps.ts';
+import { itemsOf, moveTo, oneByOne, planOf, remapKeep, setFinal, setStart, setStep, shift, shownAt, startOf, stepAt } from '../src/editor/shown-steps.ts';
 
 const at = (index) => ({ fragment: true, index, final: false });
 const loose = { fragment: true, index: null, final: false };
@@ -85,4 +85,11 @@ test('a data-keep of a number follows its step to the new index', () => {
   const off = itemsOf(before, moveTo(planOf(before), 2, null));
   assert.equal(remapKeep(3, before, off), 3);
   assert.equal(remapKeep(9, before, after), 9);
+});
+
+test('a child of a stack is shown from its step until the step of the next child', () => {
+  const span = { el: null, step: 2, kind: 'span', end: 4 };
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map((s) => shownAt(span, s)), [false, false, true, true, false, false]);
+  const lastChild = { el: null, step: 4, kind: 'span', end: Infinity };
+  assert.deepEqual([3, 4, 9].map((s) => shownAt(lastChild, s)), [false, true, true]);
 });

@@ -14,7 +14,7 @@ export function titled(label: string): string {
 
 export function refreshHeads(host: Element): void {
   const slide = host.closest('section');
-  if (!slide?.classList.contains('section') || slide.hasAttribute('data-run') || (slide.querySelector('h2') ?? slide.querySelector('h1')) !== host) return;
+  if (!slide?.classList.contains('section') || (slide.querySelector('h2') ?? slide.querySelector('h1')) !== host) return;
   (window as unknown as Page).Beeson?.refreshChrome?.();
 }
 

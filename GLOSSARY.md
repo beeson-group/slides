@@ -196,6 +196,12 @@ The small box with the name of a person at the upper left corner of the frame of
 
 Avoid "cursor", "tag", and "badge".
 
+## Outline list
+
+The list of the sections of a talk on a section slide, written empty with `data-auto` and given the heading of each section slide as an item when the deck is shown. The item of the section of its slide is drawn in `--text`, and the others are muted.
+
+Avoid "agenda" and "table of contents".
+
 ## Overview
 
 The view of reveal.js in which the slides of a show are shown small in one row. It is opened with the key O, or on a touch screen with a pinch closed at the full view, since a pinch on a zoomed page is the zoom of the browser. The row is moved with the arrow keys, a swipe, or a sideways wheel, and a slide is shown with a tap, a click, or a pinch open on it.
@@ -317,6 +323,12 @@ Avoid "Chapters Table".
 The text from which an output is compiled: `figures/name.tex` for a TikZ figure, and `preamble.tex` and `references.bib` for `tex.js`. The source of a TikZ figure is changed in its Edit Source sheet, or with the fields of the TikZ Figure pane when From Data… wrote it.
 
 Avoid "Edit TeX…" for Edit Source….
+
+## Stack
+
+A `div` with the class `r-stack` of reveal.js, whose children are drawn in one place and shown one at a time, each from its step until the step of the next child, as the `overprint` of Beamer. In the editor, each child is shown alone under its own tab at the slide, as if it were a separate slide.
+
+Avoid "pane", "layer", "panel", and "tab" for a child of a stack. Avoid "stack" for the vertical slides of reveal.js.
 
 ## Step
 

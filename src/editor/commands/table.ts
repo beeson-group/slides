@@ -17,7 +17,7 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeFigureBox, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
-import { centerPlace, drawnCells, framed, MARGIN, piecesOf, wordBox } from './place.ts';
+import { FLOW_KIDS, centerPlace, drawnCells, framed, MARGIN, piecesOf, wordBox } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
 import { MARK } from './slide.ts';
 
@@ -63,10 +63,10 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .cell{border:${FRAME}px solid var(--ed-select);border-radius:2px;pointer-events:none}
 .beeson-table-bars .grips{position:static}
 .beeson-table-bars .grip{position:fixed;cursor:col-resize;touch-action:none}
-.beeson-table-bars .grip::after{content:"";position:absolute;left:4px;top:3px;bottom:3px;width:1px;background:var(--ed-muted);opacity:0}
-.beeson-table-bars .grip:hover::after,html.beeson-column-resizing .beeson-table-bars .grip::after{opacity:1;background:var(--ed-select)}
-.beeson-table-bars .guide{width:1px;background:var(--ed-select);pointer-events:none}
-.beeson-table-bars .guide[hidden]{display:none}
+.beeson-table-bars .grip::after{content:"";position:absolute;right:2px;top:3px;bottom:0;width:1px;background:var(--ed-select);opacity:0}
+.beeson-table-bars .grips.rows .grip{cursor:row-resize}
+.beeson-table-bars .grips.rows .grip::after{right:0;left:0;top:50%;bottom:auto;width:auto;height:1px}
+.beeson-table-bars .grip:hover::after,.beeson-table-bars .grip.on::after{opacity:1}
 .beeson-table-bars .drop{border-radius:1.5px;background:var(--ed-select);pointer-events:none}
 .beeson-table-bars .drop[hidden]{display:none}
 .beeson-table-bars .lift{overflow:hidden;opacity:.85;box-shadow:0 0 0 1px var(--ed-select),0 10px 28px #0006;transform-origin:0 0;pointer-events:none}
@@ -75,6 +75,7 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 html.beeson-line-moving,html.beeson-line-moving *{cursor:grabbing!important}
 html.beeson-line-refused,html.beeson-line-refused *{cursor:not-allowed!important}
 html.beeson-column-resizing,html.beeson-column-resizing *{cursor:col-resize!important}
+html.beeson-row-resizing,html.beeson-row-resizing *{cursor:row-resize!important}
 html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:none!important}
 .beeson-table-bars .cell.range{border-width:${FRAME_RANGE}px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
 `;
@@ -82,6 +83,7 @@ html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:
 const BAR = 18;
 const GAP = 6;
 const GRIP = 9;
+const COARSE = matchMedia('(pointer: coarse), (hover: none)');
 
 type Target = { table: HTMLTableElement; cell: HTMLTableCellElement | null; box: Box | null };
 type Size = { rows: number; columns: number };
@@ -389,7 +391,7 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const drawn = slide.matches('.title, .section, .closing') ? [] : [...slide.querySelectorAll(':scope > .backdrop')].flatMap((b) => drawnCells(app, b));
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
   const before = taken(above.filter((el) => !ground(el)));
-  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .title-text > *, :scope > .sec > *')].filter((el) => !el.contains(table));
+  const kids = [...slide.querySelectorAll(FLOW_KIDS)].filter((el) => !el.contains(table));
   const others = taken(kids.flatMap((el) => (ground(el) ? [...el.children].filter((c) => c.getClientRects().length) : [el])));
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
@@ -643,6 +645,21 @@ const unmergeable = (t: Target | null) => !!t?.box && spotsIn(gridOf(t.table), t
 const NARROWEST = 24;
 
 const contentWidth = (cell: Element) => parseFloat(getComputedStyle(cell).width) || 0;
+
+function leastHeight(tr: HTMLTableRowElement): number {
+  const kept = tr.style.height;
+  tr.style.height = '1px';
+  const h = tr.offsetHeight;
+  tr.style.height = kept;
+  return h;
+}
+
+function writeHeights(app: App, heights: Map<HTMLTableRowElement, number | null>, label: string): void {
+  for (const [tr, h] of heights) {
+    const text = h === null ? null : `${Math.max(1, Math.round(h))}px`;
+    if (tr.style.height !== (text ?? '')) app.doc.setTag(tr, { style: { height: text } }, label);
+  }
+}
 
 function writeWidths(app: App, widths: Map<HTMLTableCellElement, number>, label: string): void {
   for (const [cell, w] of widths) {
@@ -1013,8 +1030,7 @@ function installBars(app: App): void {
   const addCol = round('Add Column', 'plus', (t) => app.commands.run('table.columnAfter', { cell: lastCell(t.table, 'column') }));
   const addRow = round('Add Row', 'plus', (t) => app.commands.run('table.rowBelow', { cell: lastCell(t.table, 'row') }));
   const grips = make('div', 'grips');
-  const guide = make('div', 'guide');
-  guide.hidden = true;
+  const rowGrips = make('div', 'grips rows');
   const handle = make('div', 'fill');
   handle.title = 'Drag to fill the cells beside the selection';
   handle.hidden = true;
@@ -1027,7 +1043,7 @@ function installBars(app: App): void {
     c.hidden = true;
     return c;
   });
-  const sides = (['w', 'e'] as const).map((h) => {
+  const sides = (['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const).map((h) => {
     const g = make('div', app.platform === 'mac' ? 'beeson-grip square' : 'beeson-grip');
     g.dataset.handle = h;
     g.title = 'Drag to resize the table';
@@ -1038,7 +1054,7 @@ function installBars(app: App): void {
   gapLine.hidden = true;
   const lift = make('div', 'lift');
   lift.hidden = true;
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides, lift, gapLine);
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, rowGrips, spread, ...corners, handle, ...sides, lift, gapLine);
   document.body.append(layer);
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
 
@@ -1213,6 +1229,7 @@ function installBars(app: App): void {
       i: Number(grip.dataset.grip), x: ev.clientX, scale: box.width / (shown.table.offsetWidth || 1) || 1, on: false,
     };
     grip.setPointerCapture(ev.pointerId);
+    grip.classList.add('on');
     document.documentElement.classList.add('beeson-column-resizing');
   });
   grips.addEventListener('pointermove', (ev) => {
@@ -1224,12 +1241,14 @@ function installBars(app: App): void {
     }
     resize.on = true;
     for (const [cell, w] of sized(ev)) cell.style.width = `${Math.round(w)}px`;
+    overlay().draw();
   });
   const drop = (ev: PointerEvent | null) => {
     const r = resize;
     if (!r) return;
     const widths = ev ? sized(ev) : null;
     resize = null;
+    for (const g of grips.children) g.classList.remove('on');
     document.documentElement.classList.remove('beeson-column-resizing');
     r.cells.forEach((c, i) => {
       c.style.width = r.styles[i];
@@ -1302,33 +1321,44 @@ function installBars(app: App): void {
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) c.addEventListener(type, () => (stretching = null));
   }
 
-  let widening: { table: HTMLTableElement; cells: HTMLTableCellElement[]; outer: number[]; content: number[]; styles: string[]; at: number[]; moved: string; left: boolean; x: number; scale: number; width: number; on: boolean } | null = null;
+  let widening: {
+    table: HTMLTableElement; cells: HTMLTableCellElement[]; outer: number[]; content: number[]; styles: string[]; rows: HTMLTableRowElement[]; tall: number[]; least: number[]; heights: string[];
+    at: number[]; moved: string; handle: string; x: number; y: number; scale: number; width: number; height: number; on: boolean;
+  } | null = null;
   const widen = (ev: PointerEvent) => {
     const r = widening!;
-    const d = ((ev.clientX - r.x) / r.scale) * (r.left ? -1 : 1);
-    const k = Math.max(0.05, (r.width + d) / r.width);
-    const widths = new Map(r.cells.map((c, i) => [c, Math.round(Math.max(NARROWEST, r.outer[i] * k - r.outer[i] + r.content[i]))]));
-    for (const [c, w] of widths) c.style.width = `${w}px`;
-    const shift = r.left ? r.width - r.table.offsetWidth : 0;
-    r.table.style.translate = shift ? `${r.at[0] + shift}px ${r.at[1]}px` : r.moved;
-    return { widths, shift };
+    const sx = r.handle.includes('e') ? 1 : r.handle.includes('w') ? -1 : 0;
+    const sy = r.handle.includes('s') ? 1 : r.handle.includes('n') ? -1 : 0;
+    let kx = sx ? Math.max(0.05, (r.width + (sx * (ev.clientX - r.x)) / r.scale) / r.width) : 1;
+    let ky = sy ? Math.max(0.05, (r.height + (sy * (ev.clientY - r.y)) / r.scale) / r.height) : 1;
+    if (ev.shiftKey) kx = ky = sx && (!sy || Math.abs(kx - 1) >= Math.abs(ky - 1)) ? kx : ky;
+    const widths = kx === 1 ? null : new Map(r.cells.map((c, i) => [c, Math.round(Math.max(NARROWEST, r.outer[i] * kx - r.outer[i] + r.content[i]))]));
+    const heights = ky === 1 ? null : new Map(r.rows.map((tr, i) => [tr, r.tall[i] * ky > r.least[i] + 0.5 ? Math.round(r.tall[i] * ky) : null]));
+    r.cells.forEach((c, i) => (c.style.width = widths ? `${widths.get(c)}px` : r.styles[i]));
+    r.rows.forEach((tr, i) => (tr.style.height = heights ? (heights.get(tr) === null ? '' : `${heights.get(tr)}px`) : r.heights[i]));
+    const shift = [sx < 0 ? r.width - r.table.offsetWidth : 0, sy < 0 ? r.height - r.table.offsetHeight : 0];
+    r.table.style.translate = shift[0] || shift[1] ? `${r.at[0] + shift[0]}px ${r.at[1] + shift[1]}px` : r.moved;
+    return { widths, heights, shift };
   };
   for (const g of sides) {
     g.addEventListener('pointerdown', (ev) => {
       if (!shown || ev.button !== 0 || !asObject(app, shown.table)) return;
       const table = shown.table;
       const cells = (gridOf(table).spots[0] ?? []).map((s) => s.cell);
+      const rows = [...table.rows];
       const at = (table.style.translate || '0 0').split(/\s+/).map((v) => parseFloat(v) || 0);
       widening = {
-        table, cells, outer: cells.map((c) => c.offsetWidth), content: cells.map(contentWidth), styles: cells.map((c) => c.style.width), at: [at[0] ?? 0, at[1] ?? 0],
-        moved: table.style.translate, left: g.dataset.handle === 'w', x: ev.clientX, scale: table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1, width: table.offsetWidth || 1, on: false,
+        table, cells, outer: cells.map((c) => c.offsetWidth), content: cells.map(contentWidth), styles: cells.map((c) => c.style.width),
+        rows, tall: rows.map((tr) => tr.offsetHeight), least: rows.map(leastHeight), heights: rows.map((tr) => tr.style.height),
+        at: [at[0] ?? 0, at[1] ?? 0], moved: table.style.translate, handle: g.dataset.handle ?? 'e', x: ev.clientX, y: ev.clientY,
+        scale: table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1, width: table.offsetWidth || 1, height: table.offsetHeight || 1, on: false,
       };
       g.setPointerCapture(ev.pointerId);
       document.documentElement.classList.add('beeson-resizing');
     });
     g.addEventListener('pointermove', (ev) => {
       const r = widening;
-      if (!r || (!r.on && ev.clientX === r.x)) return;
+      if (!r || (!r.on && ev.clientX === r.x && ev.clientY === r.y)) return;
       if (!r.on && refusedDrag(app, 'arrange.setSize', r.table)) {
         widening = null;
         document.documentElement.classList.remove('beeson-resizing');
@@ -1336,26 +1366,73 @@ function installBars(app: App): void {
       }
       r.on = true;
       widen(ev);
+      overlay().draw();
     });
     const end = (ev: PointerEvent | null) => {
       const r = widening;
       if (!r) return;
-      const done = ev && Math.abs(ev.clientX - r.x) >= 1 ? widen(ev) : null;
+      const done = ev && Math.hypot(ev.clientX - r.x, ev.clientY - r.y) >= 1 ? widen(ev) : null;
       widening = null;
       document.documentElement.classList.remove('beeson-resizing');
       r.cells.forEach((c, i) => (c.style.width = r.styles[i]));
+      r.rows.forEach((tr, i) => (tr.style.height = r.heights[i]));
       r.table.style.translate = r.moved;
-      if (!done || refusedDrag(app, 'arrange.setSize', r.table)) return;
+      if (!done || (!done.widths && !done.heights) || refusedDrag(app, 'arrange.setSize', r.table)) return;
       void app.history.transact('Resize Table', () => {
-        writeWidths(app, done.widths, 'resize table');
-        const x = r.at[0] + done.shift;
-        if (done.shift) app.doc.setTag(r.table, { translate: x || r.at[1] ? { x, y: r.at[1] } : null }, 'resize table');
+        if (done.widths) writeWidths(app, done.widths, 'resize table');
+        if (done.heights) writeHeights(app, done.heights, 'resize table');
+        const [x, y] = [r.at[0] + done.shift[0], r.at[1] + done.shift[1]];
+        if (done.shift[0] || done.shift[1]) app.doc.setTag(r.table, { translate: x || y ? { x, y } : null }, 'resize table');
       }).catch((e) => app.fail(e));
     };
     g.addEventListener('pointerup', (ev) => end(ev));
     g.addEventListener('pointercancel', () => end(null));
     g.addEventListener('lostpointercapture', () => end(null));
   }
+
+  let heightening: { tr: HTMLTableRowElement; tall: number; least: number; style: string; y: number; scale: number; on: boolean } | null = null;
+  const heightOf = (ev: PointerEvent): number | null => {
+    const r = heightening!;
+    const h = r.tall + (ev.clientY - r.y) / r.scale;
+    return h > r.least + 0.5 ? Math.round(h) : null;
+  };
+  rowGrips.addEventListener('pointerdown', (ev) => {
+    const grip = ev.target instanceof HTMLElement ? ev.target.closest<HTMLElement>('[data-row]') : null;
+    const tr = grip && shown ? shown.table.rows[Number(grip.dataset.row)] : null;
+    if (!grip || !tr || !shown || ev.button !== 0) return;
+    heightening = { tr, tall: tr.offsetHeight, least: leastHeight(tr), style: tr.style.height, y: ev.clientY, scale: shown.table.getBoundingClientRect().width / (shown.table.offsetWidth || 1) || 1, on: false };
+    grip.setPointerCapture(ev.pointerId);
+    grip.classList.add('on');
+    document.documentElement.classList.add('beeson-row-resizing');
+  });
+  rowGrips.addEventListener('pointermove', (ev) => {
+    const r = heightening;
+    if (!r || (!r.on && ev.clientY === r.y)) return;
+    if (!r.on && refusedDrag(app, 'arrange.setSize', r.tr.closest('table'))) {
+      heightening = null;
+      for (const g of rowGrips.children) g.classList.remove('on');
+      document.documentElement.classList.remove('beeson-row-resizing');
+      return;
+    }
+    r.on = true;
+    const h = heightOf(ev);
+    r.tr.style.height = h === null ? '' : `${h}px`;
+    overlay().draw();
+  });
+  const dropRow = (ev: PointerEvent | null) => {
+    const r = heightening;
+    if (!r) return;
+    const h = ev && r.on ? heightOf(ev) : undefined;
+    heightening = null;
+    for (const g of rowGrips.children) g.classList.remove('on');
+    document.documentElement.classList.remove('beeson-row-resizing');
+    r.tr.style.height = r.style;
+    if (h === undefined || (h === null ? !r.style : Math.abs(h - r.tall) < 0.5) || refusedDrag(app, 'arrange.setSize', r.tr.closest('table'))) return;
+    void app.history.transact('Resize Row', () => writeHeights(app, new Map([[r.tr, h]]), 'resize row')).catch((e) => app.fail(e));
+  };
+  rowGrips.addEventListener('pointerup', (ev) => dropRow(ev));
+  rowGrips.addEventListener('pointercancel', () => dropRow(null));
+  rowGrips.addEventListener('lostpointercapture', () => dropRow(null));
 
   const draw = () => {
     const t = shown;
@@ -1386,12 +1463,22 @@ function installBars(app: App): void {
         return g;
       }));
     }
+    const coarse = COARSE.matches;
+    const reach = coarse ? 2 * GRIP : Math.min(GRIP, ...rowBoxes.map((b) => b.height / 3));
     first.forEach((s, i) => {
       const x = edges[s.col + s.span - 1][1];
-      place(grips.children[i], x - GRIP / 2, top, GRIP, BAR);
-      if (resize?.i === i) place(guide, x, box.top, 1, box.height);
+      if (coarse) place(grips.children[i], x - reach / 2, top, reach, BAR);
+      else place(grips.children[i], x - GRIP + 2, top, GRIP, box.bottom - top);
     });
-    guide.hidden = !resize;
+    if (rowGrips.children.length !== rowBoxes.length) {
+      rowGrips.replaceChildren(...rowBoxes.map((_, i) => {
+        const g = make('div', 'grip');
+        g.dataset.row = String(i);
+        g.title = 'Drag to resize the row';
+        return g;
+      }));
+    }
+    rowBoxes.forEach((b, i) => place(rowGrips.children[i], left, b.bottom - reach / 2, coarse ? BAR : box.right - left, reach));
     const gap = moving?.on && moving.table === t.table ? moving.to : null;
     gapLine.hidden = gap === null;
     if (gap !== null && moving!.kind === 'row') {
@@ -1433,7 +1520,10 @@ function installBars(app: App): void {
     const whole = !!widening || (asObject(app, t.table) && !t.table.hasAttribute('data-locked'));
     for (const g of sides) {
       g.hidden = !whole;
-      if (whole) g.style.cssText = `left:${g.dataset.handle === 'w' ? box.left : box.right}px;top:${(box.top + box.bottom) / 2}px`;
+      const h = g.dataset.handle ?? '';
+      const x = h.includes('w') ? box.left : h.includes('e') ? box.right : (box.left + box.right) / 2;
+      const y = h.includes('n') ? box.top : h.includes('s') ? box.bottom : (box.top + box.bottom) / 2;
+      if (whole) g.style.cssText = `left:${x}px;top:${y}px`;
     }
     const reached = filling && !sameBox(filling.to, filling.from) ? boxRect(filling.table, filling.to) : null;
     spread.hidden = !reached;
@@ -2002,7 +2092,7 @@ export function install(app: App): void {
     }
     if (ev.button !== 0) return;
     if (!ev.shiftKey) {
-      press = cell;
+      if (!asObject(app, cell.closest('table') as HTMLTableElement)) press = cell;
       return;
     }
     const table = cell.closest('table');

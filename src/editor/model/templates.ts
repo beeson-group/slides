@@ -31,7 +31,7 @@ export function layoutText(layout: NewLayout, style: TextStyle, base = ''): stri
       return lines([[0, '<section class="closing">'], [1, '<div class="backdrop" data-backdrop="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>'], ...titleText, [0, '</section>']], style, base);
     case 'section':
       return lines(
-        [[0, '<section class="section">'], [1, '<div class="sec">'], [2, '<h2></h2>'], [2, '<ul class="outline" data-auto></ul>'], [1, '</div>'], [1, '<div class="backdrop" data-backdrop="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3"></div>'], [0, '</section>']],
+        [[0, '<section class="section">'], [1, '<div class="sec">'], [2, '<h2></h2>'], [2, '<ol class="outline" data-auto></ol>'], [1, '</div>'], [1, '<div class="backdrop" data-backdrop="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3"></div>'], [0, '</section>']],
         style,
         base,
       );
@@ -110,7 +110,7 @@ export function sampleText(layout: NewLayout): string {
     text = text.replace(empty, words ? empty.replace('></', `>${words}</`) : '');
   }
   text = text
-    .replace('<ul class="outline" data-auto></ul>', '<ul class="outline"><li class="now">Chapter one</li><li>Chapter two</li></ul>')
+    .replace('<ol class="outline" data-auto></ol>', '<ol class="outline"><li class="now">Chapter one</li><li>Chapter two</li></ol>')
     .replace(/<div class="(backdrop|plate|figure-box)"[^>]*>/g, (_, cls: string) => `<div class="${cls}" ${BOX}>`);
   text = text.replace(/<ul>\s*<li><\/li>\s*<\/ul>/, '<ul><li>A first point</li><li>A second point</li></ul>');
   const place = layout === 'content' ? 'figure-box' : layout === 'narrow' ? 'backdrop' : null;

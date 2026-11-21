@@ -194,9 +194,10 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal li ul, .reveal li ol { margin-top: 10px; font-size: 36px; }
 .reveal .outline { font-size: 36px; line-height: 1.7; color: var(--muted); margin: 48px 0 0; }
 .reveal .outline > li { margin: 0; padding-left: 42px; }
-.reveal .outline > li::before { display: none; }
 .reveal .outline > li.now { color: var(--text); }
-.reveal .outline > li.now::before { content: ""; display: block; position: absolute; left: 0; top: 0.78em; width: 22px; height: 2px; background: var(--violet); }
+.reveal ol.outline > li::before { color: var(--text); }
+.reveal ul.outline > li::before { background: var(--violet); }
+.reveal ul.outline.dots > li::before { background: none; border-color: var(--violet); }
 
 .reveal .math { margin: 28px 0 4px; font-size: 52px; }
 .reveal mjx-container[display="true"] { margin: 0 !important; text-align: left !important; }
@@ -227,9 +228,10 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .hljs-operator { color: var(--subtle); }
 
 .reveal table { margin: 24px 0 0; border-collapse: collapse; font-size: 36px; line-height: 1.4; }
-.reveal .slides section > table, .reveal .slides section > .col > table { position: relative; z-index: 1; background: var(--bg); }
-.reveal th, .reveal td { padding: 10px 40px 10px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: inherit; }
+.reveal .slides section > table, .reveal .slides section > .col > table, .reveal .slides section > :where(.r-stack) > * > table { position: relative; z-index: 1; background: var(--bg); }
+.reveal th, .reveal td { padding: 10px 40px 10px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: inherit; font-variant-numeric: lining-nums tabular-nums; }
 .reveal th { color: var(--subtle); font-style: italic; }
+.reveal tr:first-child > th { vertical-align: bottom; border-bottom-color: var(--stroke); }
 .reveal tr:last-child td { border-bottom: 0; }
 
 .reveal .run { left: 120px; top: 44px; font-size: 22px; font-style: italic; color: var(--muted); }
@@ -281,8 +283,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 
 .reveal .backdrop { pointer-events: auto; }
 .reveal .backdrop canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
-.reveal .backdrop .label { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 28px; font-style: italic; color: var(--subtle); }
-.reveal .backdrop .label sub { font-size: 0.7em; font-style: normal; vertical-align: -0.25em; }
+.reveal .backdrop .label { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 28px; color: var(--subtle); }
 
 .reveal .surface { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; }
 .reveal .surface.dragging { cursor: grabbing; }
@@ -297,8 +298,20 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section > table,
 .reveal .slides section > pre,
 .reveal .slides section > .math,
-.reveal .slides section > .col { max-width: 1000px; }
+.reveal .slides section > .col,
+.reveal .slides section > :where(.r-stack) > * > p,
+.reveal .slides section > :where(.r-stack) > * > ul,
+.reveal .slides section > :where(.r-stack) > * > ol,
+.reveal .slides section > :where(.r-stack) > * > table,
+.reveal .slides section > :where(.r-stack) > * > pre,
+.reveal .slides section > :where(.r-stack) > * > .math { max-width: 1000px; }
 .reveal .slides section > .col { margin: 0; }
+.reveal .slides section .r-stack { grid-template-rows: none; grid-template-columns: minmax(0, 1fr); }
+.reveal .slides section .r-stack > * { margin: 0; min-width: 0; align-self: start; justify-self: stretch; }
+.reveal .slides section .r-stack > * > :first-child { margin-top: 0; }
+.reveal .slides section .r-stack > * > p:last-child { margin-bottom: 24px; }
+.reveal .slides section .r-stack > :has(~ .fragment.visible) { visibility: hidden; }
+.reveal .slides section:not([data-complete]) .r-stack > .fragment.visible:not(.current-fragment) { opacity: 1; }
 .reveal .slides section .figure-box { left: 1200px; top: 120px; width: 600px; height: 800px; }
 .reveal .slides section .backdrop { left: 1200px; top: 0; width: 720px; height: 1080px; }
 .reveal .slides section.narrow .backdrop { left: 920px; width: 1000px; }
@@ -321,7 +334,12 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.narrow > ol,
 .reveal .slides section.narrow > table,
 .reveal .slides section.narrow > .math,
-.reveal .slides section.narrow > .col { max-width: 760px; width: auto; }
+.reveal .slides section.narrow > .col,
+.reveal .slides section.narrow > :where(.r-stack) > * > p,
+.reveal .slides section.narrow > :where(.r-stack) > * > ul,
+.reveal .slides section.narrow > :where(.r-stack) > * > ol,
+.reveal .slides section.narrow > :where(.r-stack) > * > table,
+.reveal .slides section.narrow > :where(.r-stack) > * > .math { max-width: 760px; width: auto; }
 .reveal .slides section.wide > h2,
 .reveal .slides section.wide > p,
 .reveal .slides section.wide > ul,
@@ -329,8 +347,17 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.wide > table,
 .reveal .slides section.wide > .math,
 .reveal .slides section.wide > pre,
-.reveal .slides section.wide > .col { max-width: 1680px; width: auto; }
-.reveal .slides section > :is(h2, p, ul, ol, .math)[style*="width:"] { max-width: none; }
+.reveal .slides section.wide > .col,
+.reveal .slides section.wide > :where(.r-stack) > * > p,
+.reveal .slides section.wide > :where(.r-stack) > * > ul,
+.reveal .slides section.wide > :where(.r-stack) > * > ol,
+.reveal .slides section.wide > :where(.r-stack) > * > table,
+.reveal .slides section.wide > :where(.r-stack) > * > .math,
+.reveal .slides section.wide > :where(.r-stack) > * > pre { max-width: 1680px; width: auto; }
+.reveal .slides section > :is(h2, p, ul, ol, .math)[style*="width:"],
+.reveal .slides section > :where(.r-stack) > * > :is(h2, p, ul, ol, .math)[style*="width:"] { max-width: none; }
+.reveal .slides section > table:has(tr:first-child > [style*="width:"]),
+.reveal .slides section > :where(.r-stack) > * > table:has(tr:first-child > [style*="width:"]) { max-width: none; }
 
 .reveal .slides section.title,
 .reveal .slides section.closing,
@@ -413,7 +440,7 @@ html:not([data-theme="light"]) .reveal .slides section.split .text-column { box-
 .reveal .plot-labels { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
 .reveal .plot-labels { pointer-events: none; }
 .reveal .plot-label { position: absolute; height: 1em; white-space: nowrap; line-height: 1; }
-.reveal .plot-tick { color: var(--muted); font-variant-numeric: tabular-nums; }
+.reveal .plot-tick { color: var(--muted); }
 .reveal .plot-axes path { fill: none; stroke: var(--muted); stroke-width: 2; }
 .reveal .plot-curve,
 .reveal .plot-ghost,

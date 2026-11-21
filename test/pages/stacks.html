@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Stacks deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+    <section class="wide">
+      <h2>Stack</h2>
+      <div class="r-stack">
+        <div>
+          <p id="one-text" style="translate: 0px 20px">The first form.</p>
+          <div class="math" id="one-math" style="translate: 40px 0px">\[a = b\]</div>
+        </div>
+        <div class="fragment" data-fragment-index="2">
+          <p id="two-text">The second form.</p>
+          <div class="math" id="two-math" style="translate: 80px 40px">\[a = b + c\]</div>
+        </div>
+      </div>
+      <p id="shared" class="fragment" data-fragment-index="1">Shared by both.</p>
+    </section>
+    <section>
+      <h2>Three forms</h2>
+      <div class="r-stack" id="three">
+        <p>The first.</p>
+        <p class="fragment" data-fragment-index="1">The second.</p>
+        <p class="fragment" data-fragment-index="2">The third.</p>
+      </div>
+    </section>
+    <section>
+      <h2>Plain</h2>
+      <p id="plain-1" class="fragment" data-fragment-index="1">The first step.</p>
+    </section>
+    <section>
+      <h2>Inner steps</h2>
+      <div class="r-stack" id="inner">
+        <div>
+          <p>The first form.</p>
+          <p class="fragment" data-fragment-index="1">Its step.</p>
+        </div>
+        <div class="fragment" data-fragment-index="2">
+          <p>The second form.</p>
+          <p class="fragment" data-fragment-index="3">Its own step.</p>
+        </div>
+        <div class="fragment" data-fragment-index="4">
+          <p>The third form.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

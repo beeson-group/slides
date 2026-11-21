@@ -706,9 +706,11 @@ export function listKind(app: App): ListKind | null {
   return at.item.localName === 'p' && structural(app, at.item) ? 'none' : null;
 }
 
+export const OUTLINE = ':is(ul, ol).outline[data-auto]';
+
 export function canSetList(app: App, kind: ListKind): boolean {
   const textEls = wholeListTargets(app);
-  if (textEls) return kind !== 'none' || textEls.every((el) => !el.querySelector('li :is(ul, ol)'));
+  if (textEls) return kind !== 'none' || textEls.every((el) => !el.matches(OUTLINE) && !el.querySelector('li :is(ul, ol)'));
   const at = itemAt(app);
   const now = listKind(app);
   if (!at || now === null) return false;
@@ -824,7 +826,8 @@ async function spanParagraphs(app: App, run: Element[], p: [flow.Place, flow.Pla
 
 function setWholeList(app: App, textEls: Element[], kind: ListKind): Promise<void> {
   if (!canSetList(app, kind)) return Promise.resolve();
-  return app.history.selecting('List', () => listAsWhole(app, textEls, kind));
+  const els = textEls.some((el) => el.matches(OUTLINE)) ? [...new Set([...textEls, ...app.slides().querySelectorAll(OUTLINE)])] : textEls;
+  return app.history.selecting('List', () => listAsWhole(app, els, kind));
 }
 
 async function listAsWhole(app: App, textEls: Element[], kind: ListKind): Promise<void> {
@@ -847,7 +850,8 @@ async function listAsWhole(app: App, textEls: Element[], kind: ListKind): Promis
     }
     if (tagOf(kind) === 'ul') await markNested(app, made.at(-1)!, kind);
   }
-  app.selection.set('elements', [...shapes, ...made.filter((el) => !shapes.some((s) => s.contains(el)))]);
+  const slide = app.current();
+  app.selection.set('elements', [...shapes, ...made.filter((el) => !shapes.some((s) => s.contains(el)) && !!slide?.contains(el))]);
 }
 
 async function markNested(app: App, textEl: Element, kind: ListKind): Promise<void> {

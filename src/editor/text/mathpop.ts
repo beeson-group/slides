@@ -3,6 +3,7 @@ import type { Entry } from '../history.ts';
 import { completionText, completions, contentWithInline, contentWithTex, deckMacros, glyphOf, isName, mathLookup, previewTex, type Macro } from '../math.ts';
 import { popoverBeside, type Side } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
+import { isLabel } from './labels.ts';
 import { showTex } from './shown-tex.ts';
 import { placeCaret } from './typing.ts';
 
@@ -471,7 +472,8 @@ export function install(app: App): void {
   document.addEventListener('click', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;
     const container = ev.defaultPrevented ? null : target?.closest('mjx-container');
-    if (container && app.hostOf(container)) {
+    const host = container && app.hostOf(container);
+    if (container && host && (!isLabel(host) || document.activeElement === host)) {
       ev.preventDefault();
       if (!ev.shiftKey && !(app.platform === 'mac' ? ev.metaKey : ev.ctrlKey) && (popover || !showTex(app, container, 'all'))) openMath(container);
     } else if (popover && popover === sheetBeforeClick && target && !popover.contains(target) && !target.closest('.beeson-complete, .beeson-edit-menu')) {

@@ -8,8 +8,8 @@ const CSS = `
 .reveal.beeson-thumb { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--bg); pointer-events: none; }
 .reveal.beeson-thumb .slides { position: absolute; inset: 0 auto auto 0; margin: 0; transform-origin: 0 0; pointer-events: none; }
 .reveal.beeson-thumb .slides > section { display: block !important; position: absolute; inset: 0; transform: none !important; }
-.reveal.beeson-thumb .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
-.reveal.beeson-thumb .fragment.beeson-off { visibility: hidden !important; }
+.reveal.beeson-thumb :is(.fragment, .r-stack > *) { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+.reveal.beeson-thumb :is(.fragment, .r-stack > *).beeson-off { visibility: hidden !important; }
 .reveal.beeson-thumb:not([data-theme="light"]) .for-light, .reveal.beeson-thumb[data-theme="light"] .for-dark { display: none !important; }
 .reveal.beeson-thumb[data-theme="dark"] .invert { filter: invert(1) hue-rotate(180deg); }
 .reveal.beeson-thumb[data-theme="light"] .slides section.title::before, .reveal.beeson-thumb[data-theme="light"] .slides section.closing::before { background-image: url("BRAND/lockup-light.png"); }

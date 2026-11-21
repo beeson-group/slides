@@ -209,7 +209,7 @@ export function markCuts(app: App, el: HTMLElement, view: { cx: number; cy: numb
     const x = edge === 'right' ? r.right - 2 : r.left - (v ? 1 : 0), y = edge === 'bottom' ? r.bottom - 2 : r.top - (v ? 0 : 1);
     Object.assign(mark.style, { left: `${x}px`, top: `${y}px`, width: v ? '3px' : `${r.width}px`, height: v ? `${r.height}px` : '3px' });
     const note = make('span', '', 'The drawing is cut here');
-    Object.assign(note.style, v ? { top: '50%', [edge === 'left' ? 'left' : 'right']: '8px', transform: 'translateY(-50%)' } : { left: '50%', [edge === 'top' ? 'top' : 'bottom']: '8px', transform: 'translateX(-50%)' });
+    Object.assign(note.style, v ? { top: '50%', [edge === 'left' ? 'left' : 'right']: '14px', transform: 'translateY(-50%)' } : { left: '50%', [edge === 'top' ? 'top' : 'bottom']: '14px', transform: 'translateX(-50%)' });
     mark.append(note);
     layer.append(mark);
     return mark;

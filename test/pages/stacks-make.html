@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Make Stack deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+    <section class="wide" id="dynamics">
+      <h2 class="fragment" data-fragment-index="1" id="title">CR3BP dynamics</h2>
+      <p class="fragment current-visible" data-fragment-index="1" id="lead-1" style="translate: 120px 215px">From my last talk, the equations of motion are:</p>
+      <p class="fragment current-visible" data-fragment-index="2" id="lead-2" style="translate: 120px 215px">From my last talk, the equations of motion are:</p>
+      <p class="fragment current-visible" data-fragment-index="3" id="lead-3" style="translate: 120px 215px">From my last talk, the equations of motion are:</p>
+      <div class="math fragment current-visible" data-fragment-index="1" id="eq-1" style="translate: 120px 300px">\[\dot v = f(r, v)\]</div>
+      <div class="math fragment current-visible" data-fragment-index="2" id="eq-2" style="translate: 120px 300px">\[\dot v = f(r, v) = g(r) + h(v)\]</div>
+      <div class="math fragment current-visible" data-fragment-index="3" id="eq-3" style="translate: 120px 300px">\[\dot p = g(r)\]</div>
+      <div class="math fragment current-visible" data-fragment-index="4" id="eq-4" style="translate: 120px 215px">\[\dot x = \partial_p H\]</div>
+      <div class="math fragment" data-fragment-index="5" id="eq-5" style="translate: 120px 215px">\[\dot r = \nabla_p H\]</div>
+      <p class="small fragment" data-fragment-index="2" id="where" style="width: 1150px; translate: 120px 760px">where the distances to the primaries are written out.</p>
+      <div class="math fragment current-visible" data-fragment-index="3" id="side-3" style="translate: 1400px 450px">\[r \mapsto p\]</div>
+      <div class="math fragment current-visible" data-fragment-index="4" id="side-4" style="translate: 1400px 430px">\[x := r\]</div>
+      <ol class="fragment" data-fragment-index="2" id="questions" style="translate: 120px 870px">
+        <li>Q1: is this Hamiltonian?</li>
+        <li class="fragment" data-fragment-index="5" id="q2">Q2: which terms are nonlinear?</li>
+      </ol>
+      <span class="fragment" data-fragment-index="1" data-focus></span>
+      <span class="fragment" data-fragment-index="4" data-highlight="cor"></span>
+      <aside class="notes">
+        <p>Step 1: the equations of motion.</p>
+      </aside>
+    </section>
+    <section id="twice">
+      <h2>Twice</h2>
+      <p class="fragment current-visible" data-fragment-index="1" id="once">Shown at one step.</p>
+      <p class="fragment" data-fragment-index="2">The second step.</p>
+      <p class="fragment fade-out" data-fragment-index="3" id="until">Shown until the third step.</p>
+    </section>
+    <section id="columns">
+      <h2>Columns</h2>
+      <div class="col">
+        <p class="fragment current-visible" data-fragment-index="1" id="in-col">In a column.</p>
+        <p class="fragment" data-fragment-index="2">After it.</p>
+      </div>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

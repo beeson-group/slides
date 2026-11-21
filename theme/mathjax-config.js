@@ -16,6 +16,7 @@ window.MathJax = {
     linebreaks: { inline: false },
   },
   options: {
+    ignoreHtmlClass: 'mathjax_ignore|label',
     menuOptions: { settings: { enrich: false, speech: false, braille: false } },
   },
   svg: {

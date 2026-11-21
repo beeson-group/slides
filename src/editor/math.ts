@@ -1,5 +1,6 @@
 import { fileIndexes, notePlaced } from './shown-steps.ts';
 import { stripRuntime } from './render.ts';
+import { faceInfo, isLabel, typesetLabel } from './text/labels.ts';
 
 export type MathInfo = { tex: string; open: string; close: string; display: boolean };
 export type MathLookup = (el: Element) => MathInfo | null;
@@ -24,7 +25,7 @@ const mathjax = (): MathJaxApi | null => (window.MathJax?.startup?.document ? wi
 function lookupOf(items: MathItem[]): MathLookup {
   const map = new Map<Element, MathInfo>();
   for (const item of items) if (item.typesetRoot) map.set(item.typesetRoot, { tex: item.math, display: item.display, open: item.start.delim ?? '', close: item.end.delim ?? '' });
-  return (el) => map.get(el) ?? null;
+  return (el) => map.get(el) ?? faceInfo(el);
 }
 
 export function mathLookup(): MathLookup {
@@ -152,7 +153,8 @@ export async function setContentWithTex(host: Element, content: string): Promise
   if (mj) mj.typesetClear([host]);
   if (!keepCode(host, content)) host.innerHTML = content;
   notePlaced(host);
-  if (mj) await mj.typesetPromise([host]);
+  if (isLabel(host)) await typesetLabel(host);
+  else if (mj) await mj.typesetPromise([host]);
 }
 
 function keepCode(host: Element, content: string): boolean {

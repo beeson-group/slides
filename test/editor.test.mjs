@@ -1309,8 +1309,8 @@ test('a slide with elements faded out at a step is edited one layer at a time', 
   await page.waitFor(ready);
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`)).problems, []);
   const shown = (ids) => page.evaluate(`${JSON.stringify(ids)}.filter((id) => getComputedStyle(document.getElementById(id)).visibility === 'visible')`);
-  const layers = () => page.evaluate(`(() => { const box = document.querySelector('.beeson-shown-steps'); return box.hidden ? null : [...box.querySelectorAll('button')].map((b) => (b.getAttribute('aria-pressed') === 'true' ? '*' : '') + b.textContent); })()`);
-  const choose = (label) => page.evaluate(`[...document.querySelectorAll('.beeson-shown-steps button')].find((b) => b.textContent === ${JSON.stringify(label)}).click()`);
+  const layers = () => page.evaluate(`(() => { const box = document.querySelector('.beeson-step-tabs'); return box.hidden ? null : [...box.querySelectorAll('button[aria-pressed]')].map((b) => (b.getAttribute('aria-pressed') === 'true' ? '*' : '') + b.textContent); })()`);
+  const choose = (label) => page.evaluate(`[...document.querySelectorAll('.beeson-step-tabs button[aria-pressed]')].find((b) => b.textContent === ${JSON.stringify(label)}).click()`);
   const go = async (h) => { await page.evaluate(`Reveal.slide(${h})`); await sleep(100); };
   const swap = ['old-lead', 'old-step', 'old-span', 'new-lead', 'new-step'];
 

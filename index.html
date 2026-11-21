@@ -38,7 +38,7 @@ try {
 <section class="section">
   <div class="sec">
     <h2>Chapter one</h2>
-    <ul class="outline" data-auto></ul>
+    <ol class="outline" data-auto></ol>
   </div>
   <div class="backdrop" data-trajectories="demo/broucke-sample.js" data-trajectories-select="frame=pulsating" data-trajectories-color="family" data-trajectories-ramp="e" data-trajectories-colormap="viridis" data-duration="3" data-stagger="0.6"></div>
 </section>
@@ -99,6 +99,24 @@ try {
   <aside class="notes">The Hamiltonian of the CR3BP in the synodic frame, where \(\rho_1\) and \(\rho_2\) are the distances of the third body from the primary and the secondary, as drawn in the figure. The macro \vb and the kind theorem are defined in preamble.tex. In the Floquet theorem, P(t) is the Floquet change and B the exponent matrix. Each reference is shown at the bottom of the slide with the step of its citation, and a reference with a DOI is a link to its paper.</aside>
 </section>
 
+<section class="wide">
+  <h2>Replace content in place</h2>
+  <p>A stack shows one version of its content at a time.</p>
+  <div class="r-stack">
+    <div>
+      <div class="math">\[\dot{\vb r} = \vb v\]</div>
+    </div>
+    <div class="fragment" data-fragment-index="1">
+      <div class="math">\[\dot{\vb r} = \nabla_{\vb p} H\]</div>
+    </div>
+    <div class="fragment" data-fragment-index="2">
+      <div class="math">\[\dot{\vb r} = \nabla_{\vb p} H = \begin{pmatrix} p_x + y \\ p_y - x \\ p_z \end{pmatrix}\]</div>
+    </div>
+  </div>
+  <p class="fragment" data-fragment-index="1">In the editor, each version has its own tab under the slide.</p>
+  <aside class="notes">Each child of the stack is shown from its step until the step of the next child, in the same place. The equation is thus rewritten in place.</aside>
+</section>
+
 <section>
   <h2>Images: all formats are supported</h2>
   <p>Add an image (PNG, SVG, PDF, JPEG, ...) from the “Media” dropdown.</p>
@@ -134,7 +152,7 @@ try {
 <section class="section">
   <div class="sec">
     <h2>Chapter two</h2>
-    <ul class="outline" data-auto></ul>
+    <ol class="outline" data-auto></ol>
   </div>
   <div class="backdrop" data-backdrop="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3">
     <span class="label" data-at="earth" data-dy="36">Earth</span>

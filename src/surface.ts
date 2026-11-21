@@ -1,4 +1,5 @@
 import type * as Three from 'three';
+import { typesetLabels } from './drawn-text.ts';
 import { FUNCTION_NAMES, RAMPS, levelCurves, sample, surfaceFunction } from './surfaces.ts';
 import type { Height, Sheet, State, SurfaceFunction } from './surfaces.ts';
 
@@ -344,6 +345,7 @@ export class Surface {
     el.prepend(this.canvas);
     el.setAttribute('data-prevent-swipe', '');
     this.labels = [...el.querySelectorAll<HTMLElement>('.label')];
+    typesetLabels(this.labels);
 
     for (const f of new Set(Object.values(fn.states).flatMap((state) => state({ ...el.dataset }).sheets.map((sheet) => sheet.height)))) {
       const g = sample(f, fn.x, fn.y, CELLS, CELLS, fn.floor);
