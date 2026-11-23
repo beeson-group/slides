@@ -151,14 +151,15 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
   let nextId = 1;
   const pending = new Map();
   const listeners = new Set();
-  let buffer = '';
+  const parts = [];
   child.stdio[4].setEncoding('utf8');
   child.stdio[4].on('data', (chunk) => {
-    buffer += chunk;
     let end;
-    while ((end = buffer.indexOf('\0')) >= 0) {
-      const message = JSON.parse(buffer.slice(0, end));
-      buffer = buffer.slice(end + 1);
+    while ((end = chunk.indexOf('\0')) >= 0) {
+      parts.push(chunk.slice(0, end));
+      chunk = chunk.slice(end + 1);
+      const message = JSON.parse(parts.join(''));
+      parts.length = 0;
       if (message.id && pending.has(message.id)) {
         const { done, fail } = pending.get(message.id);
         pending.delete(message.id);
@@ -168,6 +169,7 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
         for (const listener of listeners) listener(message);
       }
     }
+    if (chunk) parts.push(chunk);
   });
 
   function send(method, params = {}, sessionId, limit = timeout) {
