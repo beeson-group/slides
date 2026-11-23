@@ -256,14 +256,13 @@ try {
     };
     while (steps < 1000 && !(await animated.evaluate(atEnd))) {
       await animated.evaluate('Reveal.next()');
+      await new Promise((done) => setTimeout(done, stepDelay));
       if (measured) {
         await animated.waitFor(stepSettled, 60000);
         const found = await animated.evaluate('beesonStep()');
         if (found.h !== shown.h || found.v !== shown.v) ended(shown);
         shown = found;
         for (const problem of stepProblems(found)) report(named(found.h, found.v), found.allow, problem);
-      } else {
-        await new Promise((done) => setTimeout(done, stepDelay));
       }
       steps += 1;
     }

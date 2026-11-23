@@ -19,11 +19,13 @@ export const slideFacts = `(() => {
 export const stepsMeasured = `typeof Element.prototype.checkVisibility === 'function' && typeof document.getAnimations === 'function'`;
 
 export const stepSettled = `(async () => {
-  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   const slides = document.querySelector('.reveal .slides');
-  return !document.getAnimations().some((animation) => animation.playState === 'running'
+  const running = () => document.getAnimations().filter((animation) => animation.playState === 'running'
     && Number.isFinite(animation.effect?.getComputedTiming().endTime)
     && slides.contains(animation.effect.target));
+  for (const animation of running()) if (animation.playbackRate) animation.finish();
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  return !running().length;
 })()`;
 
 export const stepWatch = String.raw`(() => {
