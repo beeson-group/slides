@@ -586,7 +586,7 @@ export class Bundle {
 
   private label(): void {
     const { middle, tips } = this.compass();
-    for (const el of this.laps) el.style.opacity = String(this.fill);
+    if (this.times) for (const el of this.laps) el.style.opacity = String(this.fill);
     for (const lab of this.labels) {
       const at = lab.dataset.at ?? '';
       if (at === NUDGE && this.times) {
