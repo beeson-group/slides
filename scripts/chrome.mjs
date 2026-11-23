@@ -93,6 +93,8 @@ const LOADING = `(() => {
 
 const LAUNCHES = 3;
 
+const PRINT_PER_PAGE = 1000;
+
 export async function launch({ probe = 10000, ...options } = {}) {
   if (!probe) return start(options);
   for (let n = 1; ; n++) {
@@ -353,6 +355,7 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
         return Buffer.from(data, 'base64');
       },
       async pdf() {
+        const pages = await evaluate(`document.querySelectorAll('.pdf-page').length`);
         const { data } = await call('Page.printToPDF', {
           preferCSSPageSize: true,
           printBackground: true,
@@ -361,7 +364,7 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
           marginBottom: 0,
           marginLeft: 0,
           marginRight: 0,
-        });
+        }, timeout + pages * PRINT_PER_PAGE);
         return Buffer.from(data, 'base64');
       },
       async close() {
