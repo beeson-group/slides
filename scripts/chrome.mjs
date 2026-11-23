@@ -93,6 +93,8 @@ const LOADING = `(() => {
 
 const LAUNCHES = 3;
 
+const PRINT_PER_PAGE = 1000;
+
 export async function launch({ probe = 10000, ...options } = {}) {
   if (!probe) return start(options);
   for (let n = 1; ; n++) {
@@ -149,14 +151,15 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
   let nextId = 1;
   const pending = new Map();
   const listeners = new Set();
-  let buffer = '';
+  const parts = [];
   child.stdio[4].setEncoding('utf8');
   child.stdio[4].on('data', (chunk) => {
-    buffer += chunk;
     let end;
-    while ((end = buffer.indexOf('\0')) >= 0) {
-      const message = JSON.parse(buffer.slice(0, end));
-      buffer = buffer.slice(end + 1);
+    while ((end = chunk.indexOf('\0')) >= 0) {
+      parts.push(chunk.slice(0, end));
+      chunk = chunk.slice(end + 1);
+      const message = JSON.parse(parts.join(''));
+      parts.length = 0;
       if (message.id && pending.has(message.id)) {
         const { done, fail } = pending.get(message.id);
         pending.delete(message.id);
@@ -166,6 +169,7 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
         for (const listener of listeners) listener(message);
       }
     }
+    if (chunk) parts.push(chunk);
   });
 
   function send(method, params = {}, sessionId, limit = timeout) {
@@ -353,6 +357,7 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
         return Buffer.from(data, 'base64');
       },
       async pdf() {
+        const pages = await evaluate(`document.querySelectorAll('.pdf-page').length`);
         const { data } = await call('Page.printToPDF', {
           preferCSSPageSize: true,
           printBackground: true,
@@ -361,7 +366,7 @@ async function start({ offline = true, timeout = 120000, setup = 15000, wholeFra
           marginBottom: 0,
           marginLeft: 0,
           marginRight: 0,
-        });
+        }, timeout + pages * PRINT_PER_PAGE);
         return Buffer.from(data, 'base64');
       },
       async close() {

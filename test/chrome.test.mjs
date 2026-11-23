@@ -402,8 +402,12 @@ input.on('data', function read(chunk) {
         continue;
       }
       send({ id: msg.id, result: {} });
+    } else if (msg.method === 'Runtime.evaluate' && msg.params.expression.includes('.pdf-page')) {
+      send({ id: msg.id, result: { result: { value: mode === 'hangPrint' ? 1 : 40 } } });
     } else if (msg.method === 'Runtime.evaluate') {
       send({ id: msg.id, result: { result: { value: { creates, targets, closed } } } });
+    } else if (msg.method === 'Page.printToPDF') {
+      if (mode === 'slowPrint') setTimeout(() => send({ id: msg.id, result: { data: Buffer.from('%PDF-'.repeat(200000)).toString('base64') } }), 1000);
     } else if (msg.method === 'Page.captureScreenshot') {
       if (mode === 'hangShotOnce' && !fs.existsSync(__dirname + '/hung')) {
         fs.writeFileSync(__dirname + '/hung', '');
@@ -480,6 +484,24 @@ test('newPage recovers immediately when a fresh target detaches during setup', {
   const page = await browser.newPage();
   assert.ok(Date.now() - started < 1000, 'newPage waited for the command timeout instead of Target.detachedFromTarget');
   assert.deepEqual(await page.evaluate('state'), { creates: 2, targets: 2, closed: ['t1'] });
+});
+
+test('a print of many pages is waited for longer than the limit of a call, in proportion to its pages', { skip: process.platform === 'win32', timeout: 30000 }, async (t) => {
+  pipeChrome(t, 'slowPrint');
+  const browser = await launch({ timeout: 300, probe: 0 });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+
+  assert.equal((await page.pdf()).toString(), '%PDF-'.repeat(200000));
+});
+
+test('a print that Chrome does not answer still fails, and names Page.printToPDF', { skip: process.platform === 'win32', timeout: 30000 }, async (t) => {
+  pipeChrome(t, 'hangPrint');
+  const browser = await launch({ timeout: 300, probe: 0 });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+
+  await assert.rejects(page.pdf(), /did not answer Page\.printToPDF/);
 });
 
 test('newPage still fails when every target hangs on Page.enable', { skip: process.platform === 'win32', timeout: 8000 }, async (t) => {
