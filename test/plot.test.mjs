@@ -83,6 +83,7 @@ test('a plot opened at its slide is laid out again once the labels of its tabs a
   await page.waitFor(deckSettled);
   const size = `(() => { const a = document.querySelector('[data-plot="data"] .plot-area'); return [a.offsetHeight, Number(a.querySelector('svg').getAttribute('viewBox').split(' ')[3])]; })()`;
   await page.waitFor(`document.querySelector('[data-plot="data"] .plot-tabs').offsetHeight > 30`);
+  await page.waitFor(`(([area, drawn]) => area === drawn)(${size})`);
   const [area, drawn] = await page.evaluate(size);
   assert.equal(drawn, area);
 });
