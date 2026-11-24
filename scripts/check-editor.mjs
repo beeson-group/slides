@@ -21,6 +21,8 @@ const session = browser.session;
 const page = browser.newPage();
 let platform = 'mac';
 const results = [];
+const SAFARI = options.browser === 'safari';
+let home;
 
 const evaluate = (expression) => page.evaluate(expression);
 const waitFor = (expression, wait = 15000) => page.waitFor(expression, wait);
@@ -68,8 +70,9 @@ const move = (x, y, duration = 0) => ({ type: 'pointerMove', x: Math.round(x), y
 async function pointer(steps, mods = []) {
   const keys = modifiers(mods);
   const pause = { type: 'pause', duration: 0 };
+  const pointerOnly = SAFARI && !keys.length;
   await perform([
-    { type: 'key', id: 'keys', actions: [...keys.map((value) => ({ type: 'keyDown', value })), ...steps.map(() => pause), ...keys.map((value) => ({ type: 'keyUp', value }))] },
+    ...(pointerOnly ? [] : [{ type: 'key', id: 'keys', actions: [...keys.map((value) => ({ type: 'keyDown', value })), ...steps.map(() => pause), ...keys.map((value) => ({ type: 'keyUp', value }))] }]),
     { type: 'pointer', id: 'mouse', parameters: { pointerType: 'mouse' }, actions: [...keys.map(() => pause), ...steps, ...keys.map(() => pause)] },
   ]);
 }
@@ -88,16 +91,34 @@ async function drag(from, { dx = 0, dy = 0, steps = 10, mods = [] } = {}) {
 
 const handles = () => session('GET', '/window/handles');
 
-async function load(n = 0, { query = 'edit&still&theme=light' } = {}) {
+async function frontWindow() {
+  const { handle } = await session('POST', '/window/new', { type: 'window' });
+  await session('DELETE', '/window');
+  await session('POST', '/window', { handle });
+  await session('POST', '/window/rect', { width: 1920, height: 1080 });
+}
+
+async function visit(url) {
+  await page.goto(url).catch(async (error) => {
+    if (!SAFARI || (await evaluate('document.visibilityState')) !== 'hidden') throw error;
+    await frontWindow();
+    await page.goto(url);
+  });
+  home = await session('GET', '/window');
+}
+
+const slideWith = (selector) => `Reveal.getIndices(Reveal.getSlides().find((s) => s.querySelector(${js(selector)})))`;
+
+async function load(at = 0, { query = 'edit&still&theme=light' } = {}) {
   const url = `${server.origin}/${DECK}?${query}&edit-platform=${platform}`;
-  await page.goto(`${server.origin}/${DECK}?still`);
+  await visit(`${server.origin}/${DECK}?still`);
   await evaluate('(localStorage.clear(), true)');
-  await page.goto(url);
+  await visit(url);
   await waitFor(deckSettled, 30000);
   await waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)', 30000);
   const s = await evaluate(`window.BeesonEditor.open(${js(SOURCE)})`);
   if (s.problems.length) throw new Error(`elements not paired: ${js(s.problems)}`);
-  if (n) await evaluate(`(Reveal.slide(${n}), true)`);
+  if (at) await evaluate(`((i) => (Reveal.slide(i.h, i.v), true))(${typeof at === 'number' ? `{ h: ${at} }` : slideWith(at)})`);
   await frames();
 }
 
@@ -128,11 +149,10 @@ async function check(name, fn) {
     line = measured?.skip ? ['skip', measured.skip] : ['pass', measured ?? ''];
   } catch (error) {
     line = ['fail', String(error.message ?? error).split('\n')[0]];
-    for (const h of (await handles().catch(() => [])).slice(1)) {
+    for (const h of (await handles().catch(() => [])).filter((h) => h !== home)) {
       await session('POST', '/window', { handle: h }).then(() => session('DELETE', '/window')).catch(() => {});
     }
-    const [first] = await handles().catch(() => []);
-    if (first) await session('POST', '/window', { handle: first }).catch(() => {});
+    if (home) await session('POST', '/window', { handle: home }).catch(() => {});
   }
   results.push([name, ...line]);
   console.log(`${line[0].padEnd(4)}  ${name}${line[1] ? `: ${line[1]}` : ''}`);
@@ -174,7 +194,7 @@ try {
     await present('key');
     const f = () => evaluate(`${SHOW}.Reveal.getIndices().f ?? -1`);
     const seen = [await f()];
-    for (const key of ['ArrowRight', 'Space', 'ArrowLeft']) {
+    for (const key of ['ArrowRight', SAFARI ? 'n' : 'Space', 'ArrowLeft']) {
       await press(key);
       await sleep(300);
       seen.push(await f());
@@ -193,7 +213,7 @@ try {
     expect(m0 !== m1, `d leaves the mode at ${m0}`);
     await press('Escape');
     await waitFor(stageGone, 5000);
-    return `steps ${js(seen)}, overview opened and closed, mode ${m0} to ${m1}`;
+    return `steps ${js(seen)}${SAFARI ? ' with n in place of Space, which safaridriver sends with keyCode 0' : ''}, overview opened and closed, mode ${m0} to ${m1}`;
   });
 
   for (const key of ['Escape', 'e']) {
@@ -213,22 +233,21 @@ try {
     });
   }
 
-  await check('present: with unsaved changes, Present asks first, then plays the saved file', async () => {
+  await check('present: with unsaved changes, Present asks first, and Discard changes puts the slides back as saved and plays them', async () => {
     await load(2);
     await evaluate(`(window.BeesonEditor.exec('slide.hide'), true)`);
     await press('Mod+Enter');
-    const asked = await within(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Present the saved file')`, 5000);
+    const asked = await within(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Discard changes')`, 5000);
     expect(asked, 'Present does not ask first');
-    const at = await evaluate(`(() => { const r = [...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent === 'Present the saved file').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const at = await evaluate(`(() => { const r = [...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent === 'Discard changes').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(at);
     await waitFor(showReady, 30000);
     const look = await evaluate(stageLook);
     await press('Escape');
     await waitFor(stageGone, 5000);
-    expect(await evaluate('window.BeesonEditor.status().dirty'), 'the edit is lost');
-    await evaluate('window.BeesonEditor.undo()');
-    await byteExact('after the undo');
-    return `asked, then played in place, ${look}`;
+    expect(!(await evaluate('window.BeesonEditor.status().dirty')), 'the edit is kept');
+    await byteExact('after the show');
+    return `asked, then the edit discarded and played in place, ${look}`;
   });
 
   for (const p of ['mac', 'other']) {
@@ -236,9 +255,9 @@ try {
     await check(`present: after the show, the arrow keys nudge a selected element and Mod+Z undoes, without a click (${p})`, async () => {
       await load(2);
       await click('.reveal section.present > p');
-      await press('Escape');
       const sel = await evaluate('window.BeesonEditor.selection().map((e) => e.localName).join()');
-      expect(sel === 'p', `the selection is ${sel}`);
+      const caret = await evaluate('!!document.activeElement?.isContentEditable');
+      expect(sel === 'p' && !caret, `the selection is ${sel}, ${caret ? 'with' : 'without'} the caret`);
       await present('key');
       await press('Escape');
       await waitFor(stageGone, 5000);
@@ -274,12 +293,13 @@ try {
     await check(`speaker view: ${key === 'e' ? 'e' : 'Esc'} in the speaker view ends the show, returns to the editor, and closes the speaker view`, async () => {
       await load(2);
       await present('key');
+      const main = home;
       await evaluate(`(${SHOW}.Reveal.slide(3), true)`);
       await sleep(400);
       const shown = await showHeading();
       const all = await speakerOpen();
       if (!all) return { skip: 'the popup of the speaker view is not opened under WebDriver' };
-      const [main, speaker] = all;
+      const speaker = all.find((h) => h !== main);
       await session('POST', '/window', { handle: speaker });
       await waitFor(speakerReady, 20000);
       await sleep(500);
@@ -296,11 +316,12 @@ try {
   }
 
   await check('speaker view: e in the speaker view of a deck opened by itself opens the editor in its window, and closes the speaker view', async () => {
-    await page.goto(`${server.origin}/${DECK}?still&edit-platform=mac#/2`);
+    await visit(`${server.origin}/${DECK}?still&edit-platform=mac#/2`);
     await waitFor(deckSettled, 30000);
+    const main = home;
     const all = await speakerOpen();
     if (!all) return { skip: 'the popup of the speaker view is not opened under WebDriver' };
-    const [main, speaker] = all;
+    const speaker = all.find((h) => h !== main);
     await session('POST', '/window', { handle: speaker });
     await waitFor(speakerReady, 20000);
     await sleep(500);
@@ -328,8 +349,8 @@ try {
     const left = b.left + (b.width - w) * px, top = b.top + (b.height - h) * py;
     return { left, top, right: left + w, bottom: top + h, width: w, height: h };
   })(${shownImg})`;
-  await check('smoke: a click on the image of slide 5 selects its figure with its caption, in one frame', async () => {
-    await load(4);
+  await check('smoke: a click on an image selects its figure with its caption, in one frame', async () => {
+    await load('figure img');
     await click(IMG);
     await frames();
     const sel = await evaluate(`window.BeesonEditor.selection().map((e) => e.localName + (e.classList[0] ? '.' + e.classList[0] : ''))`);
@@ -347,7 +368,7 @@ try {
   });
 
   await check('smoke: a drag moves the figure, and Mod+Z takes the move back', async () => {
-    await load(4);
+    await load('figure img');
     await click(IMG);
     await frames();
     const before = await centerOf(IMG);
@@ -365,7 +386,7 @@ try {
   });
 
   await check('smoke: a drag of a corner grip resizes the figure with the grip under the pointer', async () => {
-    await load(4);
+    await load('figure img');
     await click(IMG);
     await frames();
     const grips = await evaluate(`Object.fromEntries([...document.querySelectorAll('.beeson-grip')].filter((g) => g.getBoundingClientRect().width).map((g) => { const q = g.getBoundingClientRect(); return [g.dataset.handle, { x: q.left + q.width / 2, y: q.top + q.height / 2 }]; }))`);
@@ -435,8 +456,8 @@ try {
   });
 
   await check('smoke: a right-click on a formula opens the menu of the editor', async () => {
-    await load(3);
-    await evaluate(`(Reveal.slide(3, 0, 9), true)`);
+    await load('div.math');
+    await evaluate(`(Reveal.slide(Reveal.getIndices().h, Reveal.getIndices().v, 9), true)`);
     await frames();
     await evaluate(`(window.__context = [], addEventListener('contextmenu', (e) => setTimeout(() => window.__context.push(e.defaultPrevented)), true), true)`);
     await click('.reveal section.present div.math mjx-container', { button: 2 });
