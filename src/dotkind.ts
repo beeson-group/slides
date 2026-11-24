@@ -28,9 +28,6 @@ export type Kind<D, S> = {
   extent(state: S): Extent;
   span(state: S, duration: number): number;
   draw(frame: Frame<S>, seconds: number, duration: number): void;
-  states?: string[];
-  initial?: string;
-  sync?(state: S, name: string, animate: boolean): void;
 };
 
 export const TAU = 2 * Math.PI;

@@ -45,7 +45,7 @@ for (const [rate, budget] of [
 
 const normalCosts = `(async () => {
   const b = Beeson.backdrops[0];
-  Reveal.slide(0, 0, 6);
+  b.t0 = performance.now() - 4500;
   const out = [], raf = window.requestAnimationFrame;
   window.requestAnimationFrame = (callback) => raf((now) => {
     const t = performance.now();
@@ -58,7 +58,7 @@ const normalCosts = `(async () => {
 })()`;
 
 test(
-  'a frame of the normal form in its resonant flow costs at most 4 ms with the CPU throttled 4 times',
+  'a frame of the normal form carried into the coordinates of its normal form costs at most 4 ms with the CPU throttled 4 times',
   { skip: process.env.CI ? 'the timing of a shared runner does not stand for a laptop' : false, timeout: 120000 },
   async (t) => {
     const browser = await launch();

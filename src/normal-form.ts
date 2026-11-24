@@ -1,374 +1,197 @@
-import { TAU, clamp, smooth, type Colors, type Frame, type Kind } from './dotkind.ts';
-import { mix } from './trajectories.ts';
+import { smooth, type Colors, type Frame, type Kind } from './dotkind.ts';
+import { MAP_CONTRAST, colormapEnds } from './trajectories.ts';
 
-export const STATES = ['none', 'field', 'stable', 'unstable', 'directions', 'flow', 'linear', 'resonant'];
-const [, FIELD, STABLE, UNSTABLE, DIRECTIONS, FLOW, LINEAR, RESONANT] = STATES.map((_, n) => n);
+const TRACE = 3.4;
+const WAIT = 1.4;
+const MORPH = 4.5;
+const REST = 3.5;
+const CYCLE = WAIT + 2 * MORPH + REST;
+const LEVELS = 16;
+const POINTS = 96;
+const FRAMES = 8;
+const REACH = 1.3;
+const FAR = 1.2;
+const GRID = 0.2;
+const GRID_LINES = 6;
+const GLOW: [number, number][] = [[24, 0.06], [13, 0.11], [6.5, 0.2]];
+const ORBIT_WIDTH = 1.4;
+const GRID_WIDTH = 1;
+const MANIFOLD_WIDTH = 2.8;
+const GRID_ALPHA = 0.2;
+const FADE_FROM = 0.72;
+const HALF_WIDTH = 0.8;
 
-const C = 1.5;
-const REACH = 1.55;
-const SIDE = 1.6;
-const LONGEST = 0.172;
-const Q_HEAD = 0.05;
-const Q_HALF = 0.019;
-const E_HEAD = 0.1;
-const E_HALF = 0.042;
-const E_GAP = 0.068;
-const E_INNER = 0.56;
-const RIPPLE = 1.05;
-const SHAFT_WIPE = 0.25;
-const LINE_WIPE = 0.8;
-const MORPH = 1.25;
-const TURN = 0.85;
-const FADE = 0.14;
-const PASS = 6;
-const HOLD = 1.4;
-const LOOP_FADE = 0.4;
-const STILL_AT = 0.86;
-const POINTS = 80;
-const WIDTH = 3;
-const DOT = 6;
-const ORIGIN = 11;
-const FAINT = 0.22;
-const REFERENCE = 0.42;
-
-type Point = [number, number];
-type Ramped = { at: number; pts: Point[] };
-type Tone = 'violet' | 'accent' | number;
-type Morph = { from: number; to: number; t: number; span: number } | null;
-
-export type State = {
-  stage: number;
-  age: number;
-  stable: number;
-  unstable: number;
-  heads: number;
-  traces: number;
-  linear: number;
-  resonant: number;
-  toLinear: Morph;
-  toResonant: Morph;
-  saddleClock: number;
-  resonantClock: number;
-  last: number | null;
-};
-
-const easeInOut = (t: number): number => {
-  const x = clamp(t);
-  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-};
-
-const along = (n: number, at: (u: number) => Point): Point[] => Array.from({ length: n + 1 }, (_, i) => at(i / n));
-
-const GRID = (() => {
-  const coords = [-1.35, -1.05, -0.75, -0.45, -0.15, 0.15, 0.45, 0.75, 1.05, 1.35];
-  const pts = coords.flatMap((x) => coords.map((y) => ({ x, y, r: Math.hypot(x, y) }))).sort((a, b) => a.r - b.r);
-  const far = pts[pts.length - 1].r;
-  return pts.map((p) => ({ ...p, delay: (RIPPLE * p.r) / far }));
-})();
-
-const LEVELS = [0.1, 0.35, 0.7];
-const SADDLE: { tone: Tone; base: Point[] }[] = [
-  ...[1, -1].map((s) => ({ tone: 'violet' as Tone, base: along(POINTS, (u): Point => [0, s * 1.48 * Math.exp(-2.65 * u)]) })),
-  ...[1, -1].map((s) => ({ tone: 'accent' as Tone, base: along(POINTS, (u): Point => [s * 0.1 * Math.exp(2.7 * u), 0]) })),
-  ...LEVELS.flatMap((x0, n) => [1, -1].flatMap((sx) => [1, -1].map((sy) => {
-    const T = Math.log(1.6 / x0);
-    return { tone: n / (LEVELS.length - 1) as Tone, base: along(POINTS, (u): Point => [sx * x0 * Math.exp(T * u), sy * 1.6 * Math.exp(-T * u)]) };
-  }))),
+const GENERATOR: [number, number, number][] = [
+  [0.4, 3, 0], [-0.34, 1, 2], [0.26, 2, 1], [0.18, 0, 3],
+  [0.2, 4, 0], [-0.28, 2, 2], [0.14, 1, 3], [-0.12, 0, 4],
+  [-0.08, 5, 0], [0.2, 3, 2], [0.12, 2, 3], [-0.14, 1, 4],
+  [0.04, 6, 0], [-0.14, 4, 2], [0.12, 2, 4],
 ];
+const POWERS = 7;
 
-const FAMILIES = [{ c0: 2.4, reach: 0.88 }, { c0: 0.75, reach: 1.24 }, { c0: -0.05, reach: 1.55 }, { c0: -1.4, reach: 1.36 }];
-const RESONANT_TRACES: { tone: Tone; pts: Point[] }[] = [
-  ...[1, -1].map((s) => ({ tone: 'accent' as Tone, pts: along(POINTS, (u): Point => [0, s * 0.1 * Math.exp(2.74 * u)]) })),
-  ...FAMILIES.flatMap(({ c0, reach }, n) => [1, -1].map((sx) => {
-    const x0 = 0.12, T = Math.log(reach / x0);
-    return {
-      tone: n / (FAMILIES.length - 1) as Tone,
-      pts: along(POINTS, (u): Point => {
-        const x = x0 * Math.exp(T * u);
-        return [sx * x, x * x * (c0 + C * Math.log(x))];
-      }),
-    };
-  })),
-];
+type Kinds = 'orbit' | 'stable' | 'unstable' | 'grid';
+type Group = { kind: Kinds; level: number; lines: Float32Array[][] };
+export type State = { groups: Group[] };
 
-const REFERENCES = [-1, 0, 1].map((k) => along(POINTS, (u): Point => {
-  const x = -REACH + 2 * REACH * u;
-  return [x, k * x * x];
-}));
+const xs = new Float64Array(POWERS), ys = new Float64Array(POWERS), flow = new Float64Array(2);
 
-function initial(): State {
-  return {
-    stage: FLOW, age: 0, stable: 0, unstable: 0, heads: 0, traces: 0, linear: 0, resonant: 0,
-    toLinear: null, toResonant: null, saddleClock: 0, resonantClock: 0, last: null,
-  };
-}
-
-function settle(st: State): void {
-  const n = st.stage;
-  st.age = n >= FIELD ? Infinity : 0;
-  st.stable = n >= STABLE ? 1 : 0;
-  st.unstable = n >= UNSTABLE ? 1 : 0;
-  st.heads = n >= DIRECTIONS ? 1 : 0;
-  st.traces = n >= FLOW ? 1 : 0;
-  st.linear = n === LINEAR ? 1 : 0;
-  st.resonant = n >= RESONANT ? 1 : 0;
-  st.toLinear = st.toResonant = null;
-  st.saddleClock = st.resonantClock = 0;
-  st.last = null;
-}
-
-function sync(st: State, name: string, animate: boolean): void {
-  const before = st.stage;
-  st.stage = Math.max(0, STATES.indexOf(name));
-  if (!animate) {
-    settle(st);
-    return;
+function field(x: number, y: number): Float64Array {
+  xs[0] = ys[0] = 1;
+  for (let k = 1; k < POWERS; k++) {
+    xs[k] = xs[k - 1] * x;
+    ys[k] = ys[k - 1] * y;
   }
-  const n = st.stage;
-  if (n < FIELD) st.age = 0;
-  else if (before < FIELD) st.age = 0;
-  if (n < STABLE) st.stable = 0;
-  if (n < UNSTABLE) st.unstable = 0;
-  if (n >= FLOW && before < FLOW) st.saddleClock = 0;
-  const linear = n === LINEAR ? 1 : 0;
-  if (Math.abs(linear - st.linear) > 1e-4 && st.toLinear?.to !== linear) st.toLinear = { from: st.linear, to: linear, t: 0, span: MORPH };
-  const resonant = n >= RESONANT ? 1 : 0;
-  if (Math.abs(resonant - st.resonant) > 1e-4 && st.toResonant?.to !== resonant) {
-    st.toResonant = { from: st.resonant, to: resonant, t: 0, span: TURN };
-    if (resonant) st.resonantClock = 0;
+  let G = 0, Gx = 0, Gy = 0;
+  for (const [c, a, b] of GENERATOR) {
+    G += c * xs[a] * ys[b];
+    if (a) Gx += c * a * xs[a - 1] * ys[b];
+    if (b) Gy += c * b * xs[a] * ys[b - 1];
   }
+  const far2 = FAR * FAR;
+  const E = Math.exp(-(x * x + y * y) / far2);
+  flow[0] = (Gy - (2 * y * G) / far2) * E;
+  flow[1] = -(Gx - (2 * x * G) / far2) * E;
+  return flow;
 }
 
-function toward(value: number, target: number, dt: number): number {
-  const next = value + (target - value) * (1 - Math.exp(-dt / FADE));
-  return Math.abs(target - next) < 0.004 ? target : next;
+function carry(points: Float32Array, sign: number): Float32Array[] {
+  const stages = [points];
+  const h = sign / (2 * FRAMES);
+  for (let k = 0; k < FRAMES; k++) {
+    const next = Float32Array.from(stages[k]);
+    for (let i = 0; i < next.length; i += 2) {
+      let x = next[i], y = next[i + 1];
+      for (let step = 0; step < 2; step++) {
+        const [ax, ay] = field(x, y);
+        const [bx, by] = field(x + (h / 2) * ax, y + (h / 2) * ay);
+        const [cx, cy] = field(x + (h / 2) * bx, y + (h / 2) * by);
+        const [ex, ey] = field(x + h * cx, y + h * cy);
+        x += (h / 6) * (ax + 2 * bx + 2 * cx + ex);
+        y += (h / 6) * (ay + 2 * by + 2 * cy + ey);
+      }
+      next[i] = x;
+      next[i + 1] = y;
+    }
+    stages.push(next);
+  }
+  return stages;
 }
 
-function advance(morph: Morph, dt: number): [number, Morph] {
-  if (!morph) return [NaN, null];
-  morph.t += dt;
-  const u = clamp(morph.t / morph.span);
-  return u >= 1 ? [morph.to, null] : [morph.from + (morph.to - morph.from) * easeInOut(u), morph];
+const turned = (q: number, p: number): [number, number] => [(q - p) / Math.SQRT2, (q + p) / Math.SQRT2];
+
+function prepare(): State {
+  const groups: Group[] = [];
+  for (let k = 1; k <= LEVELS; k++) {
+    const c = 0.5 * (k / LEVELS) ** 2, root = Math.sqrt(c), span = Math.log(REACH / root);
+    const lines = [[1, 1], [-1, -1], [1, -1], [-1, 1]].map(([sq, sp]) => {
+      const points = new Float32Array(2 * POINTS);
+      for (let i = 0; i < POINTS; i++) {
+        const e = Math.exp(span * ((2 * i) / (POINTS - 1) - 1));
+        points.set(turned(sq * root * e, (sp * root) / e), 2 * i);
+      }
+      return carry(points, 1);
+    });
+    groups.push({ kind: 'orbit', level: k / LEVELS, lines });
+  }
+  for (const kind of ['stable', 'unstable'] as const) {
+    const lines = (kind === 'stable' ? [[0, 1], [0, -1]] : [[1, 0], [-1, 0]]).map(([sq, sp]) => {
+      const points = new Float32Array(2 * POINTS);
+      for (let i = 0; i < POINTS; i++) {
+        const r = (REACH * (kind === 'stable' ? POINTS - 1 - i : i)) / (POINTS - 1);
+        points.set(turned(sq * r, sp * r), 2 * i);
+      }
+      return carry(points, 1);
+    });
+    groups.push({ kind, level: 0, lines });
+  }
+  const grid: Float32Array[][] = [];
+  for (const across of [true, false]) {
+    for (let k = -GRID_LINES; k <= GRID_LINES; k++) {
+      const points = new Float32Array(2 * POINTS);
+      for (let i = 0; i < POINTS; i++) {
+        const along = REACH * ((2 * i) / (POINTS - 1) - 1);
+        points.set(across ? [k * GRID, along] : [along, k * GRID], 2 * i);
+      }
+      grid.push(carry(points, -1).reverse());
+    }
+  }
+  groups.unshift({ kind: 'grid', level: 0, lines: grid });
+  return { groups };
 }
 
-function tick(st: State, dt: number): void {
-  const n = st.stage;
-  if (n >= FIELD && st.age < RIPPLE + SHAFT_WIPE + 0.1) st.age += dt;
-  if (n >= STABLE) st.stable = Math.min(1, st.stable + dt / LINE_WIPE);
-  if (n >= UNSTABLE) st.unstable = Math.min(1, st.unstable + dt / LINE_WIPE);
-  st.heads = toward(st.heads, n >= DIRECTIONS ? 1 : 0, dt);
-  st.traces = toward(st.traces, n >= FLOW ? 1 : 0, dt);
-  if (st.toLinear) [st.linear, st.toLinear] = advance(st.toLinear, dt);
-  if (st.toResonant) [st.resonant, st.toResonant] = advance(st.toResonant, dt);
-  if (n >= FLOW && st.resonant < 0.99) st.saddleClock += dt;
-  if (n >= RESONANT || st.resonant > 0.01) st.resonantClock += dt;
+const viridisEnds = new WeakMap<Colors, [number, number]>();
+function viridis(colors: Colors, at: number): string {
+  let ends = viridisEnds.get(colors);
+  if (!ends) viridisEnds.set(colors, (ends = colormapEnds({ name: 'viridis', lo: 0, hi: 1 }, colors.ground || undefined, MAP_CONTRAST)));
+  return colors.map('viridis', at, ends);
 }
 
-function loop(clock: number): { at: number; fade: number } {
-  const period = PASS + HOLD, tau = clock % period;
-  return { at: clamp(tau / PASS), fade: clock >= period && tau < LOOP_FADE ? smooth(tau / LOOP_FADE) : 1 };
+function standardness(seconds: number): number {
+  if (!Number.isFinite(seconds)) return 1;
+  const u = Math.max(0, seconds - TRACE) % CYCLE;
+  if (u < WAIT) return 1;
+  if (u < WAIT + MORPH) return 1 - smooth((u - WAIT) / MORPH);
+  if (u < WAIT + MORPH + REST) return 0;
+  return smooth((u - WAIT - MORPH - REST) / MORPH);
 }
 
 function draw(frame: Frame<State>, seconds: number): void {
-  const { g, state: st, colors, scale } = frame;
-  const still = !Number.isFinite(seconds);
-  if (still) settle(st);
-  else {
-    const dt = st.last === null || seconds < st.last ? 0 : Math.min(0.1, seconds - st.last);
-    st.last = seconds;
-    tick(st, dt);
-  }
-  const saddle = still ? { at: STILL_AT, fade: 1 } : loop(st.saddleClock);
-  const resonant = still ? { at: STILL_AT, fade: 1 } : loop(st.resonantClock);
-  const X = (x: number) => frame.x0 + scale * x;
-  const Y = (y: number) => frame.y0 - scale * y;
-  const tone = (t: Tone): string => (t === 'violet' ? colors.tone('--violet') : t === 'accent' ? colors.tone('--accent') : ramp(colors, t));
-  const path = (pts: Point[], upTo = pts.length) => {
+  const { g, state, colors, scale, x0, y0 } = frame;
+  const done = !Number.isFinite(seconds);
+  const s = standardness(seconds);
+  const f = Math.min(FRAMES - 1, Math.floor(s * FRAMES));
+  const w = s * FRAMES - f;
+  const traced = done ? 1 : seconds / TRACE;
+  g.lineJoin = 'round';
+  g.lineCap = 'round';
+  for (const { kind, level, lines } of state.groups) {
+    const part = kind === 'orbit' ? smooth(1.4 * traced - 0.4 * level) : kind === 'stable' ? smooth(2 * traced) : kind === 'unstable' ? smooth(2 * traced - 1) : 1;
+    const n = Math.round(part * POINTS);
+    if (n < 2) continue;
     g.beginPath();
-    for (let i = 0; i < upTo; i++) (i ? g.lineTo : g.moveTo).call(g, X(pts[i][0]), Y(pts[i][1]));
-  };
-  const head = (x: number, y: number, dx: number, dy: number, length: number, half: number) => {
-    const bx = x - length * dx, by = y - length * dy;
-    g.moveTo(X(x), Y(y));
-    g.lineTo(X(bx - dy * half), Y(by + dx * half));
-    g.lineTo(X(bx + dy * half), Y(by - dx * half));
-    g.closePath();
-  };
-  const wiped = (pts: Point[], w: number) => {
-    const lengths = [0];
-    for (let i = 1; i < pts.length; i++) lengths.push(lengths[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-    const end = easeInOut(w) * lengths[lengths.length - 1];
-    let k = 1;
-    while (k < pts.length && lengths[k] <= end) k++;
-    path(pts, k);
-    if (k < pts.length) {
-      const f = (end - lengths[k - 1]) / (lengths[k] - lengths[k - 1] || 1);
-      g.lineTo(X(pts[k - 1][0] + f * (pts[k][0] - pts[k - 1][0])), Y(pts[k - 1][1] + f * (pts[k][1] - pts[k - 1][1])));
+    for (const stages of lines) {
+      const a = stages[f], b = stages[f + 1];
+      const X = (i: number) => x0 + scale * (a[2 * i] + (b[2 * i] - a[2 * i]) * w);
+      const Y = (i: number) => y0 - scale * (a[2 * i + 1] + (b[2 * i + 1] - a[2 * i + 1]) * w);
+      g.moveTo(X(0), Y(0));
+      for (let i = 1; i < n - 1; i++) g.quadraticCurveTo(X(i), Y(i), (X(i) + X(i + 1)) / 2, (Y(i) + Y(i + 1)) / 2);
+      g.lineTo(X(n - 1), Y(n - 1));
     }
-    g.stroke();
-  };
-  const traced = (pts: Point[], color: string, { at, fade }: { at: number; fade: number }) => {
-    g.strokeStyle = g.fillStyle = color;
-    const alpha = g.globalAlpha;
-    g.globalAlpha = alpha * FAINT;
-    path(pts);
-    g.stroke();
-    const u = at * (pts.length - 1), k = Math.floor(u), f = u - k;
-    let [hx, hy] = pts[k];
-    if (f > 0 && k < pts.length - 1) {
-      hx += f * (pts[k + 1][0] - pts[k][0]);
-      hy += f * (pts[k + 1][1] - pts[k][1]);
-    }
-    g.globalAlpha = alpha * fade;
-    path(pts, k + 1);
-    g.lineTo(X(hx), Y(hy));
-    g.stroke();
-    g.beginPath();
-    g.arc(X(hx), Y(hy), DOT, 0, TAU);
-    g.fill();
-    g.globalAlpha = alpha;
-  };
-
-  const alpha = (1 - st.linear) * (C / 3);
-  const lambda = -1 + 3 * st.resonant;
-  const c = (1 - st.resonant) * (1 - st.linear) * C + st.resonant * C;
-  g.lineCap = g.lineJoin = 'round';
-  g.save();
-  g.beginPath();
-  g.rect(X(-SIDE) - DOT, Y(SIDE) - DOT, 2 * SIDE * scale + 2 * DOT, 2 * SIDE * scale + 2 * DOT);
-  g.clip();
-
-  if (st.stage >= FIELD) {
-    const flows = GRID.map(({ x, y }) => {
-      const vx = x, vy = lambda * y + c * x * x;
-      return [vx, vy, Math.hypot(vx, vy)];
-    });
-    const fastest = Math.max(...flows.map((v) => v[2]));
-    g.strokeStyle = g.fillStyle = colors.tone('--muted');
-    g.lineWidth = 1.5;
-    const heads: [number, number, number, number][] = [];
-    g.beginPath();
-    GRID.forEach((p, i) => {
-      const [vx, vy, speed] = flows[i];
-      const w = smooth((st.age - p.delay) / SHAFT_WIPE);
-      if (w <= 0 || speed < 1e-9) return;
-      const dx = vx / speed, dy = vy / speed;
-      const length = LONGEST * Math.max(0.45, Math.sqrt(speed / fastest));
-      const tx = p.x - 0.5 * length * dx, ty = p.y - 0.5 * length * dy;
-      const ex = p.x + 0.5 * length * dx - 0.5 * Q_HEAD * dx, ey = p.y + 0.5 * length * dy - 0.5 * Q_HEAD * dy;
-      g.moveTo(X(tx), Y(ty));
-      g.lineTo(X(tx + w * (ex - tx)), Y(ty + w * (ey - ty)));
-      if (st.age >= p.delay + 0.8 * SHAFT_WIPE) heads.push([p.x + 0.5 * length * dx, p.y + 0.5 * length * dy, dx, dy]);
-    });
-    g.stroke();
-    g.beginPath();
-    for (const [x, y, dx, dy] of heads) head(x, y, dx, dy, Q_HEAD, Q_HALF);
-    g.fill();
-  }
-
-  const shown = 1 - st.resonant;
-  g.lineWidth = WIDTH;
-  if (shown > 0.002) {
-    g.globalAlpha = shown;
-    if (st.stable > 0) {
-      g.strokeStyle = colors.tone('--violet');
-      wiped([[0, -REACH], [0, REACH]], st.stable);
-    }
-    if (st.unstable > 0) {
-      g.strokeStyle = colors.tone('--accent');
-      wiped(along(POINTS, (u): Point => {
-        const x = -REACH + 2 * REACH * u;
-        return [x, alpha * x * x];
-      }), st.unstable);
-    }
-    if (st.heads > 0.002) {
-      g.globalAlpha = shown * st.heads;
-      g.fillStyle = colors.tone('--violet');
-      g.beginPath();
-      for (const side of [1, -1]) for (const k of [0, 1]) head(0, side * (E_INNER + k * E_GAP), 0, -side, E_HEAD, E_HALF);
-      g.fill();
-      g.fillStyle = colors.tone('--accent');
-      g.beginPath();
-      for (const side of [1, -1]) {
-        for (const target of [E_INNER + E_HEAD, E_INNER + E_HEAD + E_GAP]) {
-          const x = atLength(alpha, target), slope = 2 * alpha * x, norm = Math.hypot(1, slope);
-          head(side * x, alpha * x * x, side / norm, slope / norm, E_HEAD, E_HALF);
-        }
+    g.strokeStyle = kind === 'orbit' ? viridis(colors, 1 - level) : kind === 'grid' ? colors.text : colors.tone(kind === 'stable' ? '--violet' : '--accent');
+    if (kind === 'stable' || kind === 'unstable') {
+      g.lineCap = 'butt';
+      for (const [width, alpha] of GLOW) {
+        g.globalAlpha = alpha;
+        g.lineWidth = width;
+        g.stroke();
       }
-      g.fill();
+      g.lineCap = 'round';
     }
-  }
-
-  if (st.resonant > 0.002) {
-    g.globalAlpha = st.resonant * REFERENCE;
-    g.strokeStyle = colors.tone('--muted');
-    g.lineWidth = 1.8;
-    g.setLineDash([8, 8]);
-    for (const pts of REFERENCES) {
-      path(pts);
-      g.stroke();
-    }
-    g.setLineDash([]);
-    g.globalAlpha = st.resonant;
-    g.lineWidth = WIDTH;
-    g.strokeStyle = g.fillStyle = colors.tone('--accent');
-    path([[0, -REACH], [0, REACH]]);
+    g.globalAlpha = kind === 'grid' ? GRID_ALPHA * smooth(traced * 3) : 1;
+    g.lineWidth = kind === 'orbit' ? ORBIT_WIDTH : kind === 'grid' ? GRID_WIDTH : MANIFOLD_WIDTH;
     g.stroke();
-    g.beginPath();
-    for (const side of [1, -1]) for (const k of [0, 1]) head(0, side * (E_INNER + E_HEAD + k * E_GAP), 0, side, E_HEAD, E_HALF);
-    g.fill();
   }
-
-  if (shown * st.traces > 0.002) {
-    g.globalAlpha = shown * st.traces;
-    for (const t of SADDLE) traced(t.base.map(([x, y]): Point => [x, y + alpha * x * x]), tone(t.tone), saddle);
-  }
-  if (st.resonant > 0.002) {
-    g.globalAlpha = st.resonant;
-    for (const t of RESONANT_TRACES) traced(t.pts, tone(t.tone), resonant);
-  }
-
-  g.restore();
+  const sharpness = g.getTransform().a;
+  const width = g.canvas.width / sharpness, height = g.canvas.height / sharpness;
   g.globalAlpha = 1;
-  g.lineWidth = WIDTH;
-  g.fillStyle = colors.ground;
-  g.strokeStyle = colors.text;
-  g.beginPath();
-  g.arc(X(0), Y(0), ORIGIN, 0, TAU);
-  g.fill();
-  g.stroke();
-}
-
-function atLength(alpha: number, target: number): number {
-  const n = 60;
-  let length = 0;
-  for (let i = 1; i <= n; i++) {
-    const a = (1.3 * (i - 1)) / n, b = (1.3 * i) / n;
-    const step = Math.hypot(b - a, alpha * (b * b - a * a));
-    if (length + step >= target) return a + ((target - length) / (step || 1)) * (b - a);
-    length += step;
-  }
-  return 1.3;
-}
-
-const ramps = new WeakMap<Colors, Map<number, string>>();
-function ramp(colors: Colors, at: number): string {
-  let known = ramps.get(colors);
-  if (!known) ramps.set(colors, (known = new Map()));
-  let out = known.get(at);
-  if (out === undefined) known.set(at, (out = mix(colors.tone('--trajectory-4'), colors.tone('--trajectory-6'), at) ?? colors.tone('--trajectory-6')));
-  return out;
+  g.save();
+  g.globalCompositeOperation = 'destination-in';
+  g.translate(x0, y0);
+  g.scale(Math.min(width / 2, scale), Math.min(height / 2, scale));
+  const fade = g.createRadialGradient(0, 0, FADE_FROM, 0, 0, 1);
+  fade.addColorStop(0, 'rgba(0, 0, 0, 1)');
+  fade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = fade;
+  g.fillRect(-1e4, -1e4, 2e4, 2e4);
+  g.restore();
 }
 
 export const normalForm: Kind<null, State> = {
-  margin: 16,
+  margin: 0,
   endless: true,
   file: () => null,
-  prepare: () => initial(),
-  extent: () => ({ x0: -SIDE, x1: SIDE, y0: -SIDE, y1: SIDE }),
-  span: () => PASS + HOLD,
+  prepare,
+  extent: () => ({ x0: -HALF_WIDTH, x1: HALF_WIDTH, y0: -1, y1: 1 }),
+  span: () => TRACE + CYCLE,
   draw,
-  states: STATES,
-  initial: 'flow',
-  sync,
 };
