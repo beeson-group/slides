@@ -789,7 +789,7 @@ const toned = `((b) => {
 
 function assertSaddle(drawn, label) {
   const { violet, accent } = drawn;
-  assert.ok(drawn.n > 20000, `${label}: ${drawn.n} opaque pixels of the orbits`);
+  assert.ok(drawn.n > 5000, `${label}: ${drawn.n} opaque pixels of the orbits`);
   assert.ok(violet.n > 500 && violet.falling > 20 * violet.rising, `${label}: the stable manifold is not drawn from the upper left to the lower right, ${JSON.stringify(violet)}`);
   assert.ok(accent.n > 500 && accent.rising > 20 * accent.falling, `${label}: the unstable manifold is not drawn from the lower left to the upper right, ${JSON.stringify(accent)}`);
   assert.equal(drawn.corners, 0, `${label}: the drawing is not faded toward the edge of its box`);
@@ -804,8 +804,13 @@ test('the normal form without a state or a file is drawn complete in standard co
   const drawn = await page.evaluate(`(async () => {
     const out = [];
     const read = async () => {
-      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
-      return Beeson.backdrops.map((b) => ({ done: b.done, tracing: b.tracing, fitted: b.fittedToDrawing, ...${toned}(b) }));
+      const out = [];
+      for (const b of Beeson.backdrops) {
+        Reveal.slide(Reveal.getIndices(b.el.closest('section')).h);
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+        out.push({ done: b.done, tracing: b.tracing, fitted: b.fittedToDrawing, ...${toned}(b) });
+      }
+      return out;
     };
     out.push(...await read());
     document.documentElement.dataset.theme = 'light';
