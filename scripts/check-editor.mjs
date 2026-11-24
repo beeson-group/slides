@@ -10,7 +10,7 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const js = (v) => JSON.stringify(v);
 
 const KEYS = {
-  Enter: '', Escape: '', Tab: '', Backspace: '', Delete: '', Space: ' ',
+  Enter: '', Escape: '', Tab: '', Backspace: '', Delete: '', Space: '',
   ArrowLeft: '', ArrowUp: '', ArrowRight: '', ArrowDown: '',
   Shift: '', Ctrl: '', Alt: '', Meta: '',
 };
@@ -21,7 +21,6 @@ const session = browser.session;
 const page = browser.newPage();
 let platform = 'mac';
 const results = [];
-const SAFARI = options.browser === 'safari';
 let home;
 
 const evaluate = (expression) => page.evaluate(expression);
@@ -70,9 +69,8 @@ const move = (x, y, duration = 0) => ({ type: 'pointerMove', x: Math.round(x), y
 async function pointer(steps, mods = []) {
   const keys = modifiers(mods);
   const pause = { type: 'pause', duration: 0 };
-  const pointerOnly = SAFARI && !keys.length;
   await perform([
-    ...(pointerOnly ? [] : [{ type: 'key', id: 'keys', actions: [...keys.map((value) => ({ type: 'keyDown', value })), ...steps.map(() => pause), ...keys.map((value) => ({ type: 'keyUp', value }))] }]),
+    { type: 'key', id: 'keys', actions: [...keys.map((value) => ({ type: 'keyDown', value })), ...steps.map(() => pause), ...keys.map((value) => ({ type: 'keyUp', value }))] },
     { type: 'pointer', id: 'mouse', parameters: { pointerType: 'mouse' }, actions: [...keys.map(() => pause), ...steps, ...keys.map(() => pause)] },
   ]);
 }
@@ -91,19 +89,8 @@ async function drag(from, { dx = 0, dy = 0, steps = 10, mods = [] } = {}) {
 
 const handles = () => session('GET', '/window/handles');
 
-async function frontWindow() {
-  const { handle } = await session('POST', '/window/new', { type: 'window' });
-  await session('DELETE', '/window');
-  await session('POST', '/window', { handle });
-  await session('POST', '/window/rect', { width: 1920, height: 1080 });
-}
-
 async function visit(url) {
-  await page.goto(url).catch(async (error) => {
-    if (!SAFARI || (await evaluate('document.visibilityState')) !== 'hidden') throw error;
-    await frontWindow();
-    await page.goto(url);
-  });
+  await page.goto(url);
   home = await session('GET', '/window');
 }
 
@@ -194,7 +181,7 @@ try {
     await present('key');
     const f = () => evaluate(`${SHOW}.Reveal.getIndices().f ?? -1`);
     const seen = [await f()];
-    for (const key of ['ArrowRight', SAFARI ? 'n' : 'Space', 'ArrowLeft']) {
+    for (const key of ['ArrowRight', 'Space', 'ArrowLeft']) {
       await press(key);
       await sleep(300);
       seen.push(await f());
@@ -213,7 +200,7 @@ try {
     expect(m0 !== m1, `d leaves the mode at ${m0}`);
     await press('Escape');
     await waitFor(stageGone, 5000);
-    return `steps ${js(seen)}${SAFARI ? ' with n in place of Space, which safaridriver sends with keyCode 0' : ''}, overview opened and closed, mode ${m0} to ${m1}`;
+    return `steps ${js(seen)}, overview opened and closed, mode ${m0} to ${m1}`;
   });
 
   for (const key of ['Escape', 'e']) {
@@ -282,6 +269,11 @@ try {
     return all.length > 1 ? all : null;
   };
   const speakerReady = `(() => { try { return !!document.querySelector('#current-slide iframe')?.contentWindow?.Reveal?.isReady?.(); } catch { return false; } })()`;
+  const pressClosing = (key, main) => press(key).catch(async (error) => {
+    if (!/no such window/.test(error.message)) throw error;
+    await session('POST', '/window', { handle: main });
+    await session('DELETE', '/actions');
+  });
   const closedBy = async (speaker) => {
     for (let i = 0; i < 25; i++) {
       if (!(await handles()).includes(speaker)) return true;
@@ -303,7 +295,7 @@ try {
       await session('POST', '/window', { handle: speaker });
       await waitFor(speakerReady, 20000);
       await sleep(500);
-      await press(key);
+      await pressClosing(key, main);
       const closed = await closedBy(speaker);
       await session('POST', '/window', { handle: main });
       const ended = await within(stageGone, 5000);
@@ -325,7 +317,7 @@ try {
     await session('POST', '/window', { handle: speaker });
     await waitFor(speakerReady, 20000);
     await sleep(500);
-    await press('e');
+    await pressClosing('e', main);
     const closed = await closedBy(speaker);
     await session('POST', '/window', { handle: main });
     const editing = await within(`new URLSearchParams(location.search).has('edit') && !!window.BeesonEditor`, 10000);
