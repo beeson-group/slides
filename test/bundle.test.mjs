@@ -352,3 +352,18 @@ test('a moving point flows around its orbit once per lap, and the elements with 
   assert.ok(hashes.size >= 3, `the point is drawn at ${hashes.size} places in its first lap`);
   assert.deepEqual(page.errors, []);
 });
+
+test('a bundle without a moving point leaves the elements with data-surface-lap of its slide alone', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl(DECK, 'still'));
+  await page.waitFor(deckSettled);
+  const opacity = await page.evaluate(`(() => {
+    const lap = document.querySelector('[data-surface-lap]');
+    ${bundle}.draw();
+    return lap && getComputedStyle(lap).opacity;
+  })()`);
+  assert.equal(opacity, '1');
+  assert.deepEqual(page.errors, []);
+});
