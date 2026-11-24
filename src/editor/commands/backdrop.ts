@@ -17,7 +17,7 @@ export type Live = { el: HTMLElement; view: View; extent: { x0: number; x1: numb
 type Hooks = { backdrops?: Live[]; remount?(el: HTMLElement): Live; preview?(el: HTMLElement): Live; fitWindow?(el: HTMLElement, box?: Box): Promise<View | null> };
 const hooks = (): Hooks => (window as unknown as { Beeson?: Hooks }).Beeson ?? {};
 
-export const DRAWING = ['data-backdrop', 'data-system', 'data-plane', 'data-tori', 'data-trajectories', 'data-trajectories-select', 'data-trajectories-color', 'data-trajectories-ramp', 'data-trajectories-colormap', 'data-trajectories-shade', 'data-heads', 'data-backdrop-state'];
+export const DRAWING = ['data-backdrop', 'data-system', 'data-plane', 'data-tori', 'data-trajectories', 'data-trajectories-select', 'data-trajectories-color', 'data-trajectories-ramp', 'data-trajectories-colormap', 'data-trajectories-shade', 'data-heads'];
 export const NAMES = {
   tubes: 'Cislunar Manifolds',
   wideRibbon: 'Earth Manifolds',

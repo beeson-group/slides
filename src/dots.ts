@@ -84,21 +84,6 @@ function colorsOf(el: HTMLElement, g: CanvasRenderingContext2D): Colors {
   };
 }
 
-const warned = new WeakSet<HTMLElement>();
-function stateOf(el: HTMLElement, states: string[], initial: string): string {
-  let best: HTMLElement | null = null, index = -Infinity;
-  for (const f of el.closest('section')?.querySelectorAll<HTMLElement>('.fragment.visible[data-backdrop-state]') ?? []) {
-    const i = Number(f.dataset.fragmentIndex ?? 0) || 0;
-    if (f !== el && i >= index) { best = f; index = i; }
-  }
-  const name = best?.dataset.backdropState ?? el.dataset.backdropState ?? initial;
-  if (states.includes(name)) return name;
-  const from = best ?? el;
-  if (!warned.has(from)) console.warn(`beeson: the backdrop state "${name}" of ${el.dataset.backdrop} is not one of ${states.join(', ')}`);
-  warned.add(from);
-  return initial;
-}
-
 const CACHE = new WeakMap<HTMLElement, Dots>();
 
 export class Dots {
@@ -156,7 +141,6 @@ export class Dots {
   private install(data: unknown): void {
     if (data === null || data === undefined || CACHE.get(this.el) !== this) return;
     this.state = this.kind.prepare(data, this.el);
-    this.sync(false);
     this.fit();
     if (this.pending) {
       this.pending = false;
@@ -241,20 +225,6 @@ export class Dots {
     this.redraw();
   }
 
-  get stated(): boolean {
-    return !!this.kind.states;
-  }
-
-  sync(animate: boolean): void {
-    const { states, initial, sync } = this.kind;
-    if (!states || !initial || !sync || this.state === null) return;
-    const name = stateOf(this.el, states, initial);
-    if (animate && name === this.el.dataset.shown) return;
-    this.el.dataset.shown = name;
-    sync(this.state, name, animate && this.raf !== 0);
-    if (!this.raf) this.redraw();
-  }
-
   redraw(): void {
     if (!this.w) return;
     if (this.raf && this.t0 !== null) this.draw((performance.now() - this.t0) / 1000);
@@ -290,7 +260,6 @@ export class Dots {
     this.t0 = null;
     this.finished = false;
     this.clear();
-    this.sync(false);
   }
 
   start(force = false): void {
@@ -325,7 +294,6 @@ export class Dots {
     this.pending = false;
     this.finished = true;
     this.t0 = null;
-    this.sync(false);
     this.redraw();
   }
 

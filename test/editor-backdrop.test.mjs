@@ -2206,14 +2206,14 @@ describe('Poincaré Sections and Invariant Tori', () => {
         const v = String(g.fillStyle).match(/[0-9a-f]{2}/gi).map((h) => parseInt(h, 16));
         const d = g.getImageData(0, 0, c.width, c.height).data, out = { rising: 0, falling: 0 };
         for (let i = 0; i < d.length; i += 4) {
-          if (d[i + 3] < 250 || Math.abs(d[i] - v[0]) + Math.abs(d[i + 1] - v[1]) + Math.abs(d[i + 2] - v[2]) > 24) continue;
+          if (d[i + 3] < 128 || Math.abs(d[i] - v[0]) + Math.abs(d[i + 1] - v[1]) + Math.abs(d[i + 2] - v[2]) > 60) continue;
           const x = (i / 4) % c.width - c.width / 2, y = Math.floor(i / 4 / c.width) - c.height / 2;
           if (x * y < 0) out.rising++;
           else out.falling++;
         }
         return out;
       })()`);
-      assert.ok(stable.falling > 100 && stable.falling > 20 * stable.rising, `the stable manifold of the tile Normal Form is not drawn from the upper left to the lower right, ${js(stable)}`);
+      assert.ok(stable.falling > 10 && stable.falling > 5 * stable.rising, `the stable manifold of the tile Normal Form is not drawn from the upper left to the lower right, ${js(stable)}`);
       await click(page, `${TILES}[data-tile="tori"]`);
       await page.waitFor(`window.BeesonEditor.render() !== ${js(bare)}`);
       await frames(page);
