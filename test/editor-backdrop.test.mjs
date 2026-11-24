@@ -2096,7 +2096,7 @@ describe('Poincaré Sections and Invariant Tori', () => {
       assert.deepEqual(page.errors, []);
     });
 
-    test(`the Normal Form put on the Earth Manifolds is drawn without a file or labels, and Cislunar Manifolds put on it takes off its state (${platform})`, async (t) => {
+    test(`the Normal Form put on the Earth Manifolds is drawn without a file or labels (${platform})`, async (t) => {
       const page = await load(t, platform);
       const normal = await choose(page, 'Backdrop', 'Normal Form');
       assert.equal(tagOf(normal, CHAPTER), '<div class="backdrop" data-backdrop="normalForm">');
@@ -2106,10 +2106,6 @@ describe('Poincaré Sections and Invariant Tori', () => {
       const out = await drawn(page);
       assert.deepEqual({ ...out, inked: out.inked > 1000 }, { count: 1, canvases: ['dots'], labels: 0, inked: true, fitted: true });
       assert.equal(await page.evaluate(`document.querySelectorAll('script[src*="/backdrops/"]').length`), 0);
-      await page.evaluate(`window.BeesonEditor.doc.setTag(window.BeesonEditor.selection()[0], { attrs: { 'data-backdrop-state': 'linear' } }, 'state')`);
-      await page.waitFor(`window.BeesonEditor.render().includes('data-backdrop-state="linear"')`);
-      const tubes = await choose(page, 'Backdrop', 'Cislunar Manifolds');
-      assert.ok(!/data-backdrop-state/.test(tagOf(tubes, CHAPTER)), tagOf(tubes, CHAPTER));
       assert.deepEqual(page.errors, []);
     });
 
@@ -2204,6 +2200,20 @@ describe('Poincaré Sections and Invariant Tori', () => {
       assert.ok((await page.evaluate(`${inked}('tori')`)) > 50, 'the tile Invariant Tori is empty');
       assert.ok((await page.evaluate(`${inked}('saddle')`)) > 50, 'the tile Saddle Manifolds is empty');
       assert.ok((await page.evaluate(`${inked}('normalForm')`)) > 50, 'the tile Normal Form is empty');
+      const stable = await page.evaluate(`(() => {
+        const c = document.querySelector('${TILES}[data-tile="normalForm"] canvas'), g = c.getContext('2d');
+        g.fillStyle = getComputedStyle(c).getPropertyValue('--violet').trim();
+        const v = String(g.fillStyle).match(/[0-9a-f]{2}/gi).map((h) => parseInt(h, 16));
+        const d = g.getImageData(0, 0, c.width, c.height).data, out = { rising: 0, falling: 0 };
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 250 || Math.abs(d[i] - v[0]) + Math.abs(d[i + 1] - v[1]) + Math.abs(d[i + 2] - v[2]) > 24) continue;
+          const x = (i / 4) % c.width - c.width / 2, y = Math.floor(i / 4 / c.width) - c.height / 2;
+          if (x * y < 0) out.rising++;
+          else out.falling++;
+        }
+        return out;
+      })()`);
+      assert.ok(stable.falling > 100 && stable.falling > 20 * stable.rising, `the stable manifold of the tile Normal Form is not drawn from the upper left to the lower right, ${js(stable)}`);
       await click(page, `${TILES}[data-tile="tori"]`);
       await page.waitFor(`window.BeesonEditor.render() !== ${js(bare)}`);
       await frames(page);
