@@ -449,7 +449,7 @@ try {
 
   await check('smoke: a right-click on a formula opens the menu of the editor', async () => {
     await load('div.math');
-    await evaluate(`(Reveal.slide(Reveal.getIndices().h, Reveal.getIndices().v, 9), true)`);
+    await evaluate(`(Reveal.slide(Reveal.getIndices().h, Reveal.getIndices().v, Infinity), true)`);
     await frames();
     await evaluate(`(window.__context = [], addEventListener('contextmenu', (e) => setTimeout(() => window.__context.push(e.defaultPrevented)), true), true)`);
     await click('.reveal section.present div.math mjx-container', { button: 2 });
