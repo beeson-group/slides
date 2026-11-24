@@ -18,6 +18,7 @@ const HELPER = `window.__animate ??= (() => {
     :root.anim-label .anim-one, :root.anim-label .anim-one * { visibility: visible !important; }
     :root.anim-label .anim-one { opacity: 1 !important; }
     :root.anim-label, :root.anim-label body, :root.anim-label .reveal-viewport, :root.anim-label .reveal { background: transparent !important; }
+    :root.anim-alone .pdf-page:not(.anim-page) { content-visibility: hidden; }
   \`;
   document.head.append(style);
   const clock = ${CLOCK};
@@ -118,6 +119,8 @@ const HELPER = `window.__animate ??= (() => {
 
     async begin(i, config, from, under, labels) {
       const el = all()[i];
+      el.closest('.pdf-page').classList.add('anim-page');
+      document.documentElement.classList.add('anim-alone');
       const surface = el.matches('.surface') ? surfaceOf(el) : null, plot = surface ? null : plotOf(el);
       if (!surface && !plot) throw new Error('the element is not drawn');
       const canvas = new OffscreenCanvas(config.width, config.height);
@@ -256,6 +259,8 @@ const HELPER = `window.__animate ??= (() => {
       if (s?.surface) { s.surface.fit(); s.surface.stop(); s.surface.sync(false); s.surface.configure(); }
       if (s?.plot) { s.plot.leave(); s.plot.still(); }
       clock.remove();
+      document.documentElement.classList.remove('anim-alone');
+      for (const e of document.querySelectorAll('.anim-page')) e.classList.remove('anim-page');
       state = null;
       return true;
     },

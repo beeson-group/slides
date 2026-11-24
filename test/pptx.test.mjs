@@ -525,6 +525,32 @@ test('a plot is recorded at each step as a loop of its pass and its hold, at twi
   }
 });
 
+test('while a surface or a plot is recorded, only its page of the print view is rendered, and every page is rendered again after', { timeout: 300000 }, async (t) => {
+  const browser = await launch({ wholeFrames: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage({ scale: 2, motion: true });
+  await printView(page, deckUrl('test/pages/animations-record.html', 'print-pdf&still&pdfPageHeightOffset=0'));
+  const rendered = `[...document.querySelectorAll('.pdf-page')].flatMap((page, n) => [...page.children].some((child) => child.checkVisibility()) ? [n] : [])`;
+  const all = await page.evaluate(rendered);
+  const shown = await listAnimations(page);
+  const surface = shown.findIndex((list) => list.some((a) => a.key.startsWith('surface ')));
+  const plot = shown.findIndex((list) => list.some((a) => a.key.startsWith('plot ')));
+  assert.ok(all.length > 2 && surface >= 0 && plot >= 0, JSON.stringify({ all, surface, plot }));
+  const { evaluate } = page;
+  for (const step of [surface, plot]) {
+    const seen = [];
+    page.evaluate = async (expression) => {
+      if (/^__animate\.(clip|turn|encode)\(/.test(expression)) seen.push(await evaluate(rendered));
+      return evaluate(expression);
+    };
+    await recordAnimation(page, shown[step][0].index);
+    page.evaluate = evaluate;
+    assert.ok(seen.length > 0);
+    for (const pages of seen) assert.deepEqual(pages, [step]);
+    assert.deepEqual(await page.evaluate(rendered), all);
+  }
+});
+
 test('the frames of a surface are drawn and encoded a second per DevTools call, and at twice the pixel ratio in about the time of the same frames at one', { timeout: 600000 }, async (t) => {
   const browser = await launch({ wholeFrames: true });
   t.after(() => browser.close());
